@@ -135,8 +135,8 @@ flowchart LR
 ### 1. โคลนโปรเจกต์ ตั้งค่า `.env` และเปิด Infrastructure (Docker)
 
 ```powershell
-git clone https://github.com/jaturapornchai/bcaichat.git
-cd bcaichat
+git clone https://github.com/jaturapornchai/bcaichat001.git
+cd bcaichat001
 
 Copy-Item .env.example .env
 # สำหรับ macOS / Linux: cp .env.example .env
