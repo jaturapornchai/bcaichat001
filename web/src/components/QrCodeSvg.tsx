@@ -24,8 +24,7 @@ export function QrCodeSvg({
     let active = true;
     QRCode.toString(value || "BC_AI_CHAT", {
       type: "svg",
-      width: size,
-      margin: 1,
+      margin: 2,
       color: {
         dark: darkColor,
         light: lightColor,
@@ -40,13 +39,13 @@ export function QrCodeSvg({
     return () => {
       active = false;
     };
-  }, [value, size, darkColor, lightColor]);
+  }, [value, darkColor, lightColor]);
 
   if (!svgMarkup) {
     return (
       <div
         style={{ width: size, height: size }}
-        className={`flex items-center justify-center rounded-xl border bg-white text-xs text-[var(--bc-muted)] ${className}`}
+        className={`flex shrink-0 items-center justify-center rounded-xl border bg-white text-xs text-[var(--bc-muted)] ${className}`}
       >
         กำลังสร้าง QR...
       </div>
@@ -55,8 +54,9 @@ export function QrCodeSvg({
 
   return (
     <div
+      data-testid="qr-code-svg"
       style={{ width: size, height: size }}
-      className={`overflow-hidden rounded-xl border border-[var(--bc-border)] bg-white p-1.5 shadow-sm ${className}`}
+      className={`shrink-0 overflow-hidden rounded-xl border border-[var(--bc-border)] bg-white p-1.5 shadow-sm [&>svg]:block [&>svg]:h-full [&>svg]:w-full ${className}`}
       dangerouslySetInnerHTML={{ __html: svgMarkup }}
     />
   );

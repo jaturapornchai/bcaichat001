@@ -9,4 +9,5 @@ BC Ai Chat — แอปแชทส่วนตัว ครอบครัว 
 - Run tests: `flutter test`
 - Live E2E against running `:8096`: `flutter test test_e2e/live_backend_e2e_test.dart`
 - Override API base URL at build/run time: `--dart-define=API_BASE_URL=http://127.0.0.1:8096`
-- Windows multi-window Demo launcher: `--test-login=demo1@bcaichat.local --test-slot=0`
+- Build native releases: `flutter build windows --release` · `flutter build apk --release`
+- Production Auth: Phone OTP (SMSMKT + Ref Code + 60s cooldown), Verified Google OAuth2 (`url_launcher` + poll), and Owner Bootstrap Admin (`ADMIN_BOOTSTRAP_CODE`) — no Demo login accounts.

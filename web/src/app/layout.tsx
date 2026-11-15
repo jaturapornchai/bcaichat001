@@ -1,5 +1,6 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Prompt } from "next/font/google";
+import { PwaBootstrap } from "@/components/PwaBootstrap";
 import "./globals.css";
 
 const promptFont = Prompt({
@@ -9,10 +10,28 @@ const promptFont = Prompt({
   display: "swap",
 });
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3096";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://www.bcaichat.com";
+
+export const viewport: Viewport = {
+  themeColor: "#812920",
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      { url: "/icons/logo.png", sizes: "256x256", type: "image/png" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "BC Ai Chat",
+  },
   title: {
     default: "BC Ai Chat — แชทส่วนตัว ครอบครัว เพื่อนสนิท และผู้ช่วย AI ธีมบ้านเชียง",
     template: "%s | BC Ai Chat",
@@ -41,12 +60,14 @@ export const metadata: Metadata = {
     siteName: "BC Ai Chat",
     locale: "th_TH",
     type: "website",
+    images: [{ url: "/icons/og-logo.png", width: 512, height: 512, alt: "BC Ai Chat" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "BC Ai Chat — แชทส่วนตัว ครอบครัว & เพื่อนสนิท + ผู้ช่วย AI",
     description:
       "แอปแชทส่วนตัวภาษาไทย 1-1 และกลุ่มเพื่อน พร้อมผู้ช่วย AI ธีมดินเผาบ้านเชียงร่วมสมัย",
+    images: ["/icons/og-logo.png"],
   },
   robots: {
     index: true,
@@ -70,6 +91,7 @@ export default function RootLayout({
         "@type": "Organization",
         name: "BC Ai Chat",
         url: APP_URL,
+        logo: `${APP_URL}/icons/og-logo.png`,
         description:
           "แอปแชทส่วนตัวสำหรับครอบครัว แก๊งเพื่อนสนิท และผู้ช่วย AI ภาษาไทย ภายใต้แนวคิดศิลปวัฒนธรรมไทยร่วมสมัยบ้านเชียง",
       },
@@ -101,7 +123,7 @@ export default function RootLayout({
             name: "BC Ai Chat เหมาะกับการคุยกับครอบครัวและเพื่อนสนิทอย่างไร?",
             acceptedAnswer: {
               "@type": "Answer",
-              text: "จัดหมวดแชทส่วนตัว ครอบครัว และกลุ่มเพื่อนได้ชัดเจน พร้อมอัลบั้มรูปและคลังไฟล์ถาวรที่ไม่หมดอายุ โพลเลือกร้านอาหาร นัดเจอ RSVP และมีบัญชี Demo 1–5 ให้ลองคุยข้ามคนผ่าน /multi-demo ได้ทันที",
+              text: "จัดหมวดแชทส่วนตัว ครอบครัว และกลุ่มเพื่อนได้ชัดเจน พร้อมอัลบั้มรูป คลังไฟล์ถาวรที่ไม่หมดอายุ โทรเสียงและวิดีโอคอลชัดระดับ HD เข้าสู่ระบบด้วยเบอร์โทร OTP หรือบัญชี Gmail ที่ยืนยันแล้ว และค้นหา/ติดตามร้านค้าได้ผ่าน /oa",
             },
           },
           {
@@ -127,11 +149,12 @@ export default function RootLayout({
 
   return (
     <html lang="th" className={promptFont.variable}>
-      <body className="min-h-[100dvh] overflow-x-hidden antialiased">
+      <body className="bc-spiral-bg min-h-[100dvh] overflow-x-hidden antialiased">
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
+        <PwaBootstrap />
         {children}
       </body>
     </html>

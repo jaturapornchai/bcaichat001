@@ -73,14 +73,15 @@ pub async fn ws_handler(
     Query(query): Query<WsQuery>,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
-    let Some(user_id) = query
+    let Some(claims) = query
         .token
         .as_deref()
         .and_then(|t| verify_jwt(t, &state.config.jwt_secret).ok())
-        .map(|c| c.sub)
+        .filter(|c| crate::auth::is_token_version_valid(&state, &c.sub, c.tv))
     else {
         return StatusCode::UNAUTHORIZED.into_response();
     };
+    let user_id = claims.sub;
 
     let device_key = query
         .device
@@ -136,6 +137,7 @@ async fn handle_socket(
     });
 
     let ws_hub = state.ws_hub.clone();
+    let recv_db = state.db.clone();
     let uid = user_id.clone();
     let mut recv_task = tokio::spawn(async move {
         // Any frame (pong included) proves the client is still there.
@@ -145,10 +147,24 @@ async fn handle_socket(
             if let Message::Text(text) = msg {
                 if let Ok(val) = serde_json::from_str::<Value>(&text) {
                     if val.get("event").and_then(|v| v.as_str()) == Some("typing") {
+                        let excluded: Vec<String> = match recv_db
+                            .collection::<crate::models::FriendshipDoc>("friendships")
+                            .find(doc! { "friend_id": &uid, "is_blocked": true })
+                            .await
+                        {
+                            Ok(cur) => futures_util::TryStreamExt::try_collect::<Vec<_>>(cur)
+                                .await
+                                .unwrap_or_default()
+                                .into_iter()
+                                .map(|f| f.user_id)
+                                .collect(),
+                            Err(_) => Vec::new(),
+                        };
                         ws_hub.broadcast_event(json!({
                             "event": "typing",
                             "user_id": uid,
                             "conversation_id": val.get("conversation_id"),
+                            "excluded_user_ids": excluded,
                         }));
                     }
                 }
@@ -170,19 +186,71 @@ async fn handle_socket(
 /// Room events (anything with conversation_id) go only to that room's members;
 /// org-wide events (theme, mini-apps) go to everyone.
 // ponytail: one indexed count per room event per socket; cache memberships per socket if traffic grows.
-async fn can_receive(state: &AppState, user_id: &str, raw: &str) -> bool {
-    let conv_id = serde_json::from_str::<Value>(raw).ok().and_then(|v| {
-        v.get("conversation_id")
-            .and_then(|c| c.as_str())
-            .map(str::to_owned)
-    });
-    let Some(conv_id) = conv_id else {
+pub async fn can_receive(state: &AppState, user_id: &str, raw: &str) -> bool {
+    let Ok(v) = serde_json::from_str::<Value>(raw) else {
+        return false;
+    };
+    // O(1) in-memory block exclusion check before touching MongoDB
+    if let Some(excluded) = v.get("excluded_user_ids").and_then(|e| e.as_array()) {
+        if excluded.iter().any(|x| x.as_str() == Some(user_id)) {
+            return false;
+        }
+    }
+    let event_name = v.get("event").and_then(|e| e.as_str()).unwrap_or("");
+    if v.get("excluded_user_ids").is_none() {
+        let actor_opt = match event_name {
+            "new_message" | "message_edited" => v
+                .get("message")
+                .and_then(|m| m.get("sender_id"))
+                .and_then(|s| s.as_str()),
+            "typing" => v.get("user_id").and_then(|s| s.as_str()),
+            "call_incoming" => v
+                .get("call")
+                .and_then(|c| c.get("initiator_id"))
+                .and_then(|s| s.as_str()),
+            _ => None,
+        };
+        if let Some(actor_id) = actor_opt {
+            if actor_id != user_id {
+                let is_blocked = state
+                    .db
+                    .collection::<bson::Document>("friendships")
+                    .count_documents(doc! {
+                        "user_id": user_id,
+                        "friend_id": actor_id,
+                        "is_blocked": true,
+                    })
+                    .await
+                    .unwrap_or(0)
+                    > 0;
+                if is_blocked {
+                    return false;
+                }
+            }
+        }
+    }
+    let is_call_event = event_name.starts_with("call_");
+    if let Some(targets) = v.get("target_user_ids").and_then(|t| t.as_array()) {
+        if targets.iter().any(|x| x.as_str() == Some(user_id)) {
+            return true;
+        }
+        if is_call_event || v.get("conversation_id").and_then(|c| c.as_str()).is_none() {
+            return false;
+        }
+    }
+    let Some(conv_id) = v.get("conversation_id").and_then(|c| c.as_str()) else {
         return true;
     };
     state
         .db
         .collection::<bson::Document>("conversations")
-        .count_documents(doc! { "_id": &conv_id, "member_ids": user_id })
+        .count_documents(doc! {
+            "_id": conv_id,
+            "$or": [
+                { "member_ids": user_id },
+                { "admin_ids": user_id },
+            ]
+        })
         .await
         .map(|n| n > 0)
         .unwrap_or(false)

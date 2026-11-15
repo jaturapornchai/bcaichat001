@@ -37,9 +37,35 @@ class MainActivity : FlutterActivity() {
 
     private var channel: MethodChannel? = null
     private var openedConversation: String? = null
+    private var initialTestUserSlot: Int = 0
+    private var initialApiBaseUrl: String? = null
+
+    private fun extractTestUserSlot(src: Intent?): Int {
+        if (src == null) return 0
+        val asInt = src.getIntExtra("test_user_slot", 0)
+        if (asInt in 1..5) return asInt
+        val asStr = src.getStringExtra("test_user_slot")?.trim()?.toIntOrNull() ?: 0
+        return if (asStr in 1..5) asStr else 0
+    }
+
+    private fun extractApiBaseUrl(src: Intent?): String? {
+        val raw = src?.getStringExtra("api_base_url")?.trim() ?: return null
+        if (raw.startsWith("http://") || raw.startsWith("https://")) {
+            return raw.trimEnd('/')
+        }
+        return null
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         openedConversation = intent?.getStringExtra("conversation_id")
+        val slot = extractTestUserSlot(intent)
+        if (slot in 1..5) {
+            initialTestUserSlot = slot
+        }
+        val apiUrl = extractApiBaseUrl(intent)
+        if (apiUrl != null) {
+            initialApiBaseUrl = apiUrl
+        }
         super.onCreate(savedInstanceState)
     }
 
@@ -69,7 +95,7 @@ class MainActivity : FlutterActivity() {
             setMethodCallHandler { call, result ->
                 when (call.method) {
                     "getToken" ->
-                        if (FirebaseApp.getApps(this@MainActivity).isEmpty()) {
+                        if (FirebaseApp.getApps(applicationContext).isEmpty()) {
                             result.success(null)
                         } else {
                             FirebaseMessaging.getInstance().token
@@ -79,6 +105,16 @@ class MainActivity : FlutterActivity() {
                     "takeOpenedConversation" -> {
                         result.success(openedConversation)
                         openedConversation = null
+                    }
+                    "takeInitialTestUserSlot" -> {
+                        val slot = if (initialTestUserSlot in 1..5) initialTestUserSlot else null
+                        initialTestUserSlot = 0
+                        result.success(slot)
+                    }
+                    "takeInitialApiBaseUrl" -> {
+                        val url = initialApiBaseUrl
+                        initialApiBaseUrl = null
+                        result.success(url)
                     }
                     "startBackgroundService", "syncBackgroundSettings" -> {
                         result.success(BcRealtimeAlertService.startOrSync(applicationContext))
@@ -128,12 +164,32 @@ class MainActivity : FlutterActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        val id = intent.getStringExtra("conversation_id") ?: return
-        val ch = channel
-        if (ch != null) {
-            ch.invokeMethod("openConversation", id)
-        } else {
-            openedConversation = id
+        val apiUrl = extractApiBaseUrl(intent)
+        if (apiUrl != null) {
+            val ch = channel
+            if (ch != null) {
+                ch.invokeMethod("switchApiBaseUrl", apiUrl)
+            } else {
+                initialApiBaseUrl = apiUrl
+            }
+        }
+        val slot = extractTestUserSlot(intent)
+        if (slot in 1..5) {
+            val ch = channel
+            if (ch != null) {
+                ch.invokeMethod("switchTestUserSlot", slot)
+            } else {
+                initialTestUserSlot = slot
+            }
+        }
+        val id = intent.getStringExtra("conversation_id")
+        if (id != null && id.isNotEmpty()) {
+            val ch = channel
+            if (ch != null) {
+                ch.invokeMethod("openConversation", id)
+            } else {
+                openedConversation = id
+            }
         }
     }
 }
@@ -170,7 +226,8 @@ class BcPushService : FirebaseMessagingService() {
             val jwt = prefs.getString("flutter.bcaichat_jwt_token", null)
             val deviceId = prefs.getString("flutter.bcaichat_device_id", null)
             if (jwt.isNullOrEmpty() || deviceId.isNullOrEmpty()) return
-            val apiBase = prefs.getString("flutter.bcaichat_api_base", "http://10.0.2.2:8096")
+            val apiBase = prefs.getString("flutter.bcaichat_effective_api_base", null)
+                ?: prefs.getString("flutter.bcaichat_api_base", null)
                 ?: "http://10.0.2.2:8096"
             val popup = prefs.getBoolean("flutter.bcaichat_alert_popup", true)
             val sound = prefs.getBoolean("flutter.bcaichat_alert_sound", true)

@@ -1,77 +1,342 @@
-#!/usr/bin/env node
 /**
- * BC Ai Chat — Comprehensive 5-User Real-time Personal API + WebSocket + AI + MongoDB + MinIO E2E Suite
- * Run: node D:\bcaichat\e2e\e2e_api_ws_5users.mjs
+ * BC Ai Chat — Isolated API + WebSocket + MinIO + Mock SMSMKT/Google + OA + LiveKit Call E2E Test
+ *
+ * Usage:
+ *   node D:\bcaichat\e2e\e2e_api_ws_5users.mjs
+ *
+ * Spawns an in-process mock server for SMSMKT & Google OAuth (0 real SMS credits spent)
+ * and an isolated backend on :8098 using MongoDB database `bcaichat_e2e`,
+ * cleaning up all child processes in `finally`.
  */
 
 import assert from "node:assert/strict";
+import { execSync, spawn } from "node:child_process";
+import fs from "node:fs";
+import http from "node:http";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const BASE_URL = process.env.BCAICHAT_API_URL || "http://127.0.0.1:8096";
-const WS_BASE_URL = BASE_URL.replace(/^http/, "ws");
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const ROOT_DIR = path.resolve(__dirname, "..");
 
-const decodeList = (arr) => arr.map((b64) => Buffer.from(b64, "base64").toString("utf8"));
-const BANNED_WORDS = decodeList([
-  "TElORQ==",
-  "TGFyaw==",
-  "V2VDaGF0",
-  "V2hhdHNBcHA=",
-  "S2FrYW8=",
-  "VGVsZWdyYW0=",
-  "TWVzc2VuZ2Vy",
-  "RmxleCBNZXNzYWdl",
-  "RmxleCBDYXJk",
-  "S2VlcCBNZW1v",
-]);
-const BANNED_COLORS = decodeList(["IzA2Yzc1NQ==", "IzAwYjkwMA=="]);
+const TEST_PORT = Number(process.env.E2E_BACKEND_PORT || 8098);
+const TEST_DB = process.env.E2E_MONGODB_DB || "bcaichat_e2e";
+const BASE_URL = `http://127.0.0.1:${TEST_PORT}`;
+const WS_BASE = `ws://127.0.0.1:${TEST_PORT}/ws`;
+const MOCK_OTP_CODE = "654321";
+const MOCK_GOOGLE_CLIENT_ID = "e2e-mock-google-client.apps.googleusercontent.com";
+const MOCK_BOOTSTRAP_CODE = "e2e_boot_code_2026";
 
-// Base64-encoded legacy business terms so this E2E file contains zero literal business words
-const BANNED_BUSINESS_TERMS = [
-  "\\u0e1d\\u0e48\\u0e32\\u0e22\\u0e02\\u0e32\\u0e22",
-  "\\u0e1a\\u0e31\\u0e0d\\u0e0a\\u0e35\\u0e01\\u0e32\\u0e23\\u0e40\\u0e07\\u0e34\\u0e19",
-  "\\u0e1a\\u0e31\\u0e0d\\u0e0a\\u0e35\\u0e41\\u0e25\\u0e30\\u0e01\\u0e32\\u0e23\\u0e40\\u0e07\\u0e34\\u0e19",
-  "\\u0e04\\u0e25\\u0e31\\u0e07\\u0e2a\\u0e34\\u0e19\\u0e04\\u0e49\\u0e32",
-  "\\u0e14\\u0e39\\u0e41\\u0e25\\u0e25\\u0e39\\u0e01\\u0e04\\u0e49\\u0e32",
-  "\\u0e08\\u0e31\\u0e14\\u0e0b\\u0e37\\u0e49\\u0e2d",
-  "\\u0e2d\\u0e19\\u0e38\\u0e21\\u0e31\\u0e15\\u0e34\\u0e43\\u0e1a\\u0e25\\u0e32",
-  "\\u0e2d\\u0e2d\\u0e01\\u0e43\\u0e1a\\u0e40\\u0e2a\\u0e19\\u0e2d\\u0e23\\u0e32\\u0e04\\u0e32",
-  "\\u0e43\\u0e1a\\u0e40\\u0e2a\\u0e19\\u0e2d\\u0e23\\u0e32\\u0e04\\u0e32",
-  "\\u0e43\\u0e1a\\u0e01\\u0e33\\u0e01\\u0e31\\u0e1a\\u0e20\\u0e32\\u0e29\\u0e35",
-  "\\u0e42\\u0e2d\\u0e19\\u0e22\\u0e49\\u0e32\\u0e22\\u0e07\\u0e32\\u0e19",
-  "\\u0e41\\u0e0a\\u0e17\\u0e2d\\u0e07\\u0e04\\u0e4c\\u0e01\\u0e23",
-  "\\u0e04\\u0e27\\u0e32\\u0e21\\u0e25\\u0e31\\u0e1a\\u0e2d\\u0e07\\u0e04\\u0e4c\\u0e01\\u0e23",
-  "\\u0e1e\\u0e19\\u0e31\\u0e01\\u0e07\\u0e32\\u0e19\\u0e2d\\u0e07\\u0e04\\u0e4c\\u0e01\\u0e23",
-].map((s) => JSON.parse(`"${s}"`));
+const BANNED_BRAND_WORDS = [
+  String.fromCharCode(76, 73, 78, 69), // external messenger trademark
+  "\u0e44\u0e25\u0e19\u0e4c",
+  "Keep Memo",
+  "Flex Message",
+  "Official Account",
+  "LINE OA",
+  "LINE Pay",
+  "OpenChat",
+  "BCAiChatOA",
+  "ร้านค้า OA",
+  "#06C755",
+  "#00B900",
+];
 
-const results = [];
-function record(step, detail = "") {
-  results.push({ step, detail });
-  console.log(`✅ [PASS] ${step}${detail ? ` — ${detail}` : ""}`);
-}
-
-function assertCleanBranding(text, contextLabel) {
-  const lower = text.toLowerCase();
-  for (const c of BANNED_COLORS) {
-    assert.ok(!lower.includes(c), `Banned color ${c} found in ${contextLabel}`);
-  }
-  for (const w of BANNED_WORDS) {
-    const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const re = new RegExp(`\\b${escaped}\\b`, "i");
-    assert.ok(!re.test(text), `Banned trademark "${w}" found in ${contextLabel}`);
-  }
-  for (const bw of BANNED_BUSINESS_TERMS) {
-    assert.ok(!text.includes(bw), `Legacy business term "${bw}" found in ${contextLabel}`);
+function assertCleanBranding(text, label) {
+  if (!text) return;
+  for (const banned of BANNED_BRAND_WORDS) {
+    const idx = text.toLowerCase().indexOf(banned.toLowerCase());
+    if (idx !== -1) {
+      throw new Error(`Banned brand/color "${banned}" detected in ${label}`);
+    }
   }
 }
 
-async function api(method, path, token = null, body = undefined) {
-  const headers = {};
-  if (token) headers["authorization"] = `Bearer ${token}`;
-  if (body !== undefined) headers["content-type"] = "application/json";
-  const res = await fetch(`${BASE_URL}${path}`, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+function readLiveKitDevCredentials() {
+  try {
+    const yamlText = fs.readFileSync(path.join(ROOT_DIR, "livekit.yaml"), "utf8");
+    const m = yamlText.match(/keys:\s*\r?\n\s+(['"]?[A-Za-z0-9_-]+['"]?)\s*:\s*([^\s\r\n#]+)/);
+    if (m) {
+      return {
+        apiKey: m[1].replace(/^['"]|['"]$/g, ""),
+        apiSecret: m[2].replace(/^['"]|['"]$/g, ""),
+      };
+    }
+  } catch {
+    // Fallback below if livekit.yaml not readable
+  }
+  return {
+    apiKey: "e2e_local_lk_key", // pragma: allowlist secret
+    apiSecret: "e2e_local_lk_secret_not_prod_2026", // pragma: allowlist secret
+  };
+}
+
+function dropTestDatabase() {
+  try {
+    execSync(
+      `docker exec bcaichat-mongodb mongosh --quiet --eval "db.getSiblingDB('${TEST_DB}').dropDatabase()"`,
+      { stdio: "pipe", timeout: 10000 }
+    );
+  } catch (err) {
+    console.warn(`⚠️ Drop DB warning (${TEST_DB}):`, err?.message || err);
+  }
+}
+
+function killProcessTree(child) {
+  if (!child || child.exitCode !== null) return;
+  try {
+    if (process.platform === "win32") {
+      execSync(`taskkill /PID ${child.pid} /T /F`, { stdio: "ignore", timeout: 8000 });
+    } else {
+      child.kill("SIGKILL");
+    }
+  } catch {
+    try {
+      child.kill("SIGKILL");
+    } catch {
+      // already exited
+    }
+  }
+}
+
+function startMockExternalServer() {
+  const otpTokens = new Map();
+  const stats = {
+    otpSent: 0,
+    otpValidated: 0,
+    creditChecks: 0,
+    googleTokenInfo: 0,
+    googleUserInfo: 0,
+  };
+
+  const server = http.createServer((req, res) => {
+    const reqUrl = new URL(req.url || "/", "http://127.0.0.1");
+    const chunks = [];
+    req.on("data", (c) => chunks.push(c));
+    req.on("end", () => {
+      const rawBody = Buffer.concat(chunks).toString("utf8");
+      let jsonBody = {};
+      if (rawBody) {
+        try {
+          jsonBody = JSON.parse(rawBody);
+        } catch {
+          jsonBody = {};
+        }
+      }
+
+      const sendJson = (status, data) => {
+        res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify(data));
+      };
+
+      // Mock SMSMKT Credit Check
+      if (req.method === "GET" && reqUrl.pathname === "/api/get-credit") {
+        stats.creditChecks += 1;
+        const apiKey = req.headers["api_key"];
+        const secretKey = req.headers["secret_key"];
+        if (!apiKey || !secretKey) {
+          return sendJson(401, { code: "401", detail: "Missing credentials" });
+        }
+        return sendJson(200, {
+          code: "000",
+          detail: "OK.",
+          result: { credit: 9999, credit_type: "E2E_MOCK" },
+        });
+      }
+
+      // Mock SMSMKT OTP Send (0 real credits used)
+      if (req.method === "POST" && reqUrl.pathname === "/api/otp-send") {
+        stats.otpSent += 1;
+        const token = `mock_otp_tok_${stats.otpSent}_${Date.now()}`;
+        const refCode = String(jsonBody.ref_code || "REF001");
+        otpTokens.set(token, { phone: jsonBody.phone, refCode });
+        return sendJson(200, {
+          code: "000",
+          detail: "OK.",
+          result: { token, ref_code: refCode },
+        });
+      }
+
+      // Mock SMSMKT OTP Validate
+      if (req.method === "POST" && reqUrl.pathname === "/api/otp-validate") {
+        stats.otpValidated += 1;
+        const token = String(jsonBody.token || "");
+        const otpCode = String(jsonBody.otp_code || "");
+        const rec = otpTokens.get(token);
+        if (!rec) {
+          return sendJson(200, {
+            code: "404",
+            detail: "Unknown OTP token",
+            result: { status: false, message: "Unknown token" },
+          });
+        }
+        const ok = otpCode === MOCK_OTP_CODE;
+        return sendJson(200, {
+          code: "000",
+          detail: ok ? "OK." : "Invalid OTP",
+          result: {
+            status: ok,
+            message: ok ? "Verified by mock SMSMKT" : "Invalid OTP code",
+          },
+        });
+      }
+
+      // Mock Google OAuth tokeninfo
+      if (req.method === "GET" && reqUrl.pathname === "/tokeninfo") {
+        stats.googleTokenInfo += 1;
+        const idToken = reqUrl.searchParams.get("id_token");
+        const accessToken = reqUrl.searchParams.get("access_token");
+        if (idToken === "mock_id_u4") {
+          return sendJson(200, {
+            aud: MOCK_GOOGLE_CLIENT_ID,
+            sub: "google_sub_e2e_u4",
+            email: "user4.google@bcaichat.local",
+            email_verified: "true",
+            name: "ปลายฟ้า (Google 4)",
+            picture: "https://ui-avatars.com/api/?name=P4&background=812920&color=fff",
+          });
+        }
+        if (idToken === "mock_id_u1_link") {
+          return sendJson(200, {
+            aud: MOCK_GOOGLE_CLIENT_ID,
+            sub: "google_sub_e2e_u1_link",
+            email: "u1.linked@bcaichat.local",
+            email_verified: "true",
+            name: "ก้อง Linked Gmail",
+          });
+        }
+        if (idToken === "mock_id_u1_new") {
+          return sendJson(200, {
+            aud: MOCK_GOOGLE_CLIENT_ID,
+            sub: "google_sub_e2e_u1_new",
+            email: "u1.newgmail@bcaichat.local",
+            email_verified: "true",
+            name: "ก้อง Recovered Gmail",
+          });
+        }
+        if (idToken === "mock_id_unverified") {
+          return sendJson(200, {
+            aud: MOCK_GOOGLE_CLIENT_ID,
+            sub: "google_sub_bad",
+            email: "unverified@bcaichat.local",
+            email_verified: "false",
+            name: "Unverified User",
+          });
+        }
+        if (accessToken === "mock_access_u5") {
+          return sendJson(200, {
+            aud: MOCK_GOOGLE_CLIENT_ID,
+            scope: "openid email profile",
+          });
+        }
+        return sendJson(400, { error: "invalid_token" });
+      }
+
+      // Mock Google OAuth userinfo
+      if (req.method === "GET" && reqUrl.pathname === "/oauth2/v3/userinfo") {
+        stats.googleUserInfo += 1;
+        const auth = String(req.headers["authorization"] || "");
+        if (auth === "Bearer mock_access_u5") {
+          return sendJson(200, {
+            sub: "google_sub_e2e_u5",
+            email: "user5.google@bcaichat.local",
+            email_verified: true,
+            name: "นที (Google 5)",
+            picture: "https://ui-avatars.com/api/?name=N5&background=681F18&color=fff",
+          });
+        }
+        return sendJson(401, { error: "unauthorized" });
+      }
+
+      return sendJson(404, { error: "Mock endpoint not found", path: reqUrl.pathname });
+    });
   });
+
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const addr = server.address();
+      resolve({
+        server,
+        url: `http://127.0.0.1:${addr.port}`,
+        stats,
+      });
+    });
+  });
+}
+
+async function waitForHealth(timeoutMs = 30000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const res = await fetch(`${BASE_URL}/api/health`);
+      if (res.ok) return;
+    } catch {
+      // retry
+    }
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  throw new Error(`Isolated backend on ${BASE_URL} did not become healthy within ${timeoutMs}ms`);
+}
+
+function spawnIsolatedBackend(mockUrl) {
+  const lk = readLiveKitDevCredentials();
+  const exePath = path.join(ROOT_DIR, "backend", "target", "debug", "bcaichat-backend.exe");
+  const hasExe = fs.existsSync(exePath);
+
+  const env = {
+    ...process.env,
+    PORT: String(TEST_PORT),
+    RUST_LOG: "bcaichat_backend=warn",
+    MONGODB_URI: "mongodb://127.0.0.1:27030",
+    MONGODB_DB: TEST_DB,
+    MINIO_ENDPOINT: "http://127.0.0.1:9130",
+    MINIO_BUCKET: "bcaichat-storage",
+    JWT_SECRET: "e2e_isolated_jwt_secret_key_not_for_production_2026", // pragma: allowlist secret
+    PUBLIC_BASE_URL: BASE_URL,
+    SMSMKT_BASE_URL: mockUrl,
+    SMSMKT_API_KEY: "e2e_mock_sms_api_key", // pragma: allowlist secret
+    SMSMKT_SECRET_KEY: "e2e_mock_sms_secret_key",
+    SMSMKT_PROJECT_KEY: "e2e_mock_sms_project_key",
+    GOOGLE_OAUTH_VERIFY_BASE: mockUrl,
+    GOOGLE_CLIENT_ID: MOCK_GOOGLE_CLIENT_ID,
+    SUPER_ADMIN_EMAIL: "",
+    SUPER_ADMIN_PHONE: "",
+    ADMIN_BOOTSTRAP_CODE: MOCK_BOOTSTRAP_CODE,
+    LIVEKIT_URL: "ws://127.0.0.1:7880",
+    LIVEKIT_API_KEY: lk.apiKey,
+    LIVEKIT_API_SECRET: lk.apiSecret,
+    DEEPSEEK_API_KEY: "",
+    FCM_SERVICE_ACCOUNT_FILE: "",
+  };
+
+  const child = hasExe
+    ? spawn(exePath, [], { cwd: path.join(ROOT_DIR, "backend"), env, stdio: ["ignore", "pipe", "pipe"] })
+    : spawn("cargo", ["run"], {
+        cwd: path.join(ROOT_DIR, "backend"),
+        env,
+        shell: process.platform === "win32",
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+
+  const logs = [];
+  child.stdout?.on("data", (d) => logs.push(d.toString()));
+  child.stderr?.on("data", (d) => logs.push(d.toString()));
+  return { child, logs, binaryUsed: hasExe ? exePath : "cargo run" };
+}
+
+async function api(method, reqPath, body = undefined, token = null, expectedStatus = 200) {
+  const headers = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  let payload;
+  if (body instanceof FormData) {
+    payload = body;
+  } else if (body !== undefined) {
+    headers["Content-Type"] = "application/json";
+    payload = JSON.stringify(body);
+  }
+  const res = await fetch(`${BASE_URL}${reqPath}`, { method, headers, body: payload });
   const text = await res.text();
   let json = null;
   try {
@@ -79,669 +344,1003 @@ async function api(method, path, token = null, body = undefined) {
   } catch {
     json = text;
   }
+  if (expectedStatus !== null && res.status !== expectedStatus) {
+    throw new Error(
+      `${method} ${reqPath} expected HTTP ${expectedStatus}, got ${res.status}: ${text}`
+    );
+  }
   return { status: res.status, data: json, raw: text };
 }
 
 function connectWs(token, label) {
   return new Promise((resolve, reject) => {
+    const ws = new WebSocket(`${WS_BASE}?token=${encodeURIComponent(token)}&device=e2e_${label}`);
     const events = [];
     const waiters = [];
-    const ws = new WebSocket(`${WS_BASE_URL}/ws?token=${encodeURIComponent(token)}`);
 
-    const timer = setTimeout(() => {
-      reject(new Error(`WS connect timeout for ${label}`));
-    }, 8000);
-
-    ws.addEventListener("message", (ev) => {
-      let parsed;
+    ws.addEventListener("message", (evt) => {
       try {
-        parsed = JSON.parse(typeof ev.data === "string" ? ev.data : ev.data.toString());
-      } catch {
-        return;
-      }
-      events.push(parsed);
-      for (let i = waiters.length - 1; i >= 0; i--) {
-        if (waiters[i].pred(parsed)) {
-          const w = waiters.splice(i, 1)[0];
-          clearTimeout(w.timer);
-          w.resolve(parsed);
+        const parsed = JSON.parse(String(evt.data));
+        events.push(parsed);
+        for (let i = waiters.length - 1; i >= 0; i -= 1) {
+          const w = waiters[i];
+          if (w.predicate(parsed)) {
+            waiters.splice(i, 1);
+            clearTimeout(w.timer);
+            w.resolve(parsed);
+          }
         }
-      }
-      if (parsed.event === "connected") {
-        clearTimeout(timer);
-        resolve({
-          ws,
-          events,
-          waitFor(pred, timeoutMs = 8000, desc = "ws event") {
-            const existing = events.find(pred);
-            if (existing) return Promise.resolve(existing);
-            return new Promise((resWait, rejWait) => {
-              const t = setTimeout(() => {
-                rejWait(new Error(`Timeout waiting for ${desc} on ${label}`));
-              }, timeoutMs);
-              waiters.push({ pred, resolve: resWait, timer: t });
-            });
-          },
-          clearEvents() {
-            events.length = 0;
-          },
-          sendJson(obj) {
-            ws.send(JSON.stringify(obj));
-          },
-          close() {
-            try {
-              ws.close();
-            } catch {}
-          },
-        });
+      } catch {
+        // ignore
       }
     });
 
-    ws.addEventListener("error", (err) => {
-      clearTimeout(timer);
-      reject(new Error(`WS error on ${label}: ${err?.message || "unknown"}`));
+    const timeout = setTimeout(() => reject(new Error(`WS connect timeout for ${label}`)), 8000);
+    ws.addEventListener("open", () => {
+      clearTimeout(timeout);
+      resolve({
+        ws,
+        events,
+        waitFor(predicate, timeoutMs = 8000, desc = "event") {
+          const existing = events.find(predicate);
+          if (existing) return Promise.resolve(existing);
+          return new Promise((res, rej) => {
+            const timer = setTimeout(() => {
+              const idx = waiters.findIndex((x) => x.resolve === res);
+              if (idx >= 0) waiters.splice(idx, 1);
+              rej(new Error(`Timeout waiting for WS ${desc} on ${label}`));
+            }, timeoutMs);
+            waiters.push({ predicate, resolve: res, reject: rej, timer });
+          });
+        },
+        close() {
+          try {
+            ws.close();
+          } catch {
+            // ignore
+          }
+        },
+      });
+    });
+
+    ws.addEventListener("error", () => {
+      clearTimeout(timeout);
+      reject(new Error(`WS error on ${label}`));
     });
   });
 }
 
+async function loginViaMockPhoneOtp(phone, displayName) {
+  const reqRes = await api("POST", "/api/auth/otp/request", { phone, purpose: "auth" });
+  const ch = reqRes.data;
+  assert.ok(ch.challenge_id, "challenge_id returned");
+  assert.match(ch.ref_code, /^[A-Z0-9]{6}$/, "ref_code must be 6 uppercase chars");
+  assert.ok(ch.expires_in_sec >= 60, "expires_in_sec >= 60");
+
+  const verRes = await api("POST", "/api/auth/otp/verify", {
+    challenge_id: ch.challenge_id,
+    otp_code: MOCK_OTP_CODE,
+    ref_code: ch.ref_code,
+    display_name: displayName,
+  });
+  return { ...verRes.data, ref_code: ch.ref_code, challenge_id: ch.challenge_id };
+}
+
 async function main() {
-  console.log(`🚀 Starting BC Ai Chat 5-User Personal E2E Suite against ${BASE_URL} ...`);
+  console.log("🚀 Starting BC Ai Chat Isolated E2E (API + WS + Mock SMSMKT/Google + OA + LiveKit)...");
+
+  let mock = null;
+  let backendProc = null;
   const wsClients = [];
-  let tempGroupId = null;
-  let demo5TestMsgId = null;
-  let aiDirectMsgIds = [];
-  let adminToken = null;
 
   try {
-    // 1. Health, Theme & Personal Mini-App Branding Check
-    const health = await api("GET", "/api/health");
-    assert.equal(health.status, 200);
-    assert.equal(health.data.status, "ok");
-    assert.equal(health.data.mongodb, true);
-    assert.equal(health.data.minio, true);
-    record("1. Health check", "MongoDB=true, MinIO=true");
+    dropTestDatabase();
+    mock = await startMockExternalServer();
+    console.log(`✅ In-process Mock SMSMKT & Google server listening at ${mock.url}`);
 
-    const theme = await api("GET", "/api/settings/theme");
-    assert.equal(theme.status, 200);
-    assert.equal(theme.data.preset, "ban_chiang");
-    record("2. Default theme preset", `preset=${theme.data.preset}`);
+    backendProc = spawnIsolatedBackend(mock.url);
+    await waitForHealth(35000);
+    console.log(`✅ Isolated Backend (${backendProc.binaryUsed}) ready at ${BASE_URL} [DB=${TEST_DB}]`);
 
-    const miniApps = await api("GET", "/api/mini-apps");
-    assert.equal(miniApps.status, 200);
-    assert.ok(Array.isArray(miniApps.data) && miniApps.data.length >= 5);
-    assertCleanBranding(miniApps.raw, "/api/mini-apps");
-    const appCodes = new Set(miniApps.data.map((m) => m.app_code));
-    for (const expectedCode of [
-      "ai_companion",
-      "split_bill",
-      "trip_planner",
-      "gift_wishlist",
-      "hangout_invite",
-    ]) {
-      assert.ok(appCodes.has(expectedCode), `Expected personal mini-app ${expectedCode}`);
-    }
-    for (const slug of [
-      "ai",
-      "split",
-      "trip",
-      "wishlist",
-      "hangout",
-      "leave",
-      "quotation",
-      "expense",
-      "booking",
-    ]) {
-      const page = await api("GET", `/miniapp/${slug}`);
-      assert.equal(page.status, 200);
-      assertCleanBranding(page.raw, `/miniapp/${slug}`);
-    }
-    record("3. Personal Mini-apps & HTML branding audit", `${miniApps.data.length} apps clean`);
+    // 1. Auth Config & Demo Removal Checks
+    const healthRes = await api("GET", "/api/health");
+    assert.equal(healthRes.data.status, "ok");
 
-    // 2. Admin & 5 Personal Demo Accounts Login
-    const adminAuth = await api("POST", "/api/auth/google", null, {
-      email: "jead@bcaichat.local",
-      id_token: "demo_jead",
+    const cfgRes = await api("GET", "/api/auth/config");
+    const cfg = cfgRes.data;
+    assert.equal(cfg.demo_enabled, false, "demo_enabled must be false");
+    assert.equal(cfg.phone_otp_enabled, true, "phone_otp_enabled must be true");
+    assert.equal(cfg.phone_otp_ready, true, "phone_otp_ready must be true");
+    assert.equal(cfg.google_enabled, true, "google_enabled must be true");
+    assert.equal(cfg.admin_bootstrap_enabled, true, "admin_bootstrap_enabled must be true");
+    assert.equal(cfg.livekit_enabled, true, "livekit_enabled must be true");
+
+    const oldDemoRes = await api("POST", "/api/auth/demo", { email: "demo1@bcaichat.local" }, null, null);
+    assert.ok([404, 405].includes(oldDemoRes.status), `/api/auth/demo must be gone, got ${oldDemoRes.status}`);
+
+    // 2. Owner Bootstrap Admin FIRST (so subsequent Phone/Google users register as regular role="user")
+    const badBoot = await api(
+      "POST",
+      "/api/auth/bootstrap-admin",
+      { code: "wrong_code_999" },
+      null,
+      null
+    );
+    assert.ok([401, 403].includes(badBoot.status), "Wrong bootstrap code must be denied");
+
+    const adminRes = await api("POST", "/api/auth/bootstrap-admin", {
+      code: MOCK_BOOTSTRAP_CODE,
+      display_name: "ลุงจืด Admin E2E",
     });
-    assert.equal(adminAuth.status, 200);
-    assert.equal(adminAuth.data.user.id, "user_jead");
-    assert.equal(adminAuth.data.user.role, "admin");
-    assert.equal(adminAuth.data.user.display_name, "ลุงจืด");
-    assert.equal(adminAuth.data.user.department, "เจ้าของระบบ");
-    assert.equal(adminAuth.data.user.job_title, "ผู้ดูแลระบบส่วนตัว");
-    adminToken = adminAuth.data.token;
+    assert.equal(adminRes.data.user.id, "user_owner_admin");
+    assert.equal(adminRes.data.user.role, "admin");
 
-    const overview = await api("GET", "/api/admin/overview", adminToken);
-    assert.equal(overview.status, 200);
-    assert.ok(String(overview.data.mongo_db).startsWith("bcaichat"));
-    assert.equal(overview.data.minio_bucket, "bcaichat-storage");
-    assert.ok(overview.data.total_users >= 10);
+    // 3. Phone OTP (Users 1..3), 60s Cooldown (429), Invalid OTP Check
+    const otpU1Req = await api("POST", "/api/auth/otp/request", { phone: "0811111111", purpose: "auth" });
+    assert.match(otpU1Req.data.ref_code, /^[A-Z0-9]{6}$/);
+    const cooldownRes = await api(
+      "POST",
+      "/api/auth/otp/request",
+      { phone: "0811111111", purpose: "auth" },
+      null,
+      429
+    );
+    assert.equal(cooldownRes.status, 429, "Immediate duplicate OTP request must return 429 cooldown");
 
-    const adminUsers = await api("GET", "/api/admin/users", adminToken);
-    assert.equal(adminUsers.status, 200);
-    assertCleanBranding(adminUsers.raw, "/api/admin/users");
+    const wrongOtpRes = await api(
+      "POST",
+      "/api/auth/otp/verify",
+      {
+        challenge_id: otpU1Req.data.challenge_id,
+        otp_code: "000000",
+        ref_code: otpU1Req.data.ref_code,
+      },
+      null,
+      null
+    );
+    assert.ok(wrongOtpRes.status >= 400 && wrongOtpRes.status < 500, "Wrong OTP must fail 4xx");
 
-    const expectedPersonas = [
-      ["ก้อง (Demo 1)", "@kong.bc", "เพื่อนสนิท", "สายเที่ยว & ถ่ายรูป"],
-      ["แพร (Demo 2)", "@prae.bc", "เพื่อนสนิท", "สายคาเฟ่ & ชวนกินข้าว"],
-      ["บอส (Demo 3)", "@boss.bc", "ครอบครัว", "สายแกดเจ็ต & เพลง"],
-      ["มายด์ (Demo 4)", "@mind.bc", "เพื่อนสนิท", "สายดูหนัง & ซีรีส์"],
-      ["ต้น (Demo 5)", "@ton.bc", "ก๊วนกีฬา", "สายวิ่ง & แคมป์ปิ้ง"],
+    const u1 = await api("POST", "/api/auth/otp/verify", {
+      challenge_id: otpU1Req.data.challenge_id,
+      otp_code: MOCK_OTP_CODE,
+      ref_code: otpU1Req.data.ref_code,
+      display_name: "ก้อง (OTP 1)",
+    });
+    assert.equal(u1.data.user.role, "user");
+    assert.equal(u1.data.user.phone, "0811111111");
+    assert.equal(u1.data.user.phone_verified, true);
+
+    const u2Data = await loginViaMockPhoneOtp("0822222222", "แพร (OTP 2)");
+    const u3Data = await loginViaMockPhoneOtp("0833333333", "บอส (OTP 3)");
+    assert.equal(u2Data.user.role, "user");
+    assert.equal(u2Data.user.phone, "0822222222");
+    assert.equal(u3Data.user.phone, "0833333333");
+
+    // 4. Verified Google OAuth (Users 4..5) + Unverified/Fake Token Rejection
+    const badDemoGoogle = await api("POST", "/api/auth/google", { id_token: "demo_fake" }, null, null);
+    assert.ok(badDemoGoogle.status >= 400 && badDemoGoogle.status < 500, "demo_ Google token must reject");
+
+    const unverifiedGoogle = await api(
+      "POST",
+      "/api/auth/google",
+      { id_token: "mock_id_unverified" },
+      null,
+      null
+    );
+    assert.ok(
+      unverifiedGoogle.status >= 400 && unverifiedGoogle.status < 500,
+      "Unverified Gmail must be rejected"
+    );
+
+    const u4Res = await api("POST", "/api/auth/google", { id_token: "mock_id_u4" }); // pragma: allowlist secret
+    const u5Res = await api("POST", "/api/auth/google", { access_token: "mock_access_u5" }); // pragma: allowlist secret
+    assert.equal(u4Res.data.user.email_verified, true);
+    assert.equal(u5Res.data.user.email_verified, true);
+    assert.equal(u4Res.data.user.role, "user");
+    assert.equal(u5Res.data.user.role, "user");
+
+    const users = [
+      { label: "u1", token: u1.data.token, user: u1.data.user },
+      { label: "u2", token: u2Data.token, user: u2Data.user },
+      { label: "u3", token: u3Data.token, user: u3Data.user },
+      { label: "u4", token: u4Res.data.token, user: u4Res.data.user },
+      { label: "u5", token: u5Res.data.token, user: u5Res.data.user },
+      { label: "admin", token: adminRes.data.token, user: adminRes.data.user },
     ];
-    const demos = [];
-    for (let i = 1; i <= 5; i++) {
-      const [expName, expBcId, expDept, expJob] = expectedPersonas[i - 1];
-      const res = await api("POST", "/api/auth/google", null, {
-        email: `demo${i}@bcaichat.local`,
-        id_token: `demo_${i}`,
-      });
-      assert.equal(res.status, 200);
-      assert.equal(res.data.user.id, `user_demo${i}`);
-      assert.equal(res.data.user.display_name, expName);
-      assert.equal(res.data.user.bc_id, expBcId);
-      assert.equal(res.data.user.department, expDept);
-      assert.equal(res.data.user.job_title, expJob);
-      demos.push({
-        idx: i,
-        id: res.data.user.id,
-        name: res.data.user.display_name,
-        token: res.data.token,
-      });
-    }
-    record("4. Admin + 5 Personal Demo accounts login", demos.map((d) => d.name).join(", "));
+    const [U1, U2, U3, U4, U5, ADMIN] = users;
 
-    // Verify mutual friendships + conv_group_demo5 & conv_group_family + seeded items
-    const demo1Friends = await api("GET", "/api/friends", demos[0].token);
-    assert.equal(demo1Friends.status, 200);
-    assertCleanBranding(demo1Friends.raw, "/api/friends");
-    const friendIds = new Set(demo1Friends.data.map((f) => f.id));
-    for (const target of ["user_demo2", "user_demo3", "user_demo4", "user_demo5", "user_ai", "user_official"]) {
-      assert.ok(friendIds.has(target), `demo1 must have friend ${target}`);
+    await api("GET", "/api/admin/auth-settings", undefined, U1.token, 403);
+    const authSettingsGet = await api("GET", "/api/admin/auth-settings", undefined, ADMIN.token, 200);
+    assert.equal(authSettingsGet.data.smsmkt_has_keys, true);
+    assert.equal(authSettingsGet.data.credit_info?.credit, 9999);
+    assert.equal(authSettingsGet.data.google_enabled, true);
+
+    const authSettingsPut = await api(
+      "PUT",
+      "/api/admin/auth-settings",
+      { google_client_id: MOCK_GOOGLE_CLIENT_ID },
+      ADMIN.token,
+      200
+    );
+    assert.equal(authSettingsPut.data.google_enabled, true);
+    console.log("✅ Auth passed: OTP + Ref Code + 429 cooldown + Google OAuth + Bootstrap Admin + Auth Settings");
+
+    // 5. Default Theme, Mini-Apps, Friend Search & Add by Thai Phone
+    const themeRes = await api("GET", "/api/settings/theme");
+    assert.equal(themeRes.data.preset, "ban_chiang");
+
+    const miniAppsRes = await api("GET", "/api/mini-apps", undefined, U1.token);
+    assert.ok(miniAppsRes.data.length >= 5, "Seeded personal mini-apps >= 5");
+    for (const ma of miniAppsRes.data) {
+      assertCleanBranding(ma.title + " " + ma.description, `mini_app_${ma.code}`);
     }
 
-    const demo1Convs = await api("GET", "/api/conversations?folder=all", demos[0].token);
-    assert.equal(demo1Convs.status, 200);
-    assertCleanBranding(demo1Convs.raw, "/api/conversations?folder=all");
-    assert.ok(!demo1Convs.data.some((c) => c.id === "conv_group_office"), "conv_group_office must not exist");
-
-    const demo5Room = demo1Convs.data.find((c) => c.id === "conv_group_demo5");
-    assert.ok(demo5Room, "conv_group_demo5 must exist");
-    assert.equal(demo5Room.name, "แก๊งเพื่อนสนิท 5 คน + BC AI");
-    assert.equal(demo5Room.folder, "group");
-    assert.equal(demo5Room.member_ids.length, 6);
-
-    const familyRoom = demo1Convs.data.find((c) => c.id === "conv_group_family");
-    assert.ok(familyRoom, "conv_group_family must exist");
-    assert.equal(familyRoom.name, "กลุ่มครอบครัว & เพื่อนบ้าน");
-    assert.equal(familyRoom.folder, "family");
-
-    const famFilter = await api("GET", "/api/conversations?folder=family", demos[0].token);
-    assert.equal(famFilter.status, 200);
-    assert.ok(famFilter.data.some((c) => c.id === "conv_group_family"), "?folder=family returns conv_group_family");
-
-    const demo5Msgs = await api("GET", "/api/conversations/conv_group_demo5/messages", demos[0].token);
-    assert.equal(demo5Msgs.status, 200);
-    assertCleanBranding(demo5Msgs.raw, "conv_group_demo5 messages");
+    const searchByPhone = await api("GET", "/api/users/search?q=0822222222", undefined, U1.token);
     assert.ok(
-      demo5Msgs.data.some((m) => m.type === "poll" && m.poll?.question === "เสาร์นี้ไปกินข้าวร้านไหนดี?"),
-      "seeded personal poll must exist in conv_group_demo5"
-    );
-    assert.ok(
-      demo5Msgs.data.some((m) => m.type === "event" && m.event_data?.title === "นัดกินหมูกระทะ & คาเฟ่เสาร์นี้"),
-      "seeded personal event must exist in conv_group_demo5"
+      searchByPhone.data.some((x) => x.id === U2.user.id),
+      "Thai phone search 0822222222 must find User 2"
     );
 
-    const demo5Albums = await api("GET", "/api/conversations/conv_group_demo5/albums", demos[0].token);
-    assert.equal(demo5Albums.status, 200);
-    assertCleanBranding(demo5Albums.raw, "conv_group_demo5 albums");
-    assert.ok(
-      demo5Albums.data.some((a) => a.title === "อัลบั้มทริปเที่ยวและมื้ออร่อย"),
-      "seeded personal album must exist in conv_group_demo5"
-    );
+    const addFriend12 = await api("POST", "/api/friends/add", { phone: "0822222222" }, U1.token);
+    const directConv12Id = addFriend12.data.conversation_id;
+    assert.ok(directConv12Id, "Adding friend by phone creates/returns 1-1 conversation");
 
-    const demo5Notes = await api("GET", "/api/notes?conversation_id=conv_group_demo5", demos[0].token);
-    assert.equal(demo5Notes.status, 200);
-    assertCleanBranding(demo5Notes.raw, "conv_group_demo5 notes");
-    assert.ok(
-      demo5Notes.data.some((n) => n.title === "ลิสต์ร้านอร่อยและแผนเที่ยว"),
-      "seeded personal group note must exist in conv_group_demo5"
-    );
+    await api("POST", "/api/friends/add", { phone: "0833333333" }, U1.token);
+    await api("POST", "/api/friends/add", { bc_id: U4.user.bc_id }, U1.token);
+    await api("POST", "/api/friends/add", { bc_id: U5.user.bc_id }, U1.token);
+    console.log("✅ Thai phone friend search & add passed");
 
-    const personalNotes = await api("GET", "/api/notes", demos[0].token);
-    assert.equal(personalNotes.status, 200);
-    assertCleanBranding(personalNotes.raw, "personal notebook");
-    assert.ok(
-      personalNotes.data.some((n) => n.title === "บันทึกส่วนตัวของฉัน — รหัส Wi-Fi บ้าน & ลิสต์หนังน่าดู"),
-      "seeded personal Wi-Fi/movie notebook note must exist"
-    );
-
-    for (const seedKey of ["seed_trip_postcard.svg", "seed_weekend_trip.txt"]) {
-      const seedRes = await fetch(`${BASE_URL}/api/files/${seedKey}`);
-      assert.equal(seedRes.status, 200, `${seedKey} must be served from MinIO`);
-    }
-    record("5. Seeded personal rooms, friends, poll, event, album, notes & MinIO files verified", "conv_group_demo5 + conv_group_family");
-
-    // 3. Connect all 5 Demo WebSockets simultaneously
-    for (const d of demos) {
-      const client = await connectWs(d.token, d.id);
+    // 6. WebSocket Connections, 1-1 & Group Chat, MinIO Upload/Download/Purge
+    for (const u of users) {
+      const client = await connectWs(u.token, u.label);
+      u.ws = client;
       wsClients.push(client);
     }
-    record("6. 5 simultaneous WebSocket connections active", "user_demo1..5");
 
-    // Broadcast real-time message in conv_group_demo5 and verify all 5 receive it
-    for (const c of wsClients) c.clearEvents();
-    const liveText = `ทักทายแก๊งเพื่อนครบ 5 คนแบบ Real-time ${Date.now()}`;
-    const sentLive = await api(
-      "POST",
-      "/api/conversations/conv_group_demo5/messages",
-      demos[0].token,
-      { type: "text", content: liveText }
+    const png1x1 = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=",
+      "base64"
     );
-    assert.equal(sentLive.status, 200);
-    demo5TestMsgId = sentLive.data.id;
+    const form = new FormData();
+    form.append("file", new Blob([png1x1], { type: "image/png" }), "e2e_dot.png");
+    const uploadRes = await api("POST", "/api/upload", form, U1.token);
+    assert.ok(uploadRes.data.key, "MinIO upload returned key");
+    const dlUrl = uploadRes.data.url.startsWith("http")
+      ? uploadRes.data.url
+      : `${BASE_URL}${uploadRes.data.url}`;
+    const dlRes = await fetch(dlUrl);
+    assert.equal(dlRes.status, 200, "Uploaded MinIO file must be downloadable");
 
-    await Promise.all(
-      wsClients.map((c, idx) =>
-        c.waitFor(
-          (e) => e.event === "new_message" && e.message?.id === demo5TestMsgId,
-          6000,
-          `new_message on demo${idx + 1}`
-        )
+    const fileMsg = await api(
+      "POST",
+      `/api/conversations/${directConv12Id}/messages`,
+      {
+        type: "image",
+        content: "รูปทดสอบ E2E",
+        attachment: {
+          key: uploadRes.data.key,
+          url: uploadRes.data.url,
+          file_name: uploadRes.data.file_name,
+          mime_type: uploadRes.data.mime_type,
+          file_size: uploadRes.data.file_size,
+        },
+      },
+      U1.token
+    );
+    await U2.ws.waitFor(
+      (e) => e.event === "new_message" && e.message?.id === fileMsg.data.id,
+      6000,
+      "1-1 image message"
+    );
+    await api("POST", `/api/messages/${fileMsg.data.id}/purge`, undefined, U1.token);
+    const dlAfterPurge = await fetch(dlUrl);
+    assert.equal(dlAfterPurge.status, 404, "Purged MinIO file must return 404");
+
+    const groupRes = await api(
+      "POST",
+      "/api/conversations/group",
+      {
+        name: "แก๊งทริปบ้านเชียง E2E",
+        category: "เพื่อน",
+        member_ids: [U2.user.id, U3.user.id, U4.user.id, U5.user.id],
+      },
+      U1.token
+    );
+    const groupId = groupRes.data.id;
+    const pollRes = await api(
+      "POST",
+      `/api/conversations/${groupId}/polls`,
+      { question: "กินร้านไหนดี?", options: ["บ้านเชียงคาเฟ่", "ก๋วยเตี๋ยวเรือ"] },
+      U1.token
+    );
+    await U3.ws.waitFor(
+      (e) => e.event === "new_message" && e.message?.id === pollRes.data.id,
+      6000,
+      "group poll"
+    );
+    await api(
+      "POST",
+      `/api/messages/${pollRes.data.id}/vote`,
+      { option_id: pollRes.data.poll.options[0].id },
+      U2.token
+    );
+    const aiMentionRes = await api(
+      "POST",
+      `/api/conversations/${groupId}/messages`,
+      { content: "@ai สรุปแผนทริปสั้นๆ" },
+      U1.token
+    );
+    assert.ok(aiMentionRes.data.id);
+    await U2.ws.waitFor(
+      (e) =>
+        e.event === "new_message" &&
+        e.conversation_id === groupId &&
+        e.message?.sender_id === "user_ai",
+      6000,
+      "@ai group fallback reply"
+    );
+    console.log("✅ 1-1/Group WS + MinIO upload/download/purge + Poll + @ai passed");
+
+    // 7. Multi-Shop & Multi-Role ร้านค้า
+    const shopA = (
+      await api(
+        "POST",
+        "/api/oa",
+        {
+          handle: "e2e_cafe",
+          display_name: "บ้านเชียงคาเฟ่ E2E",
+          category: "อาหาร & คาเฟ่",
+          greeting_message: "สวัสดีค่ะ ยินดีต้อนรับสู่บ้านเชียงคาเฟ่ E2E!",
+          calls_enabled: true,
+        },
+        U1.token
       )
-    );
-    record("7. Real-time WS broadcast delivered to all 5 users", demo5TestMsgId);
+    ).data;
+    const shopB = (
+      await api(
+        "POST",
+        "/api/oa",
+        {
+          handle: "e2e_bakery",
+          display_name: "ขนมไทยบ้านเชียง E2E",
+          category: "ร้านค้า & บริการ",
+          calls_enabled: true,
+        },
+        U1.token
+      )
+    ).data;
 
-    // Typing indicator over WS
-    for (const c of wsClients) c.clearEvents();
-    wsClients[1].sendJson({
-      event: "typing",
-      conversation_id: "conv_group_demo5",
-    });
-    await wsClients[0].waitFor(
-      (e) => e.event === "typing" && e.user_id === "user_demo2" && e.conversation_id === "conv_group_demo5",
-      5000,
-      "typing indicator from user_demo2"
-    );
-    record("8. Real-time WS typing indicator verified", "user_demo2 -> user_demo1");
+    assert.equal(shopA.handle, "e2e_cafe");
+    assert.equal(shopB.handle, "e2e_bakery");
+    assert.equal(shopA.my_role, "owner");
 
-    // Read receipt over WS
-    const readRes = await api("POST", "/api/conversations/conv_group_demo5/read", demos[2].token);
-    assert.equal(readRes.status, 200);
-    await wsClients[0].waitFor(
-      (e) => e.event === "message_read" && e.conversation_id === "conv_group_demo5" && e.user_id === "user_demo3",
-      5000,
-      "message_read from user_demo3"
-    );
-    record("9. Real-time WS read receipt verified", "user_demo3");
-
-    // 4. Friends favorite / block / hide
-    const friendUpd = await api("PUT", "/api/friends/user_demo5", demos[0].token, {
-      is_favorite: true,
-      is_blocked: true,
-      is_hidden: true,
-    });
-    assert.equal(friendUpd.status, 200);
-    assert.equal(friendUpd.data.is_favorite, true);
-    assert.equal(friendUpd.data.is_blocked, true);
-    assert.equal(friendUpd.data.is_hidden, true);
-    const friendRestore = await api("PUT", "/api/friends/user_demo5", demos[0].token, {
-      is_favorite: false,
-      is_blocked: false,
-      is_hidden: false,
-    });
-    assert.equal(friendRestore.status, 200);
-    assert.equal(friendRestore.data.is_blocked, false);
-    record("10. Friends favorite/block/hide toggle", "PUT /api/friends/:friend_id");
-
-    // 5. Group lifecycle: Create -> Meta -> Invite (friends + user_ai) -> Join via invite_token
-    const createdGroup = await api("POST", "/api/conversations/group", demos[0].token, {
-      name: "ก๊วนจัดทริปเขาใหญ่ E2E",
-      member_ids: ["user_demo2", "user_demo3"],
-      folder: "group",
-    });
-    assert.equal(createdGroup.status, 200);
-    tempGroupId = createdGroup.data.id;
-    const inviteToken = createdGroup.data.invite_token;
-    assert.ok(typeof inviteToken === "string" && inviteToken.length >= 6);
-
-    const metaRes = await api("PUT", `/api/conversations/${tempGroupId}/meta`, demos[0].token, {
-      is_muted: true,
-      is_archived: false,
-      is_pinned: true,
-      folder: "family",
-      name: "ก๊วนจัดทริปเขาใหญ่ E2E + AI",
-    });
-    assert.equal(metaRes.status, 200);
-    assert.equal(metaRes.data.is_muted, true);
-    assert.equal(metaRes.data.is_pinned, true);
-    assert.equal(metaRes.data.folder, "family");
-    assert.equal(metaRes.data.name, "ก๊วนจัดทริปเขาใหญ่ E2E + AI");
-    // Unmute so notifications work normally
-    await api("PUT", `/api/conversations/${tempGroupId}/meta`, demos[0].token, { is_muted: false });
-
-    for (const c of wsClients) c.clearEvents();
-    const invRes = await api("POST", `/api/conversations/${tempGroupId}/members`, demos[0].token, {
-      member_ids: ["user_demo4", "user_ai"],
-    });
-    assert.equal(invRes.status, 200);
-    assert.ok(invRes.data.member_ids.includes("user_demo4"));
-    assert.ok(invRes.data.member_ids.includes("user_ai"));
-    await wsClients[3].waitFor(
-      (e) => e.event === "conversation_updated" && e.conversation_id === tempGroupId,
-      5000,
-      "conversation_updated on invited user_demo4"
-    );
-
-    const joinRes = await api("POST", "/api/conversations/join", demos[4].token, {
-      invite_token: inviteToken,
-    });
-    assert.equal(joinRes.status, 200);
-    assert.equal(joinRes.data.id, tempGroupId);
-    assert.equal(joinRes.data.member_ids.length, 6);
-    record("11. Group create, meta, invite user_ai & join via invite_token", tempGroupId);
-
-    // 6. @ai Mention in Group + 1-1 Direct Chat with user_ai
-    for (const c of wsClients) c.clearEvents();
-    const aiGroupPrompt = await api(
+    // Regular user U1 adds U2 as agent on Shop A, U3 as admin on Shop A
+    await api(
       "POST",
-      `/api/conversations/${tempGroupId}/messages`,
-      demos[0].token,
-      {
-        type: "text",
-        content: "@ai ช่วยทักทายเพื่อนๆ ในแก๊งทริปเขาใหญ่นี้สั้นๆ 1 ประโยคครับ",
-        mentions: ["user_ai"],
-      }
+      `/api/oa/${shopA.id}/admins`,
+      { phone: "0822222222", role: "agent" },
+      U1.token
     );
-    assert.equal(aiGroupPrompt.status, 200);
+    await api(
+      "POST",
+      `/api/oa/${shopA.id}/admins`,
+      { query: "0833333333", role: "admin" },
+      U1.token
+    );
 
-    const aiWsEvent = await wsClients[4].waitFor(
+    // U1 adds U2 as marketer on Shop B, then updates U2 role to agent via PUT /admins/:uid
+    await api(
+      "POST",
+      `/api/oa/${shopB.id}/admins`,
+      { phone: "0822222222", role: "marketer" },
+      U1.token
+    );
+    const updatedShopB = (
+      await api(
+        "PUT",
+        `/api/oa/${shopB.id}/admins/${U2.user.id}`,
+        { role: "agent" },
+        U1.token
+      )
+    ).data;
+    assert.equal(updatedShopB.staff_roles?.[U2.user.id], "agent");
+
+    // Verify U1 owns 2 shops and U2 sees both assigned shops in GET /api/oa/mine
+    const u1Mine = (await api("GET", "/api/oa/mine", undefined, U1.token)).data;
+    assert.ok(u1Mine.some((o) => o.id === shopA.id) && u1Mine.some((o) => o.id === shopB.id));
+    const u2Mine = (await api("GET", "/api/oa/mine", undefined, U2.token)).data;
+    assert.equal(u2Mine.length, 2, "Agent U2 must see both assigned shops in /api/oa/mine");
+    assert.ok(u2Mine.every((o) => o.my_role === "agent"));
+
+    // Verify co-admin U3 can update Shop A profile, add auto-reply, and create coupon
+    await api(
+      "PUT",
+      `/api/oa/${shopA.id}`,
+      { bio: "กาแฟดริปและมัทฉะสูตรพิเศษ" },
+      U3.token
+    );
+    await api(
+      "POST",
+      `/api/oa/${shopA.id}/auto-replies`,
+      {
+        keyword: "โปรโมชั่น",
+        match_mode: "contains",
+        reply_text: "โปรพิเศษวันนี้ ลด 50 บาทเมื่อเก็บคูปอง E2E50 ค่ะ",
+      },
+      U3.token
+    );
+    const coupon = (
+      await api(
+        "POST",
+        `/api/oa/${shopA.id}/coupons`,
+        {
+          code: "E2E50",
+          title: "ส่วนลด E2E 50 บาท",
+          discount_text: "ลด 50 บาท",
+          max_claims: 50,
+        },
+        U3.token
+      )
+    ).data;
+    const couponId = coupon.id || coupon._id;
+    assert.ok(couponId, "Created coupon must have id");
+
+    // Verify Agent U2 receives 403 on mass broadcast, shop profile edit, and auto-reply create
+    await api(
+      "POST",
+      `/api/oa/${shopA.id}/broadcasts`,
+      { content: "ลองส่งจาก agent" },
+      U2.token,
+      403
+    );
+    await api("PUT", `/api/oa/${shopA.id}`, { bio: "agent แก้ไม่ได้" }, U2.token, 403);
+    await api(
+      "POST",
+      `/api/oa/${shopA.id}/auto-replies`,
+      { keyword: "test", reply_text: "nope" },
+      U2.token,
+      403
+    );
+
+    // Customer U4 follows Shop A -> receives greeting -> triggers Rich Menu keyword -> receives auto-reply
+    const followU4 = (await api("POST", `/api/oa/${shopA.id}/follow`, undefined, U4.token)).data;
+    const oaConvU4Id = followU4.conversation_id;
+    const u4MsgsAfterFollow = (
+      await api("GET", `/api/conversations/${oaConvU4Id}/messages`, undefined, U4.token)
+    ).data;
+    assert.ok(
+      u4MsgsAfterFollow.some((m) => m.content.includes("บ้านเชียงคาเฟ่ E2E")),
+      "Customer must receive OA welcome greeting on follow"
+    );
+
+    await api(
+      "POST",
+      `/api/conversations/${oaConvU4Id}/messages`,
+      { content: "โปรโมชั่น" },
+      U4.token
+    );
+    await U4.ws.waitFor(
       (e) =>
         e.event === "new_message" &&
-        e.conversation_id === tempGroupId &&
-        e.message?.sender_id === "user_ai",
-      25000,
-      "user_ai reply broadcast to demo5"
+        e.conversation_id === oaConvU4Id &&
+        String(e.message?.content || "").includes("E2E50"),
+      6000,
+      "OA keyword auto-reply"
     );
-    assertCleanBranding(aiWsEvent.message.content, "AI group reply");
-    record("12. @ai group mention auto-reply over WS", aiWsEvent.message.content.slice(0, 50));
 
-    const directAiConv = await api("POST", "/api/conversations/direct", demos[0].token, {
-      friend_id: "user_ai",
-    });
-    assert.equal(directAiConv.status, 200);
-    const aiConvId = directAiConv.data.id;
-    wsClients[0].clearEvents();
-    const directAiSent = await api(
-      "POST",
-      `/api/conversations/${aiConvId}/messages`,
-      demos[0].token,
-      {
-        type: "text",
-        content: "ช่วยแนะนำไอเดียจัดกระเป๋าไปเที่ยวเขาใหญ่เสาร์อาทิตย์สั้นๆ หน่อยครับ",
-      }
+    // Agent U2 sees customer chat & replies
+    const oaChatsForAgent = (await api("GET", `/api/oa/${shopA.id}/chats`, undefined, U2.token)).data;
+    assert.ok(oaChatsForAgent.some((c) => c.conversation_id === oaConvU4Id));
+    const agentReply = (
+      await api(
+        "POST",
+        `/api/oa/${shopA.id}/chats/${oaConvU4Id}/messages`,
+        { content: "สวัสดีค่ะ แอดมินแพรรับออเดอร์ให้นะคะ" },
+        U2.token
+      )
+    ).data;
+    await U4.ws.waitFor(
+      (e) => e.event === "new_message" && e.message?.id === agentReply.id,
+      6000,
+      "Agent reply to OA customer"
     );
-    assert.equal(directAiSent.status, 200);
-    aiDirectMsgIds.push(directAiSent.data.id);
-    const directAiReply = await wsClients[0].waitFor(
+
+    // Customer U4 claims coupon -> Agent U2 redeems coupon for U4
+    const claimedCoupon = (
+      await api("POST", `/api/oa/${shopA.id}/coupons/${couponId}/claim`, undefined, U4.token)
+    ).data;
+    assert.ok(
+      claimedCoupon.is_claimed === true ||
+        (Array.isArray(claimedCoupon.claimed_by) && claimedCoupon.claimed_by.includes(U4.user.id)),
+      "Coupon must be claimed by U4"
+    );
+    const redeemedCoupon = (
+      await api(
+        "POST",
+        `/api/oa/${shopA.id}/coupons/${couponId}/redeem`,
+        { user_id: U4.user.id },
+        U2.token
+      )
+    ).data;
+    assert.equal(
+      redeemedCoupon.redeemed_count ?? redeemedCoupon.redeemed_by?.length,
+      1
+    );
+
+    // U3 (co-admin) tags U4 as VIP, U5 follows without VIP tag, targeted broadcast reaches ONLY U4
+    await api(
+      "PUT",
+      `/api/oa/${shopA.id}/followers/${U4.user.id}/crm`,
+      { tags: ["VIP"], crm_note: "ลูกค้าประจำ E2E" },
+      U3.token
+    );
+    await api("POST", `/api/oa/${shopA.id}/follow`, undefined, U5.token);
+
+    const bcRes = (
+      await api(
+        "POST",
+        `/api/oa/${shopA.id}/broadcasts`,
+        {
+          target_tag: "VIP",
+          content: "ประกาศพิเศษเฉพาะลูกค้า VIP เท่านั้น!",
+          coupon_id: couponId,
+        },
+        U3.token
+      )
+    ).data;
+    assert.equal(bcRes.recipient_count, 1, "Targeted VIP broadcast must reach exactly 1 follower");
+    await U4.ws.waitFor(
       (e) =>
         e.event === "new_message" &&
-        e.conversation_id === aiConvId &&
-        e.message?.sender_id === "user_ai",
-      25000,
-      "1-1 user_ai auto-reply"
+        e.conversation_id === oaConvU4Id &&
+        String(e.message?.content || "").includes("ประกาศพิเศษเฉพาะลูกค้า VIP"),
+      6000,
+      "Targeted VIP broadcast to U4"
     );
-    aiDirectMsgIds.push(directAiReply.message.id);
-    assertCleanBranding(directAiReply.message.content, "AI 1-1 reply");
-    record("13. 1-1 direct chat with user_ai auto-reply", directAiReply.message.content.slice(0, 50));
+    console.log("✅ Multi-Shop & Multi-Role ร้านค้า + Follow + Auto-Reply + Coupon + Targeted Broadcast passed");
 
-    // AI Settings secret masking check
-    const aiSettings = await api("GET", "/api/admin/ai-settings", adminToken);
-    assert.equal(aiSettings.status, 200);
-    assert.equal(aiSettings.data.api_key, undefined);
-    assert.ok(!String(aiSettings.data.masked_key).includes("sk-"));
-    assertCleanBranding(aiSettings.raw, "/api/admin/ai-settings");
-    record("14. Admin AI settings secret masking", aiSettings.data.masked_key);
+    // 8. LiveKit Call Signaling & call_log Message Bubble
+    const startCall = (
+      await api(
+        "POST",
+        "/api/calls/start",
+        { conversation_id: directConv12Id, call_type: "video" },
+        U1.token
+      )
+    ).data;
+    assert.ok(startCall.call?.id, "Call session id created");
+    assert.ok(startCall.token && startCall.token.split(".").length === 3, "LiveKit JWT returned");
 
-    // 7. MinIO Upload, Download, Audio Message, Rich Card & Confidential Instant Purge
-    const filePayload = Buffer.from("แผนทริปเที่ยววันหยุดจัดเก็บถาวรบน MinIO BC Ai Chat 100%", "utf8");
-    const upRes = await api("POST", "/api/upload", demos[0].token, {
-      file_name: "e2e_trip_plan.txt",
-      mime_type: "text/plain",
-      data_base64: filePayload.toString("base64"),
-      conversation_id: tempGroupId,
-    });
-    assert.equal(upRes.status, 200);
-    const dlRes = await fetch(`${BASE_URL}/api/files/${upRes.data.key}`);
-    assert.equal(dlRes.status, 200);
-    const dlBytes = Buffer.from(await dlRes.arrayBuffer());
-    assert.deepEqual(dlBytes, filePayload);
+    await U2.ws.waitFor(
+      (e) => e.event === "call_incoming" && e.call?.id === startCall.call.id,
+      6000,
+      "call_incoming on callee"
+    );
 
-    const confUp = await api("POST", "/api/upload", demos[0].token, {
-      file_name: "e2e_private_pin_burn.txt",
-      mime_type: "text/plain",
-      data_base64: Buffer.from("PRIVATE WIFI PIN BURN TEST").toString("base64"),
-      conversation_id: tempGroupId,
-    });
-    assert.equal(confUp.status, 200);
-    const confMsg = await api("POST", `/api/conversations/${tempGroupId}/messages`, demos[0].token, {
-      type: "file",
-      content: "ข้อความลับส่วนตัวล็อก PIN ทดสอบลบทำลาย",
-      is_confidential: true,
-      confidential_pin: "2580",
-      attachment: confUp.data,
-    });
-    assert.equal(confMsg.status, 200);
-    const purgeRes = await api("DELETE", `/api/messages/${confMsg.data.id}/purge`, demos[0].token);
-    assert.equal(purgeRes.status, 200);
-    assert.equal(purgeRes.data.file_purged, true);
-    const afterPurge = await fetch(`${BASE_URL}/api/files/${confUp.data.key}`);
-    assert.equal(afterPurge.status, 404);
-    record("15. MinIO upload/download + confidential file instant purge (404)", confUp.data.key);
+    const activeList = (
+      await api(
+        "GET",
+        `/api/calls/active?conversation_id=${encodeURIComponent(directConv12Id)}`,
+        undefined,
+        U2.token
+      )
+    ).data;
+    assert.ok(
+      activeList.calls.some((c) => c.id === startCall.call.id && c.status === "ringing"),
+      "Active ringing call listed for callee"
+    );
 
-    // Clean up e2e_trip_plan.txt via confidential message purge helper so MinIO stays tidy
-    const tempCleanupMsg = await api("POST", `/api/conversations/${tempGroupId}/messages`, demos[0].token, {
-      type: "file",
-      content: "ไฟล์ทดสอบชั่วคราว",
-      attachment: upRes.data,
-    });
-    if (tempCleanupMsg.status === 200) {
-      await api("DELETE", `/api/messages/${tempCleanupMsg.data.id}/purge`, demos[0].token);
-    }
+    const acceptCall = (
+      await api("POST", `/api/calls/${startCall.call.id}/accept`, undefined, U2.token)
+    ).data;
+    assert.equal(acceptCall.call.status, "active");
+    assert.ok(acceptCall.token && acceptCall.token.split(".").length === 3);
 
-    // Audio + Mentions + Reactions + Delete-for-me
-    const audioMsg = await api("POST", `/api/conversations/${tempGroupId}/messages`, demos[1].token, {
-      type: "audio",
-      content: "ข้อความเสียงจากแพรชวนแวะคาเฟ่",
-      audio_duration_sec: 14,
-      mentions: ["user_demo1", "user_demo3"],
-    });
-    assert.equal(audioMsg.status, 200);
-    assert.equal(audioMsg.data.type, "audio");
-    assert.equal(audioMsg.data.audio_duration_sec, 14);
+    await U1.ws.waitFor(
+      (e) => e.event === "call_accepted" && e.call?.id === startCall.call.id,
+      6000,
+      "call_accepted on caller"
+    );
 
-    for (const c of wsClients) c.clearEvents();
-    const reactRes = await api(
+    const refreshToken = (
+      await api("GET", `/api/calls/${startCall.call.id}/token`, undefined, U1.token)
+    ).data;
+    assert.ok(refreshToken.token && refreshToken.livekit_url.includes(":7880"));
+
+    await new Promise((r) => setTimeout(r, 1100));
+    const endedCall = (
+      await api("POST", `/api/calls/${startCall.call.id}/hangup`, undefined, U1.token)
+    ).data;
+    assert.equal(endedCall.call.status, "ended");
+
+    await U2.ws.waitFor(
+      (e) => e.event === "call_ended" && e.call?.id === startCall.call.id,
+      6000,
+      "call_ended on callee"
+    );
+
+    const msgsAfterCall = (
+      await api("GET", `/api/conversations/${directConv12Id}/messages`, undefined, U1.token)
+    ).data;
+    const callLogBubble = msgsAfterCall.find(
+      (m) => m.type === "call_log" && m.card_payload?.call_id === startCall.call.id
+    );
+    assert.ok(callLogBubble, "call_log message bubble must be persisted after hangup");
+    console.log("✅ LiveKit Call signaling + WS events + call_log bubble passed");
+
+    // 9. Wave 2 (#52): Privacy, Multi-Channel Add Friend, Reset QR, Delete Friend, Timed Mute, Silent Block
+    await api("PUT", "/api/users/me", { allow_add_by_email: false }, U4.token);
+    const hiddenSearchRes = (
+      await api(
+        "GET",
+        `/api/users/search?q=${encodeURIComponent(U4.user.email)}&by=email`,
+        undefined,
+        U2.token
+      )
+    ).data;
+    assert.ok(
+      !hiddenSearchRes.some((x) => x.id === U4.user.id),
+      "Search by email must exclude user who disabled allow_add_by_email"
+    );
+    const blockedEmailAdd = await api(
       "POST",
-      `/api/messages/${audioMsg.data.id}/react`,
-      demos[2].token,
-      { emoji: "🎉" }
+      "/api/friends/add",
+      { query: U4.user.email },
+      U2.token,
+      null
     );
-    assert.equal(reactRes.status, 200);
-    assert.deepEqual(reactRes.data.reactions["🎉"], ["user_demo3"]);
-    await wsClients[0].waitFor(
-      (e) => e.event === "message_updated" && e.message?.id === audioMsg.data.id,
-      5000,
-      "message_updated on reaction"
+    assert.ok(
+      [403, 404].includes(blockedEmailAdd.status),
+      `Adding by disabled email must fail 403/404, got ${blockedEmailAdd.status}`
     );
 
-    const delMe = await api(
-      "POST",
-      `/api/messages/${audioMsg.data.id}/delete-for-me`,
-      demos[3].token
-    );
-    assert.equal(delMe.status, 200);
-    const d4Msgs = await api("GET", `/api/conversations/${tempGroupId}/messages`, demos[3].token);
-    const d1Msgs = await api("GET", `/api/conversations/${tempGroupId}/messages`, demos[0].token);
-    assert.ok(!d4Msgs.data.some((m) => m.id === audioMsg.data.id), "hidden for demo4");
-    assert.ok(d1Msgs.data.some((m) => m.id === audioMsg.data.id), "still visible for demo1");
-    record("16. Audio message, mentions, WS reactions & delete-for-me", audioMsg.data.id);
+    await api("PUT", "/api/users/me", { allow_add_by_email: true }, U4.token);
+    await api("POST", "/api/friends/add", { query: U4.user.email }, U2.token, 200);
+    const delFriendRes = (
+      await api("DELETE", `/api/friends/${U4.user.id}`, undefined, U2.token, 200)
+    ).data;
+    assert.equal(delFriendRes.ok, true);
 
-    // 8. Polls: create, vote, WS message_updated, close-poll
-    const pollCreated = await api(
+    const oldQr = U4.user.qr_token;
+    const resetQrRes = (
+      await api("POST", "/api/users/me/reset-qr", undefined, U4.token, 200)
+    ).data;
+    const newQr = resetQrRes.qr_token;
+    assert.ok(newQr && newQr !== oldQr && newQr.startsWith("BCQR_"), "New QR token generated");
+    const oldQrFail = await api("POST", "/api/friends/add", { query: oldQr }, U2.token, null);
+    assert.ok(oldQrFail.status >= 400 && oldQrFail.status < 500, "Old QR token must fail");
+    await api("POST", "/api/friends/add", { query: newQr }, U2.token, 200);
+    await api("DELETE", `/api/friends/${U4.user.id}`, undefined, U2.token, 200);
+
+    const mutedConv = (
+      await api(
+        "PUT",
+        `/api/conversations/${directConv12Id}/meta`,
+        { mute_duration: "1h" },
+        U2.token,
+        200
+      )
+    ).data;
+    assert.equal(mutedConv.is_muted, true);
+    assert.ok(mutedConv.muted_until && Date.parse(mutedConv.muted_until) > Date.now());
+    const unmutedConv = (
+      await api(
+        "PUT",
+        `/api/conversations/${directConv12Id}/meta`,
+        { mute_duration: "off" },
+        U2.token,
+        200
+      )
+    ).data;
+    assert.equal(unmutedConv.is_muted, false);
+    assert.equal(unmutedConv.muted_until ?? null, null);
+
+    // Silent-drop Block (U2 blocks U1)
+    await api("PUT", `/api/friends/${U1.user.id}`, { is_blocked: true }, U2.token, 200);
+    const silentDropText = `ข้อความขณะโดนบล็อก_${Date.now()}`;
+    const silentSent = (
+      await api(
+        "POST",
+        `/api/conversations/${directConv12Id}/messages`,
+        { content: silentDropText },
+        U1.token,
+        200
+      )
+    ).data;
+    await new Promise((r) => setTimeout(r, 350));
+    assert.ok(
+      !U2.ws.events.some((e) => e.message?.id === silentSent.id),
+      "Blocked recipient WS must NOT receive silent-dropped message"
+    );
+    const u2BlockedMsgs = (
+      await api("GET", `/api/conversations/${directConv12Id}/messages`, undefined, U2.token, 200)
+    ).data;
+    assert.ok(!u2BlockedMsgs.some((m) => m.id === silentSent.id), "Blocked recipient DB hides msg");
+    const u1BlockedMsgs = (
+      await api("GET", `/api/conversations/${directConv12Id}/messages`, undefined, U1.token, 200)
+    ).data;
+    assert.ok(u1BlockedMsgs.some((m) => m.id === silentSent.id), "Sender still sees sent message");
+    await api(
       "POST",
-      `/api/conversations/${tempGroupId}/polls`,
-      demos[0].token,
+      "/api/calls/start",
+      { conversation_id: directConv12Id, call_type: "audio" },
+      U2.token,
+      400
+    );
+
+    await api("PUT", `/api/friends/${U1.user.id}`, { is_blocked: false }, U2.token, 200);
+    const u2AfterUnblockMsgs = (
+      await api("GET", `/api/conversations/${directConv12Id}/messages`, undefined, U2.token, 200)
+    ).data;
+    assert.ok(
+      !u2AfterUnblockMsgs.some((m) => m.id === silentSent.id),
+      "Silent-dropped message must stay hidden after unblock"
+    );
+    const postUnblockMsg = (
+      await api(
+        "POST",
+        `/api/conversations/${directConv12Id}/messages`,
+        { content: "หลังปลดบล็อกแล้วส่งถึงปกติ" },
+        U1.token,
+        200
+      )
+    ).data;
+    await U2.ws.waitFor(
+      (e) => e.event === "new_message" && e.message?.id === postUnblockMsg.id,
+      6000,
+      "post-unblock message"
+    );
+    console.log("✅ Wave 2 (#52): Privacy, Multi-Channel Add Friend, Reset/Delete Friend, Timed Mute, Silent Block passed");
+
+    // 10. Wave 4 (#60): Location, Contact Card, Ladder Game, Edit Message, Forward, Keep Memo, Silent/Expire
+    await api(
+      "POST",
+      `/api/conversations/${directConv12Id}/messages`,
       {
-        question: "ออกเดินทางไปเขาใหญ่กี่โมงดี?",
-        options: ["ล้อหมุนเช้า 07:30 น.", "สายๆ ชิลๆ 10:00 น."],
-        allow_multiple: false,
-        is_anonymous: false,
-      }
+        type: "location",
+        location_data: { latitude: 95.0, longitude: 100.5, title: "Bad Lat" },
+      },
+      U1.token,
+      400
     );
-    assert.equal(pollCreated.status, 200);
-    const pollId = pollCreated.data.id;
-    const optA = pollCreated.data.poll.options[0].id;
-    for (const c of wsClients) c.clearEvents();
-    const voteRes = await api("POST", `/api/messages/${pollId}/vote`, demos[1].token, {
-      option_ids: [optA],
-    });
-    assert.equal(voteRes.status, 200);
-    assert.deepEqual(voteRes.data.poll.options[0].voter_ids, ["user_demo2"]);
-    await wsClients[2].waitFor(
-      (e) => e.event === "message_updated" && e.message?.id === pollId,
-      5000,
-      "message_updated on poll vote"
+    const locMsg = (
+      await api(
+        "POST",
+        `/api/conversations/${directConv12Id}/messages`,
+        {
+          type: "location",
+          location_data: {
+            latitude: 17.4055,
+            longitude: 103.237,
+            title: "พิพิธภัณฑสถานแห่งชาติบ้านเชียง",
+            address: "อุดรธานี",
+          },
+        },
+        U1.token,
+        200
+      )
+    ).data;
+    assert.equal(locMsg.type, "location");
+    assert.ok(locMsg.location_data?.map_url?.includes("17.4055"), "Auto map_url generated");
+
+    const contactMsg = (
+      await api(
+        "POST",
+        `/api/conversations/${directConv12Id}/messages`,
+        {
+          type: "contact",
+          contact_data: {
+            user_id: U3.user.id,
+            display_name: U3.user.display_name,
+            bc_id: U3.user.bc_id,
+          },
+        },
+        U1.token,
+        200
+      )
+    ).data;
+    assert.equal(contactMsg.type, "contact");
+
+    const ladderMsg = (
+      await api(
+        "POST",
+        `/api/conversations/${groupId}/messages`,
+        {
+          type: "ladder",
+          ladder_data: {
+            title: "สุ่มเลี้ยงกาแฟ E2E",
+            entries: [
+              { player: "ก้อง", result: "จ่าย" },
+              { player: "แพร", result: "ฟรี" },
+            ],
+          },
+        },
+        U1.token,
+        200
+      )
+    ).data;
+    assert.equal(ladderMsg.type, "ladder");
+
+    const editableMsg = (
+      await api(
+        "POST",
+        `/api/conversations/${directConv12Id}/messages`,
+        { content: "ข้อความเดิมก่อนแก้ไข E2E" },
+        U1.token,
+        200
+      )
+    ).data;
+    await api(
+      "PUT",
+      `/api/messages/${editableMsg.id}`,
+      { content: "แอบแก้โดยคนอื่น" },
+      U2.token,
+      403
     );
-    const closePoll = await api("POST", `/api/messages/${pollId}/close-poll`, demos[0].token);
-    assert.equal(closePoll.status, 200);
-    assert.equal(closePoll.data.poll.is_closed, true);
-    record("17. Group Poll create, vote, WS sync & close-poll", pollId);
-
-    // 9. Events: create, RSVP (going/maybe/not_going), WS sync, GET events
-    const evCreated = await api(
-      "POST",
-      `/api/conversations/${tempGroupId}/events`,
-      demos[0].token,
-      {
-        title: "นัดปิ้งย่างและดูดาวลานกางเต็นท์",
-        description: "เตรียมเสื้อกันหนาวและเก้าอี้แคมป์ปิ้งมาด้วยนะ",
-        starts_at: "2026-11-25T18:00:00Z",
-        ends_at: "2026-11-25T21:30:00Z",
-        location: "ลานกางเต็นท์ลำตะคอง เขาใหญ่",
-      }
+    const editedMsg = (
+      await api(
+        "PUT",
+        `/api/messages/${editableMsg.id}`,
+        { content: "ข้อความแก้ไขใหม่แล้ว E2E" },
+        U1.token,
+        200
+      )
+    ).data;
+    assert.ok(editedMsg.edited_at, "edited_at timestamp must be set");
+    await U2.ws.waitFor(
+      (e) => e.event === "message_edited" && e.message?.id === editableMsg.id,
+      6000,
+      "WS message_edited"
     );
-    assert.equal(evCreated.status, 200);
-    const evId = evCreated.data.id;
-    await api("POST", `/api/messages/${evId}/rsvp`, demos[1].token, { status: "going" });
-    await api("POST", `/api/messages/${evId}/rsvp`, demos[2].token, { status: "maybe" });
-    const rsvpNotGoing = await api("POST", `/api/messages/${evId}/rsvp`, demos[4].token, {
-      status: "not_going",
-    });
-    assert.equal(rsvpNotGoing.status, 200);
-    assert.ok(rsvpNotGoing.data.event_data.going_ids.includes("user_demo2"));
-    assert.ok(rsvpNotGoing.data.event_data.maybe_ids.includes("user_demo3"));
-    assert.ok(rsvpNotGoing.data.event_data.not_going_ids.includes("user_demo5"));
-    const evList = await api("GET", `/api/conversations/${tempGroupId}/events`, demos[0].token);
-    assert.equal(evList.status, 200);
-    assert.equal(evList.data.length, 1);
-    record("18. Group Event create, RSVP (going/maybe/not_going) & list", evId);
 
-    // 10. Shared Albums: create, add photos, list, delete
-    const samplePhoto = {
-      key: "seed_trip_postcard.svg",
-      url: `${BASE_URL}/api/files/seed_trip_postcard.svg`,
-      file_name: "โปสการ์ดทริปเขาใหญ่_ตัวอย่าง.svg",
-      mime_type: "image/svg+xml",
-      file_size: 820,
-    };
-    const albCreated = await api(
-      "POST",
-      `/api/conversations/${tempGroupId}/albums`,
-      demos[0].token,
-      {
-        title: "อัลบั้มภาพทริปวันหยุด E2E",
-        description: "เก็บรูปความทรงจำถาวรบน MinIO",
-        photos: [samplePhoto],
-      }
-    );
-    assert.equal(albCreated.status, 200);
-    const albId = albCreated.data.id;
-    const albAdded = await api("POST", `/api/albums/${albId}/photos`, demos[1].token, {
-      photos: [{ ...samplePhoto, file_name: "รูปคาเฟ่ริมเขา_ตัวอย่าง.svg" }],
-    });
-    assert.equal(albAdded.status, 200);
-    assert.equal(albAdded.data.photos.length, 2);
-    const albDel = await api("DELETE", `/api/albums/${albId}`, demos[0].token);
-    assert.equal(albDel.status, 200);
-    record("19. Shared Photo Albums CRUD", albId);
+    const fwdRes = (
+      await api(
+        "POST",
+        `/api/messages/${editableMsg.id}/forward`,
+        { target_conversation_ids: [groupId] },
+        U1.token,
+        200
+      )
+    ).data;
+    assert.equal(fwdRes.forwarded_count, 1);
+    assert.equal(fwdRes.messages?.[0]?.forwarded_from, U1.user.display_name);
 
-    // 11. Group Notes (edit, like, comment) & Personal สมุดบันทึก BC
-    const grpNote = await api("POST", "/api/notes", demos[0].token, {
-      conversation_id: tempGroupId,
-      title: "สรุปจุดแวะพักระหว่างทาง",
-      content: "แวะกินส้มตำปากช่องตอนเที่ยงตรง",
-      tags: ["ทริปเที่ยว"],
-      is_pinned: true,
-    });
-    assert.equal(grpNote.status, 200);
-    const noteId = grpNote.data.id;
-    const updNote = await api("PUT", `/api/notes/${noteId}`, demos[0].token, {
-      title: "สรุปจุดแวะพักระหว่างทาง (อัปเดต)",
-      content: "แวะคาเฟ่ก่อนขึ้นเขาใหญ่เวลา 13:30 น.",
-    });
-    assert.equal(updNote.status, 200);
-    assert.equal(updNote.data.title, "สรุปจุดแวะพักระหว่างทาง (อัปเดต)");
-    const likeNote = await api("POST", `/api/notes/${noteId}/like`, demos[1].token);
-    assert.equal(likeNote.status, 200);
-    assert.deepEqual(likeNote.data.liked_by, ["user_demo2"]);
-    const cmtNote = await api("POST", `/api/notes/${noteId}/comments`, demos[2].token, {
-      content: "บอสเตรียมลำโพงพกพากับเพลย์ลิสต์เพลงชิลๆ เรียบร้อยครับ",
-    });
-    assert.equal(cmtNote.status, 200);
-    assert.equal(cmtNote.data.comments.length, 1);
-    await api("DELETE", `/api/notes/${noteId}`, demos[0].token);
+    const keepConv = (
+      await api("POST", "/api/conversations/keep", undefined, U1.token, 200)
+    ).data;
+    assert.equal(keepConv.type, "keep");
+    const savedToKeep = (
+      await api("POST", `/api/messages/${editableMsg.id}/save-to-keep`, undefined, U1.token, 200)
+    ).data;
+    assert.equal(savedToKeep.conversation_id, keepConv.id);
 
-    const memoNote = await api("POST", "/api/notes", demos[0].token, {
-      title: "สมุดบันทึก BC ส่วนตัว",
-      content: "เตือนความจำซื้อของฝากคุณแม่วันอาทิตย์บ่ายสาม",
-      tags: ["ส่วนตัว"],
-      is_pinned: false,
-    });
-    assert.equal(memoNote.status, 200);
-    const d2MemoCheck = await api("GET", "/api/notes", demos[1].token);
-    assert.ok(!d2MemoCheck.data.some((n) => n.id === memoNote.data.id), "personal memo is private");
-    await api("DELETE", `/api/notes/${memoNote.data.id}`, demos[0].token);
-    record("20. Group Notes (edit/like/comment) & private สมุดบันทึก BC", noteId);
+    const silentExpireMsg = (
+      await api(
+        "POST",
+        `/api/conversations/${directConv12Id}/messages`,
+        {
+          content: "ข้อความไร้เสียง + ลบอัตโนมัติ",
+          priority: "silent",
+          expire_at: new Date(Date.now() + 3600 * 1000).toISOString(),
+        },
+        U1.token,
+        200
+      )
+    ).data;
+    assert.equal(silentExpireMsg.priority, "silent");
+    assert.ok(silentExpireMsg.expire_at);
+    console.log("✅ Wave 4 (#60): Location, Contact, Ladder, Edit+WS, Forward, Keep Memo, Silent/Expire passed");
 
-    // 12. Member leave / remove cleanup
-    for (let i = 4; i >= 1; i--) {
-      const lv = await api(
-        "DELETE",
-        `/api/conversations/${tempGroupId}/members/me`,
-        demos[i].token
-      );
-      assert.equal(lv.status, 200);
+    // 11. Wave 3 (#56): Link Gmail, Unlink Guard, Recovery PIN/Backup Codes, Recover Phone & Gmail + O(1) Revocation
+    const linkedU1 = (
+      await api("POST", "/api/auth/link/google", { id_token: "mock_id_u1_link" }, U1.token, 200) // pragma: allowlist secret
+    ).data;
+    assert.equal(linkedU1.user.email, "u1.linked@bcaichat.local");
+    assert.equal(linkedU1.user.email_verified, true);
+
+    // Google-only user (U4) without verified phone must be blocked from unlinking Gmail
+    await api("DELETE", "/api/auth/link/google", undefined, U4.token, 400);
+
+    const setupRec = (
+      await api("POST", "/api/auth/recovery/setup", { recovery_pin: "246810" }, U1.token, 200)
+    ).data;
+    assert.equal(setupRec.user.has_recovery_pin, true);
+    assert.equal(setupRec.backup_codes?.length, 6);
+    for (const code of setupRec.backup_codes) {
+      assert.match(code, /^BCRC-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
     }
-    await api("DELETE", `/api/conversations/${tempGroupId}/members/user_ai`, demos[0].token);
-    await api("DELETE", `/api/conversations/${tempGroupId}/members/me`, demos[0].token);
-    record("21. Group leave/remove member cleanup", tempGroupId);
 
-    // Clean up temporary messages in conv_group_demo5 & 1-1 AI chat
-    if (demo5TestMsgId) {
-      await api("DELETE", `/api/messages/${demo5TestMsgId}/purge`, demos[0].token);
-    }
-    if (adminToken) {
-      for (const mid of aiDirectMsgIds) {
-        await api("DELETE", `/api/messages/${mid}/purge`, adminToken);
-      }
-    }
+    const oldU1Token = U1.token;
+    const newPhoneOtpReq = (
+      await api("POST", "/api/auth/otp/request", { phone: "0899999999", purpose: "recover" })
+    ).data;
+    const recoveredPhone = (
+      await api(
+        "POST",
+        "/api/auth/recover/change-phone",
+        {
+          method: "google",
+          google_id_token: "mock_id_u1_link", // pragma: allowlist secret
+          new_phone_challenge_id: newPhoneOtpReq.challenge_id,
+          new_phone_otp_code: MOCK_OTP_CODE,
+          new_phone_ref_code: newPhoneOtpReq.ref_code,
+          revoke_other_sessions: true,
+        },
+        null,
+        200
+      )
+    ).data;
+    assert.equal(recoveredPhone.recovered, true);
+    assert.equal(recoveredPhone.user.id, U1.user.id);
+    assert.equal(recoveredPhone.user.phone, "0899999999");
 
-    console.log(`\n🎉 ALL ${results.length}/21 E2E CHECKS PASSED 100% WITHOUT ERRORS!`);
+    // Old JWT must be immediately rejected 401 via O(1) memory token_versions check
+    await api("GET", "/api/auth/me", undefined, oldU1Token, 401);
+
+    // Recovered account must retain both OA shops and Keep conversation
+    const newU1Token = recoveredPhone.token;
+    const oasAfterRecover = (await api("GET", "/api/oa/mine", undefined, newU1Token, 200)).data;
+    assert.equal(oasAfterRecover.length, 2, "Recovered account retains both OA shops");
+    const keepMsgsAfterRecover = (
+      await api("GET", `/api/conversations/${keepConv.id}/messages`, undefined, newU1Token, 200)
+    ).data;
+    assert.ok(keepMsgsAfterRecover.some((m) => m.id === savedToKeep.id), "Recovered account retains Keep");
+
+    // Recover Change Gmail via 1-time Backup Code
+    const recoveredGoogle = (
+      await api(
+        "POST",
+        "/api/auth/recover/change-google",
+        {
+          method: "pin_or_code",
+          identifier: "0899999999",
+          recovery_secret: setupRec.backup_codes[0],
+          new_google_id_token: "mock_id_u1_new", // pragma: allowlist secret
+          revoke_other_sessions: true,
+        },
+        null,
+        200
+      )
+    ).data;
+    assert.equal(recoveredGoogle.recovered, true);
+    assert.equal(recoveredGoogle.user.email, "u1.newgmail@bcaichat.local");
+    assert.equal(recoveredGoogle.user.recovery_codes_remaining, 5);
+    await api("GET", "/api/auth/me", undefined, newU1Token, 401);
+
+    const recLogs = (
+      await api("GET", "/api/auth/recovery/logs", undefined, recoveredGoogle.token, 200)
+    ).data;
+    assert.ok(
+      recLogs.logs?.some((l) => l.action === "recover_change_phone") &&
+        recLogs.logs?.some((l) => l.action === "recover_change_google"),
+      "Recovery audit logs recorded"
+    );
+    console.log("✅ Wave 3 (#56): Link Gmail, Unlink Guard, Recovery PIN/Backup Codes, Change Phone/Gmail + O(1) 401 passed");
+
+    // 12. Verify Zero Real Credits Used & Mock Stats Hit
+    assert.ok(mock.stats.otpSent >= 3, "Mock SMSMKT otp-send was called");
+    assert.ok(mock.stats.otpValidated >= 4, "Mock SMSMKT otp-validate was called");
+    assert.ok(mock.stats.creditChecks >= 1, "Mock SMSMKT get-credit was called");
+    assertCleanBranding(JSON.stringify([cfg, shopA, shopB, callLogBubble]), "final_payload_check");
+
+    console.log(
+      `\n🎉 ALL API + WS E2E CHECKS PASSED! (Mock SMS sent=${mock.stats.otpSent}, validated=${mock.stats.otpValidated}, credit_checks=${mock.stats.creditChecks}, DB=${TEST_DB}, port=${TEST_PORT})`
+    );
   } finally {
-    for (const c of wsClients) c.close();
+    for (const c of wsClients) {
+      c.close();
+    }
+    if (backendProc?.child) {
+      killProcessTree(backendProc.child);
+    }
+    if (mock?.server) {
+      await new Promise((r) => mock.server.close(() => r()));
+    }
+    dropTestDatabase();
   }
 }
 
 main().catch((err) => {
-  console.error("\n❌ E2E FAILED:", err);
+  console.error("❌ E2E API/WS Failed:", err);
   process.exit(1);
 });

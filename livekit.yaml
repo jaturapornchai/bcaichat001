@@ -1,0 +1,7 @@
+port: 7880
+rtc:
+  tcp_port: 7881
+  udp_port: 7882
+  use_external_ip: false
+keys:
+  bcaichat_lk_dev_key: bcaichat_lk_dev_secret_key_2026_local_only

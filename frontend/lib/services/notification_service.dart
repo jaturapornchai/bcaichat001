@@ -181,6 +181,7 @@ class NotificationService {
     Map<String, dynamic> event, {
     required String myUserId,
     Conversation? room,
+    AppUser? currentUser,
   }) async {
     if (event['event'] != 'new_message' || event['message'] is! Map) return;
     final msg = ChatMessage.fromJson(
@@ -194,7 +195,12 @@ class NotificationService {
       return;
     }
     if (appInFront && msg.conversationId == openConversationId) return;
-    final alert = describe(msg, myUserId: myUserId, room: room);
+    final alert = describe(
+      msg,
+      myUserId: myUserId,
+      room: room,
+      currentUser: currentUser,
+    );
     if (alert == null) return;
 
     // The sender's "silent" priority wins over the receiver's sound choice.
@@ -255,15 +261,77 @@ class NotificationService {
     return AlertKind.normal;
   }
 
+  static bool isMentioned(
+    ChatMessage msg, {
+    required String myUserId,
+    AppUser? currentUser,
+  }) {
+    final normalizedBcId = (currentUser?.bcId ?? '').trim().replaceFirst(
+      RegExp(r'^@'),
+      '',
+    );
+    for (final raw in msg.mentions) {
+      final m = raw.trim();
+      if (m.isEmpty) continue;
+      final low = m.toLowerCase();
+      if (m == myUserId || low == 'all' || low == '@all') return true;
+      if (normalizedBcId.isNotEmpty) {
+        final lowNoAt = low.replaceFirst(RegExp(r'^@'), '');
+        if (lowNoAt == normalizedBcId.toLowerCase()) return true;
+      }
+    }
+    return msg.content.toLowerCase().contains('@all');
+  }
+
+  static bool shouldAlert(
+    ChatMessage msg, {
+    required String myUserId,
+    Conversation? room,
+    AppUser? currentUser,
+  }) {
+    if (msg.senderId == myUserId || msg.type == 'system' || msg.isUnsent) {
+      return false;
+    }
+    if (room?.isBlockedByMe == true) {
+      return false;
+    }
+    if (currentUser?.isDndActive == true) {
+      return false;
+    }
+    if (room?.isEffectivelyMuted == true) {
+      final canOverrideMention =
+          room != null &&
+          room.kind != 'direct' &&
+          (currentUser?.notifyOnMention ?? true) &&
+          isMentioned(msg, myUserId: myUserId, currentUser: currentUser);
+      if (!canOverrideMention) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   /// Title/body for a message, or null when it should not alert
-  /// (own message, system notice, unsent).
+  /// (own message, system notice, unsent, DND, or muted room).
   static ({String title, String body})? describe(
     ChatMessage msg, {
     required String myUserId,
     Conversation? room,
+    AppUser? currentUser,
   }) {
-    if (msg.senderId == myUserId || msg.type == 'system' || msg.isUnsent) {
+    if (!shouldAlert(
+      msg,
+      myUserId: myUserId,
+      room: room,
+      currentUser: currentUser,
+    )) {
       return null;
+    }
+    final isGroup = room != null && room.kind != 'direct';
+    if (currentUser != null && !currentUser.notifyPreview) {
+      return isGroup
+          ? (title: room.name, body: 'คุณมีข้อความใหม่')
+          : (title: msg.senderName, body: 'คุณมีข้อความใหม่');
     }
     final String preview;
     if (msg.isConfidential) {
@@ -285,13 +353,24 @@ class NotificationService {
           preview = 'สร้างนัดหมาย';
         case 'rich_card':
           preview = 'ส่งการ์ดโต้ตอบ';
+        case 'location':
+          final title = msg.locationData?.title.trim() ?? '';
+          preview = title.isEmpty ? '📍 แชร์ตำแหน่งที่ตั้ง' : '📍 $title';
+        case 'contact':
+          final name = msg.contactData?.displayName.trim() ?? '';
+          preview = name.isEmpty ? '👤 แนะนำเพื่อน' : '👤 แนะนำเพื่อน: $name';
+        case 'ladder':
+          final title = msg.ladderData?.title.trim() ?? '';
+          preview = title.isEmpty ? '🎲 เกมสุ่มบันได' : '🎲 $title';
+        case 'call_log':
+          preview = msg.previewText;
         default:
           final text = msg.content.trim();
-          preview = text.length > 120 ? '${text.substring(0, 120)}…' : text;
+          final chars = text.characters;
+          preview = chars.length > 120 ? '${chars.take(120)}…' : text;
       }
     }
     final body = msg.priority == 'urgent' ? '⚡ ด่วน: $preview' : preview;
-    final isGroup = room != null && room.kind != 'direct';
     return isGroup
         ? (title: room.name, body: '${msg.senderName}: $body')
         : (title: msg.senderName, body: body);

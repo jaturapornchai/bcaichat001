@@ -1,28 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'models/models.dart';
+import 'screens/call_inline_panel.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_shell.dart';
 import 'services/api_service.dart';
+import 'services/push_service.dart';
 import 'theme/app_theme.dart';
 
-void main(List<String> args) {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Set by the 5-person chat test launcher (login_screen.dart).
-  const prefix = '--test-login=';
-  final testLogin = args
-      .where((a) => a.startsWith(prefix))
-      .map((a) => a.substring(prefix.length))
-      .firstOrNull;
-  runApp(BCAiChatApp(testLoginEmail: testLogin));
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  runApp(const BCAiChatApp());
 }
 
 typedef MyApp = BCAiChatApp;
 
 class BCAiChatApp extends StatefulWidget {
-  final String? testLoginEmail;
-
-  const BCAiChatApp({super.key, this.testLoginEmail});
+  const BCAiChatApp({super.key});
 
   @override
   State<BCAiChatApp> createState() => _BCAiChatAppState();
@@ -36,11 +32,15 @@ class _BCAiChatAppState extends State<BCAiChatApp> {
   void initState() {
     super.initState();
     AppTheme.preset.addListener(_repaintAll);
+    PushService.instance.bindSwitchTestUserSlot(_switchToTestSlot);
+    PushService.instance.bindSwitchApiBaseUrl(_switchApiBaseUrl);
     _initSession();
   }
 
   @override
   void dispose() {
+    PushService.instance.bindSwitchTestUserSlot(null);
+    PushService.instance.bindSwitchApiBaseUrl(null);
     AppTheme.preset.removeListener(_repaintAll);
     super.dispose();
   }
@@ -57,15 +57,44 @@ class _BCAiChatAppState extends State<BCAiChatApp> {
     (context as Element).visitChildren(rebuild);
   }
 
+  Future<void> _switchApiBaseUrl(String url) async {
+    await ApiService.instance.setCustomBaseUrl(url);
+    ApiService.instance.loadBusinessTheme();
+  }
+
+  Future<void> _switchToTestSlot(int slot) async {
+    try {
+      final res = await ApiService.instance.testQuickLogin(slot: slot);
+      if (!mounted) return;
+      setState(() {
+        _currentUser = res.user;
+        _checkingSession = false;
+      });
+    } catch (_) {}
+  }
+
   Future<void> _initSession() async {
     await ApiService.instance.initServerUrl();
-    ApiService.instance.loadBusinessTheme();
-    final testEmail = widget.testLoginEmail;
-    if (testEmail != null) {
-      await _loginTestAccount(testEmail);
-      return;
+    final initialApiUrl = await PushService.instance.takeInitialApiBaseUrl();
+    if (initialApiUrl != null && initialApiUrl.isNotEmpty) {
+      await ApiService.instance.setCustomBaseUrl(initialApiUrl);
     }
+    ApiService.instance.loadBusinessTheme();
     try {
+      final initialSlot = await PushService.instance.takeInitialTestUserSlot();
+      if (initialSlot != null) {
+        try {
+          final res = await ApiService.instance.testQuickLogin(
+            slot: initialSlot,
+          );
+          if (!mounted) return;
+          setState(() {
+            _currentUser = res.user;
+            _checkingSession = false;
+          });
+          return;
+        } catch (_) {}
+      }
       final ok = await ApiService.instance.restoreSession();
       if (!mounted) return;
       setState(() {
@@ -76,27 +105,6 @@ class _BCAiChatAppState extends State<BCAiChatApp> {
       if (!mounted) return;
       setState(() => _checkingSession = false);
     }
-  }
-
-  Future<void> _loginTestAccount(String email) async {
-    ApiService.instance.persistSession = false;
-    final account = LoginScreen.testAccounts
-        .where((a) => a.email == email)
-        .firstOrNull;
-    AppUser? user;
-    try {
-      user = await ApiService.instance.loginWithGoogle(
-        email: email,
-        displayName: account?.name ?? email.split('@').first,
-      );
-    } catch (_) {
-      // Backend down: fall back to the login screen.
-    }
-    if (!mounted) return;
-    setState(() {
-      _currentUser = user;
-      _checkingSession = false;
-    });
   }
 
   void _handleLoggedIn(AppUser user) {
@@ -115,15 +123,22 @@ class _BCAiChatAppState extends State<BCAiChatApp> {
       title: 'BC Ai Chat — แชทส่วนตัว ครอบครัว & เพื่อนสนิท',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.buildTheme(),
+      // เต็มจอทุกขนาด — MainShell เป็นผู้จัด layout แคบ/กว้างเอง (auto resize)
+      builder: (context, child) => Stack(
+        fit: StackFit.expand,
+        children: [?child, const CallFullScreenStage()],
+      ),
       home: _checkingSession
           ? const _SplashLoadingView()
           : _currentUser == null
           ? LoginScreen(onLoggedIn: _handleLoggedIn)
           : MainShell(
+              key: ValueKey(_currentUser!.id),
               currentUser: _currentUser!,
               onLoggedOut: _handleLoggedOut,
               onUserChanged: (updated) =>
                   setState(() => _currentUser = updated),
+              onSwitchUser: _handleLoggedIn,
             ),
     );
   }

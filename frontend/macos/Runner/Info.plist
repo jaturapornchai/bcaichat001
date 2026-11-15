@@ -28,5 +28,9 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSCameraUsageDescription</key>
+	<string>BC Ai Chat ขออนุญาตเข้าถึงกล้องเพื่อถ่ายภาพและสนทนาวิดีโอคอล</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>BC Ai Chat ขออนุญาตเข้าถึงไมโครโฟนเพื่อบันทึกข้อความเสียงและสนทนาโทรด้วยเสียง/วิดีโอ</string>
 </dict>
 </plist>

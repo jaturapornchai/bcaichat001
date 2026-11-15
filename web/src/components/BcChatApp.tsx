@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import {
   api,
   clearTabSession,
@@ -9,35 +8,62 @@ import {
   getTabToken,
   getTabUser,
   getWsUrl,
+  isConversationMutedNow,
+  isDndActiveNow,
   saveRoomTone,
   setTabSession,
 } from "@/lib/api";
 import { playChime } from "@/lib/sound";
-import {
-  ADMIN_DEMO_ACCOUNT,
-  applyThemeCssVars,
-  DEMO_ACCOUNTS,
-  normalizeThemeId,
-} from "@/lib/themes";
-import type { RoomToneId, ThemePresetId, UserProfile, WsEvent } from "@/lib/types";
+import { applyThemeCssVars, normalizeThemeId } from "@/lib/themes";
+import type {
+  AuthConfig,
+  CallSession,
+  Conversation,
+  RoomToneId,
+  ThemePresetId,
+  UserProfile,
+  WsEvent,
+} from "@/lib/types";
 import { LoginView } from "./LoginView";
-import { MainShell } from "./MainShell";
+import { MainShell, type MainTabId } from "./MainShell";
 
-export function BcChatApp() {
-  const searchParams = useSearchParams();
+interface BcChatAppProps {
+  initialTab?: Exclude<MainTabId, "room">;
+}
+
+export function BcChatApp({ initialTab = "chats" }: BcChatAppProps) {
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [authConfig, setAuthConfig] = useState<AuthConfig | null>(null);
   const [booting, setBooting] = useState(true);
-  const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
   const [activeTheme, setActiveTheme] = useState<ThemePresetId>("ban_chiang");
   const [roomTone, setRoomTone] = useState<RoomToneId>("ban_chiang_cream");
   const [wsTick, setWsTick] = useState(0);
   const [lastWsConvId, setLastWsConvId] = useState<string | null>(null);
+  const [latestCallEvent, setLatestCallEvent] = useState<{
+    seq: number;
+    eventName: string;
+    call: CallSession;
+  } | null>(null);
+  const [latestIncomingNotice, setLatestIncomingNotice] = useState<{
+    seq: number;
+    conversationId: string;
+    text: string;
+  } | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const userRef = useRef<UserProfile | null>(null);
   userRef.current = user;
+  const convMapRef = useRef<Map<string, Conversation>>(new Map());
+
+  const handleConversationsSynced = useCallback((convs: Conversation[]) => {
+    const next = new Map<string, Conversation>();
+    for (const c of convs) {
+      next.set(c.id, c);
+    }
+    convMapRef.current = next;
+  }, []);
 
   const applyAndSaveTheme = useCallback((rawPreset?: string | null) => {
     const id = normalizeThemeId(rawPreset);
@@ -45,26 +71,7 @@ export function BcChatApp() {
     applyThemeCssVars(id);
   }, []);
 
-  const performLogin = useCallback(
-    async (params: { email: string; display_name?: string; department?: string }) => {
-      setLoginLoading(true);
-      setLoginError(null);
-      try {
-        const res = await api.loginDemoOrEmail(params);
-        setTabSession(res.token, res.user);
-        setUser(res.user);
-      } catch (err) {
-        setLoginError(
-          err instanceof Error ? err.message : "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้"
-        );
-      } finally {
-        setLoginLoading(false);
-      }
-    },
-    []
-  );
-
-  // Boot: apply theme + check URL query (?demo=1..5 / ?test_login=...) or sessionStorage
+  // Boot: apply theme + load authConfig + restore sessionStorage token
   useEffect(() => {
     let active = true;
     setRoomTone(getSavedRoomTone());
@@ -72,42 +79,54 @@ export function BcChatApp() {
 
     const init = async () => {
       try {
-        const themeRes = await api.getTheme();
-        if (active) applyAndSaveTheme(themeRes.preset);
+        const [themeRes, cfgRes] = await Promise.allSettled([
+          api.getTheme(),
+          api.getAuthConfig(),
+        ]);
+        if (active && themeRes.status === "fulfilled") {
+          applyAndSaveTheme(themeRes.value.preset);
+        }
+        if (active && cfgRes.status === "fulfilled") {
+          setAuthConfig(cfgRes.value);
+        }
       } catch {
         // Keep default ban_chiang when backend is still booting
       }
 
-      const demoParam = searchParams.get("demo");
-      const testLoginParam = searchParams.get("test_login");
+      const rawTestSlot =
+        typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("test_user")
+          : null;
+      const testSlotNum = rawTestSlot ? Number(rawTestSlot) : NaN;
+      const hasValidTestSlot =
+        Number.isInteger(testSlotNum) && testSlotNum >= 1 && testSlotNum <= 5;
 
-      if (demoParam) {
-        const match =
-          demoParam === "jead"
-            ? ADMIN_DEMO_ACCOUNT
-            : DEMO_ACCOUNTS.find((d) => d.slot === demoParam);
-        if (match) {
-          await performLogin({
-            email: match.email,
-            display_name: match.name,
-            department: match.department,
-          });
-          if (active) setBooting(false);
-          return;
+      if (hasValidTestSlot) {
+        try {
+          const res = await api.testQuickLogin({ slot: testSlotNum });
+          if (active) {
+            setLoginError(null);
+            setTabSession(res.token, res.user);
+            setUser(res.user);
+            const cleanUrl = new URL(window.location.href);
+            cleanUrl.searchParams.delete("test_user");
+            window.history.replaceState(
+              {},
+              "",
+              `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`
+            );
+            setBooting(false);
+            return;
+          }
+        } catch (err) {
+          if (active) {
+            setLoginError(
+              err instanceof Error
+                ? err.message
+                : "ไม่สามารถเข้าสู่ระบบด้วยบัญชีทดสอบได้"
+            );
+          }
         }
-      }
-
-      if (testLoginParam) {
-        const foundDemo = DEMO_ACCOUNTS.find(
-          (d) => d.email.toLowerCase() === testLoginParam.trim().toLowerCase()
-        );
-        await performLogin({
-          email: testLoginParam.trim(),
-          display_name: foundDemo?.name,
-          department: foundDemo?.department,
-        });
-        if (active) setBooting(false);
-        return;
       }
 
       const token = getTabToken();
@@ -120,9 +139,15 @@ export function BcChatApp() {
             setTabSession(token, me);
             setUser(me);
           }
-        } catch {
-          clearTabSession();
-          if (active) setUser(null);
+        } catch (err) {
+          const status =
+            err && typeof err === "object" && "status" in err
+              ? Number((err as { status?: unknown }).status)
+              : 0;
+          if (active && (status === 401 || status === 403 || status === 404)) {
+            clearTabSession();
+            setUser(null);
+          }
         }
       }
 
@@ -133,7 +158,7 @@ export function BcChatApp() {
     return () => {
       active = false;
     };
-  }, [applyAndSaveTheme, performLogin, searchParams]);
+  }, [applyAndSaveTheme]);
 
   // WebSocket lifecycle per tab session
   useEffect(() => {
@@ -164,13 +189,71 @@ export function BcChatApp() {
             return;
           }
           if (evName === "new_message" && payload.message) {
-            const senderId = String(payload.message.sender_id ?? "");
-            if (senderId && senderId !== userRef.current?.id) {
-              playChime("incoming");
+            const rawMsg = payload.message as Record<string, unknown>;
+            const senderId = String(rawMsg.sender_id ?? "");
+            const me = userRef.current;
+            if (senderId && me && senderId !== me.id) {
+              const convId = String(payload.conversation_id ?? rawMsg.conversation_id ?? "");
+              const conv = convId ? convMapRef.current.get(convId) : undefined;
+              const muted = isConversationMutedNow(conv);
+              const dnd = isDndActiveNow(me);
+              const mentionsArr = Array.isArray(rawMsg.mentions)
+                ? rawMsg.mentions.map((x) => String(x).toLowerCase())
+                : [];
+              const contentStr = String(rawMsg.content ?? "");
+              const contentLower = contentStr.toLowerCase();
+              const meHandle = (me.bc_id || "").replace(/^@/, "").toLowerCase();
+              const meName = (me.display_name || "").toLowerCase();
+              const isMentioned =
+                mentionsArr.includes(me.id.toLowerCase()) ||
+                Boolean(
+                  meHandle &&
+                    (mentionsArr.includes(meHandle) ||
+                      mentionsArr.includes(`@${meHandle}`) ||
+                      contentLower.includes(`@${meHandle}`))
+                ) ||
+                Boolean(meName && contentLower.includes(`@${meName}`)) ||
+                contentLower.includes("@all") ||
+                contentLower.includes("@ทุกคน");
+              const allowMentionOverride = me.notify_on_mention !== false && isMentioned;
+              const isSilentMsg = String(rawMsg.priority ?? "normal") === "silent";
+              if (!isSilentMsg && !dnd && (!muted || allowMentionOverride)) {
+                playChime("incoming");
+                const senderName = String(rawMsg.sender_name ?? conv?.name ?? "ข้อความใหม่");
+                const previewText =
+                  me.notify_preview === false
+                    ? `${senderName}: คุณมีข้อความใหม่`
+                    : `${senderName}: ${contentStr || "ส่งไฟล์หรือสติกเกอร์"}`;
+                setLatestIncomingNotice((prev) => ({
+                  seq: (prev?.seq ?? 0) + 1,
+                  conversationId: convId,
+                  text: previewText,
+                }));
+              }
             }
           }
+          if (
+            (evName === "call_incoming" ||
+              evName === "call_accepted" ||
+              evName === "call_declined" ||
+              evName === "call_participant_updated" ||
+              evName === "call_ended") &&
+            payload.call
+          ) {
+            const callObj = payload.call as CallSession;
+            setLatestCallEvent((prev) => ({
+              seq: (prev?.seq ?? 0) + 1,
+              eventName: evName,
+              call: callObj,
+            }));
+          }
           if (evName && evName !== "connected" && evName !== "typing") {
-            setLastWsConvId(payload.conversation_id ? String(payload.conversation_id) : null);
+            const rawMsg =
+              payload.message && typeof payload.message === "object"
+                ? (payload.message as Record<string, unknown>)
+                : undefined;
+            const wsConvId = payload.conversation_id ?? rawMsg?.conversation_id;
+            setLastWsConvId(wsConvId ? String(wsConvId) : null);
             setWsTick((t) => t + 1);
           }
         } catch {
@@ -195,10 +278,27 @@ export function BcChatApp() {
     };
   }, [user, applyAndSaveTheme]);
 
+  const handleAuthenticated = (token: string, nextUser: UserProfile) => {
+    setLoginError(null);
+    setTabSession(token, nextUser);
+    setUser(nextUser);
+  };
+
   const handleLogout = () => {
     clearTabSession();
     setUser(null);
+    setLatestCallEvent(null);
+    setLatestIncomingNotice(null);
   };
+
+  const handleSwitchTestUser = useCallback(async (slot: number) => {
+    const res = await api.testQuickLogin({ slot });
+    setLoginError(null);
+    setTabSession(res.token, res.user);
+    setLatestCallEvent(null);
+    setLatestIncomingNotice(null);
+    setUser(res.user);
+  }, []);
 
   const handleChangeRoomTone = (tone: RoomToneId) => {
     setRoomTone(tone);
@@ -229,16 +329,21 @@ export function BcChatApp() {
   if (!user) {
     return (
       <LoginView
-        onLogin={performLogin}
-        isLoading={loginLoading}
-        errorMessage={loginError}
+        authConfig={authConfig}
+        onAuthenticated={handleAuthenticated}
+        initialError={loginError}
       />
     );
   }
 
   return (
     <MainShell
+      key={user.id}
+      initialTab={initialTab}
+      authConfig={authConfig}
       currentUser={user}
+      testUsers={authConfig?.test_users_enabled ? authConfig.test_users ?? [] : []}
+      onSwitchTestUser={handleSwitchTestUser}
       onUserUpdated={(updated) => {
         setUser(updated);
         const tok = getTabToken();
@@ -251,6 +356,9 @@ export function BcChatApp() {
       onChangeRoomTone={handleChangeRoomTone}
       wsTick={wsTick}
       lastWsConvId={lastWsConvId}
+      latestCallEvent={latestCallEvent}
+      latestIncomingNotice={latestIncomingNotice}
+      onConversationsSynced={handleConversationsSynced}
     />
   );
 }

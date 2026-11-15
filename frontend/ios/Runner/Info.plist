@@ -56,22 +56,17 @@
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>BC Ai Chat ขออนุญาตเข้าถึงคลังรูปภาพเพื่อส่งและบันทึกรูปภาพในห้องแชทและอัลบั้มกลุ่ม</string>
 	<key>NSCameraUsageDescription</key>
-	<string>BC Ai Chat ขออนุญาตเข้าถึงกล้องเพื่อถ่ายภาพและส่งในห้องแชท</string>
+	<string>BC Ai Chat ขออนุญาตเข้าถึงกล้องเพื่อถ่ายภาพ ส่งในห้องแชท และสนทนาวิดีโอคอล</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>BC Ai Chat ขออนุญาตเข้าถึงไมโครโฟนเพื่อบันทึกและส่งข้อความเสียง</string>
+	<string>BC Ai Chat ขออนุญาตเข้าถึงไมโครโฟนเพื่อบันทึกข้อความเสียงและสนทนาโทรด้วยเสียง/วิดีโอ</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>

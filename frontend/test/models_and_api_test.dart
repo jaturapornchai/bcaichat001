@@ -33,8 +33,8 @@ void main() {
   test('Models parse Ban Chiang new fields (reactions, audio, poll, event, album, notes, friends, conv)', () {
     final user = AppUser.fromJson({
       'id': 'u1',
-      'email': 'demo1@bcaichat.local',
-      'display_name': 'ก้อง (Demo 1)',
+      'email': 'kong@bcaichat.example',
+      'display_name': 'ก้อง',
       'is_favorite': true,
       'is_blocked': false,
       'is_hidden': false,
@@ -203,5 +203,364 @@ void main() {
       'created_by_name': 'ก้อง',
     });
     expect(album.photos.single.fileName, 'trip.jpg');
+  });
+
+  test('ApiService.resolveLiveKitUrlFrom normalizes URLs and never appends /rtc', () {
+    expect(
+      ApiService.resolveLiveKitUrlFrom(
+        '',
+        fallbackBaseUrl: 'http://127.0.0.1:8096',
+      ),
+      'ws://127.0.0.1:8096',
+    );
+    expect(
+      ApiService.resolveLiveKitUrlFrom(
+        'same_origin',
+        fallbackBaseUrl: 'https://chat.bcaichat.example/api/v1/',
+      ),
+      'wss://chat.bcaichat.example',
+    );
+    expect(
+      ApiService.resolveLiveKitUrlFrom('wss://lk.bcaichat.example/'),
+      'wss://lk.bcaichat.example',
+    );
+    expect(
+      ApiService.resolveLiveKitUrlFrom('wss://lk.bcaichat.example/rtc'),
+      'wss://lk.bcaichat.example',
+    );
+    expect(
+      ApiService.resolveLiveKitUrlFrom('https://lk.bcaichat.example/rtc///'),
+      'https://lk.bcaichat.example',
+    );
+  });
+
+  test('Auth, OA multi-role, and Call models parse snake_case and camelCase', () {
+    final user = AppUser.fromJson({
+      'id': 'u_phone_1',
+      'email': '',
+      'phone': '0812345678',
+      'phone_verified': true,
+      'email_verified': false,
+      'has_google_linked': true,
+      'display_name': 'ลุงจืด',
+      'bc_id': 'jead.bc',
+      'role': 'admin',
+      'is_oa_bot': false,
+    });
+    expect(user.phone, '0812345678');
+    expect(user.phoneVerified, isTrue);
+    expect(user.emailVerified, isFalse);
+    expect(user.hasGoogleLinked, isTrue);
+    expect(user.isAdmin, isTrue);
+
+    final prefixedBcIdUser = AppUser.fromJson({
+      'id': 'u2',
+      'display_name': 'แพรไหม',
+      'bc_id': '@praemai',
+    });
+    expect(prefixedBcIdUser.bcId, 'praemai');
+    expect('@${prefixedBcIdUser.bcId}', '@praemai');
+
+    final quickPrefixedUser = QuickTestUser.fromJson({
+      'slot': 2,
+      'id': 'u2',
+      'display_name': 'แพรไหม',
+      'bc_id': '@praemai',
+    });
+    expect(quickPrefixedUser.bcId, 'praemai');
+
+    final cfg = AuthConfig.fromJson({
+      'phone_otp_enabled': true,
+      'phone_otp_ready': true,
+      'google_enabled': true,
+      'google_client_id': 'gid-123',
+      'admin_bootstrap_enabled': true,
+      'livekit_enabled': true,
+      'demo_enabled': false,
+    });
+    expect(cfg.phoneOtpReady, isTrue);
+    expect(cfg.googleEnabled, isTrue);
+    expect(cfg.adminBootstrapEnabled, isTrue);
+    expect(cfg.livekitEnabled, isTrue);
+    expect(cfg.demoEnabled, isFalse);
+
+    final oa = OaAccountDto.fromJson({
+      'id': 'oa_shop_1',
+      'handle': '@ban.coffee',
+      'name': 'กาแฟบ้านเชียง',
+      'owner_id': 'u_owner',
+      'admin_ids': ['u_admin'],
+      'my_role': 'marketer',
+      'staff_roles': {
+        'u_owner': 'owner',
+        'u_admin': 'admin',
+        'u_agent': 'agent',
+        'u_marketer': 'marketer',
+      },
+      'calls_enabled': false,
+      'rich_menu': [
+        {
+          'id': 'rm_1',
+          'label': 'เก็บคูปอง',
+          'action_type': 'coupon',
+          'action_value': 'SAVE50',
+          'icon': 'coupon',
+        },
+      ],
+    });
+    expect(oa.callsEnabled, isFalse);
+    expect(oa.richMenu.single.actionType, 'coupon');
+    expect(oa.effectiveRole('u_marketer'), 'marketer');
+    expect(oa.canDoMarketing('u_marketer'), isTrue);
+    expect(oa.canEditRichMenu('u_marketer'), isTrue);
+    expect(oa.canHandleChats('u_marketer'), isFalse);
+    expect(oa.canManageTeam('u_marketer'), isFalse);
+
+    final oaConv = Conversation.fromJson({
+      'id': 'conv_oa_1',
+      'kind': 'oa',
+      'name': 'กาแฟบ้านเชียง',
+      'folder': 'oa',
+      'oa_id': 'oa_shop_1',
+      'oa_handle': '@ban.coffee',
+      'rich_menu': [
+        {'id': 'rm_1', 'label': 'เมนูร้าน', 'action_type': 'keyword'},
+      ],
+    });
+    expect(oaConv.isOa, isTrue);
+    expect(oaConv.oaId, 'oa_shop_1');
+    expect(oaConv.folderLabel, 'ร้านค้า');
+    expect(oaConv.richMenu, hasLength(1));
+
+    final callMsg = ChatMessage.fromJson({
+      'id': 'm_call_1',
+      'conversation_id': 'c1',
+      'sender_id': 'u1',
+      'sender_name': 'ก้อง',
+      'type': 'call_log',
+      'content': 'จบสาย',
+      'card_payload': {
+        'call_type': 'video',
+        'status': 'ended',
+        'duration_sec': 75,
+      },
+    });
+    expect(callMsg.previewText, contains('วิดีโอคอล'));
+
+    final join = CallJoinSession.fromJson({
+      'livekit_url': 'same_origin',
+      'token': 'lk-jwt',
+      'call': {
+        'id': 'call_1',
+        'conversation_id': 'c1',
+        'room_name': 'room_c1',
+        'call_type': 'audio',
+        'status': 'ringing',
+        'initiator_id': 'u1',
+        'target_user_ids': ['u2'],
+      },
+    });
+    expect(join.token, 'lk-jwt');
+    expect(join.call.id, 'call_1');
+    expect(join.call.isRinging, isTrue);
+
+    final futureIso = DateTime.now()
+        .toUtc()
+        .add(const Duration(hours: 2))
+        .toIso8601String();
+    final pastIso = DateTime.now()
+        .toUtc()
+        .subtract(const Duration(hours: 2))
+        .toIso8601String();
+
+    final privacyUser = AppUser.fromJson({
+      'id': 'u_priv',
+      'email': 'priv@bcaichat.local',
+      'display_name': 'สมชาย',
+      'qr_token': 'BCQR_NEW_123', // pragma: allowlist secret
+      'allow_add_by_phone': false,
+      'allow_add_by_id': true,
+      'allow_add_by_email': false,
+      'notify_preview': false,
+      'notify_on_mention': false,
+      'dnd_until': futureIso,
+    });
+    expect(privacyUser.qrToken, 'BCQR_NEW_123');
+    expect(privacyUser.allowAddByPhone, isFalse);
+    expect(privacyUser.allowAddById, isTrue);
+    expect(privacyUser.allowAddByEmail, isFalse);
+    expect(privacyUser.notifyPreview, isFalse);
+    expect(privacyUser.notifyOnMention, isFalse);
+    expect(privacyUser.isDndActive, isTrue);
+    expect(privacyUser.copyWith(clearDndUntil: true).isDndActive, isFalse);
+    expect(privacyUser.toJson()['allow_add_by_phone'], isFalse);
+
+    final tempMutedConv = Conversation.fromJson({
+      'id': 'c_mute_temp',
+      'kind': 'direct',
+      'name': 'เพื่อนสนิท',
+      'is_muted': false,
+      'muted_until': futureIso,
+      'is_blocked_by_me': true,
+    });
+    expect(tempMutedConv.isMuted, isFalse);
+    expect(tempMutedConv.isEffectivelyMuted, isTrue);
+    expect(tempMutedConv.isBlockedByMe, isTrue);
+
+    final expiredMutedConv = Conversation.fromJson({
+      'id': 'c_mute_exp',
+      'kind': 'direct',
+      'name': 'เพื่อนเก่า',
+      'is_muted': false,
+      'muted_until': pastIso,
+      'is_blocked_by_me': false,
+    });
+    expect(expiredMutedConv.isEffectivelyMuted, isFalse);
+    expect(expiredMutedConv.isBlockedByMe, isFalse);
+
+    final recUser = AppUser.fromJson({
+      'id': 'u_rec',
+      'email': 'rec@example.com',
+      'display_name': 'สมหญิง',
+      'has_recovery_pin': true,
+      'recovery_codes_remaining': 5,
+      'last_recovered_at': '2026-11-15T08:00:00Z',
+    });
+    expect(recUser.hasRecoveryPin, isTrue);
+    expect(recUser.recoveryCodesRemaining, 5);
+    expect(recUser.lastRecoveredAt, '2026-11-15T08:00:00Z');
+    expect(recUser.copyWith(recoveryCodesRemaining: 4).recoveryCodesRemaining, 4);
+
+    final pollRec = GoogleOAuthPollResult.fromJson({
+      'status': 'verified_for_recovery',
+      'mode': 'recover',
+      'oauth_state': 'st_abc',
+      'email': 'rec@example.com',
+    });
+    expect(pollRec.status, 'verified_for_recovery');
+    expect(pollRec.oauthState, 'st_abc');
+    expect(pollRec.email, 'rec@example.com');
+
+    final recLog = RecoveryLogDto.fromJson({
+      'id': 'rl1',
+      'user_id': 'u_rec',
+      'action': 'recover_change_phone',
+      'method': 'google',
+      'detail_masked': '081***5678',
+      'created_at': '2026-11-15T08:01:00Z',
+    });
+    expect(recLog.actionLabel, 'กู้คืน & เปลี่ยนเบอร์โทร');
+    expect(recLog.detailMasked, '081***5678');
+
+    final locMsg = ChatMessage.fromJson({
+      'id': 'm_loc',
+      'conversation_id': 'c1',
+      'sender_id': 'u1',
+      'sender_name': 'ก้อง',
+      'type': 'location',
+      'content': 'สยามพารากอน',
+      'location_data': {
+        'latitude': 13.7466,
+        'longitude': 100.5347,
+        'title': 'สยามพารากอน',
+        'address': 'ปทุมวัน กรุงเทพฯ',
+      },
+      'edited_at': '2026-11-15T09:00:00Z',
+      'forwarded_from': 'ก้อง',
+      'expire_at': futureIso,
+    });
+    expect(locMsg.locationData?.title, 'สยามพารากอน');
+    expect(locMsg.locationData?.resolvedMapUrl, contains('13.7466,100.5347'));
+    expect(locMsg.isEdited, isTrue);
+    expect(locMsg.isForwarded, isTrue);
+    expect(locMsg.isExpiring, isTrue);
+    expect(locMsg.previewText, contains('📍 สยามพารากอน'));
+
+    final contactMsg = ChatMessage.fromJson({
+      'id': 'm_contact',
+      'conversation_id': 'c1',
+      'sender_id': 'u1',
+      'sender_name': 'ก้อง',
+      'type': 'contact',
+      'content': 'แพร',
+      'contact_data': {
+        'user_id': 'user_demo2',
+        'display_name': 'แพร',
+        'bc_id': 'prae.bc',
+      },
+    });
+    expect(contactMsg.contactData?.bcId, 'prae.bc');
+    expect(contactMsg.previewText, contains('แนะนำเพื่อน: แพร'));
+
+    final ladderMsg = ChatMessage.fromJson({
+      'id': 'm_ladder',
+      'conversation_id': 'c1',
+      'sender_id': 'u1',
+      'sender_name': 'ก้อง',
+      'type': 'ladder',
+      'content': 'ทายเลี้ยงข้าว',
+      'ladder_data': {
+        'title': 'ทายเลี้ยงข้าว',
+        'entries': [
+          {'player': 'ก้อง', 'result': 'เลี้ยงกาแฟ'},
+          {'player': 'แพร', 'result': 'รอดตัว!'},
+        ],
+      },
+    });
+    expect(ladderMsg.ladderData?.entries.length, 2);
+    expect(ladderMsg.previewText, contains('เกมสุ่มบันได: ทายเลี้ยงข้าว'));
+
+    final keepConv = Conversation.fromJson({
+      'id': 'conv_keep_u1',
+      'kind': 'keep',
+      'name': 'Keep ส่วนตัว',
+      'folder': 'personal',
+      'is_pinned': true,
+    });
+    expect(keepConv.isKeep, isTrue);
+    expect(keepConv.folderLabel, 'Keep ส่วนตัว');
+
+    final parsedAt = ApiService.parseLocationInput(
+      'https://www.google.com/maps/place/Test/@13.7563,100.5018,17z',
+    );
+    expect(parsedAt?.lat, closeTo(13.7563, 0.0001));
+    expect(parsedAt?.lng, closeTo(100.5018, 0.0001));
+
+    final parsedPlain = ApiService.parseLocationInput('18.7883, 98.9853');
+    expect(parsedPlain?.lat, closeTo(18.7883, 0.0001));
+    expect(parsedPlain?.lng, closeTo(98.9853, 0.0001));
+    expect(ApiService.parseLocationInput('99.0, 200.0'), isNull);
+  });
+
+  test('normalizeThaiDigits and normalizeFriendSearchQuery handle Thai digits, dashes, spaces, +66 and @BC ID', () {
+    expect(normalizeThaiDigits('๐๘๑-๒๓๔ ๕๖๗๘'), '081-234 5678');
+    expect(
+      normalizeFriendSearchQuery('081-234-5678', mode: 'phone'),
+      '0812345678',
+    );
+    expect(
+      normalizeFriendSearchQuery(' ๐๘๑ ๒๓๔-๕๖๗๘ ', mode: 'phone'),
+      '0812345678',
+    );
+    expect(
+      normalizeFriendSearchQuery('+66 81-234-5678', mode: 'phone'),
+      '0812345678',
+    );
+    expect(
+      normalizeFriendSearchQuery('+66 ๘๑ ๒๓๔ ๕๖๗๘', mode: 'phone'),
+      '0812345678',
+    );
+    expect(
+      normalizeFriendSearchQuery('+660812345678', mode: 'phone'),
+      '0812345678',
+    );
+    expect(
+      normalizeFriendSearchQuery('66812345678', mode: 'phone'),
+      '0812345678',
+    );
+    expect(
+      normalizeFriendSearchQuery('  @kong.bc  ', mode: 'id'),
+      'kong.bc',
+    );
   });
 }

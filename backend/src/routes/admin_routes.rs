@@ -373,7 +373,7 @@ pub async fn admin_broadcast_handler(
             &official,
             "official",
             "personal",
-            true,
+            false,
             &formatted,
         )
         .await
@@ -415,6 +415,11 @@ pub async fn admin_broadcast_handler(
                 audio_duration_sec: None,
                 poll: None,
                 event_data: None,
+                location_data: None,
+                contact_data: None,
+                ladder_data: None,
+                edited_at: None,
+                forwarded_from: None,
                 deleted_for: Vec::new(),
                 created_at: now.clone(),
             };

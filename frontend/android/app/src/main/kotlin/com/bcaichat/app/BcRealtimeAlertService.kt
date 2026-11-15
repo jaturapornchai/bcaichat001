@@ -11,6 +11,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
+import android.media.Ringtone
+import android.media.RingtoneManager
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkRequest
@@ -27,6 +29,8 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import java.net.URLEncoder
+import java.util.Calendar
+import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -74,10 +78,13 @@ class BcRealtimeAlertService : Service() {
         const val ACTION_START = "com.bcaichat.app.action.START_REALTIME_ALERTS"
         const val ACTION_SYNC = "com.bcaichat.app.action.SYNC_REALTIME_ALERTS"
         const val ACTION_STOP = "com.bcaichat.app.action.STOP_REALTIME_ALERTS"
+        const val ACTION_STOP_CALL_RING = "com.bcaichat.app.action.STOP_CALL_RING"
 
         private const val FOREGROUND_CHANNEL_ID = "bc_fg_realtime_v1"
         private const val MSG_CHANNEL_PREFIX = "bc_msg_v2_"
+        private const val CALL_CHANNEL_ID = "bc_call_incoming_v1"
         private const val FOREGROUND_NOTIFICATION_ID = 9100
+        private const val CALL_NOTIFICATION_BASE_ID = 9500
         private const val AI_USER_ID = "user_ai"
 
         private val SOUND_CODES = listOf(
@@ -138,15 +145,20 @@ class BcRealtimeAlertService : Service() {
         val name: String,
         val type: String,
         val isMuted: Boolean,
+        val mutedUntil: String = "",
+        val isBlockedByMe: Boolean = false,
     )
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val ioExecutor = Executors.newSingleThreadExecutor()
     private val roomCache = ConcurrentHashMap<String, RoomMeta>()
+    private val activeCallNotifIds = ConcurrentHashMap<String, Int>()
     private val seenMessageIds = LinkedHashSet<String>()
 
     private lateinit var powerManager: PowerManager
     private lateinit var notificationManager: NotificationManager
+
+    private var activeCallRingtone: Ringtone? = null
 
     private var wsClient: OkHttpClient? = null
     private var httpClient: OkHttpClient? = null
@@ -201,6 +213,19 @@ class BcRealtimeAlertService : Service() {
         if (intent?.action == ACTION_STOP) {
             teardownAndStopSelf()
             return START_NOT_STICKY
+        }
+
+        if (intent?.action == ACTION_STOP_CALL_RING) {
+            val callId = intent.getStringExtra("call_id").orEmpty()
+            stopCallRingAndDismiss(callId, dismissNotification = true)
+            if (activeJwt.isNullOrEmpty()) {
+                val s = readSession()
+                if (s.jwt.isNullOrEmpty()) {
+                    teardownAndStopSelf()
+                    return START_NOT_STICKY
+                }
+            }
+            return START_STICKY
         }
 
         val session = readSession()
@@ -261,6 +286,7 @@ class BcRealtimeAlertService : Service() {
     override fun onDestroy() {
         destroyed = true
         isServiceRunning = false
+        stopCallRingAndDismiss("", dismissNotification = true)
         cancelPendingReconnect()
         closeWebSocket()
         unregisterNetworkCallback()
@@ -277,6 +303,7 @@ class BcRealtimeAlertService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun teardownAndStopSelf() {
+        stopCallRingAndDismiss("", dismissNotification = true)
         cancelPendingReconnect()
         closeWebSocket()
         unregisterNetworkCallback()
@@ -368,6 +395,25 @@ class BcRealtimeAlertService : Service() {
             }
             notificationManager.createNotificationChannel(channel)
         }
+
+        val ringtoneUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+        val callAudioAttr = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+        val callChannel = NotificationChannel(
+            CALL_CHANNEL_ID,
+            "สายโทรเข้า BC Ai Chat",
+            NotificationManager.IMPORTANCE_HIGH,
+        ).apply {
+            description = "แจ้งเตือนสายโทรเข้าด้วยเสียงและวิดีโอ"
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            enableLights(true)
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 600, 300, 600)
+            setSound(ringtoneUri, callAudioAttr)
+        }
+        notificationManager.createNotificationChannel(callChannel)
     }
 
     private data class SessionData(
@@ -375,6 +421,10 @@ class BcRealtimeAlertService : Service() {
         val userId: String,
         val deviceId: String,
         val apiBase: String,
+        val bcId: String = "",
+        val dndUntil: String = "",
+        val notifyPreview: Boolean = true,
+        val notifyOnMention: Boolean = true,
     )
 
     private fun readSession(): SessionData {
@@ -382,9 +432,26 @@ class BcRealtimeAlertService : Service() {
         val jwt = prefs.getString("flutter.bcaichat_jwt_token", null)
         val rawUser = prefs.getString("flutter.bcaichat_user_json", null)
         var userId = ""
+        var bcId = ""
+        var dndUntil = ""
+        var notifyPreview = true
+        var notifyOnMention = true
         if (!rawUser.isNullOrEmpty()) {
             try {
-                userId = JSONObject(rawUser).optString("id", "")
+                val obj = JSONObject(rawUser)
+                userId = obj.optString("id", "")
+                bcId = obj.optString("bc_id", obj.optString("bcId", ""))
+                dndUntil = obj.optString("dnd_until", obj.optString("dndUntil", "")).trim()
+                if (obj.has("notify_preview")) {
+                    notifyPreview = obj.optBoolean("notify_preview", true)
+                } else if (obj.has("notifyPreview")) {
+                    notifyPreview = obj.optBoolean("notifyPreview", true)
+                }
+                if (obj.has("notify_on_mention")) {
+                    notifyOnMention = obj.optBoolean("notify_on_mention", true)
+                } else if (obj.has("notifyOnMention")) {
+                    notifyOnMention = obj.optBoolean("notifyOnMention", true)
+                }
             } catch (_: Throwable) {
             }
         }
@@ -394,7 +461,70 @@ class BcRealtimeAlertService : Service() {
         val effective = prefs.getString("flutter.bcaichat_effective_api_base", null)
         val fallback = prefs.getString("flutter.bcaichat_api_base", null)
         val apiBase = normalizeBaseUrl(effective ?: fallback ?: "http://10.0.2.2:8096")
-        return SessionData(jwt = jwt, userId = userId, deviceId = deviceId, apiBase = apiBase)
+        return SessionData(
+            jwt = jwt,
+            userId = userId,
+            deviceId = deviceId,
+            apiBase = apiBase,
+            bcId = bcId,
+            dndUntil = dndUntil,
+            notifyPreview = notifyPreview,
+            notifyOnMention = notifyOnMention,
+        )
+    }
+
+    private fun parseIsoMillis(raw: String?): Long? {
+        val text = raw?.trim().orEmpty()
+        if (text.isEmpty() || text == "null") return null
+        val match = Regex("""^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:?\d{2})?$""")
+            .matchEntire(text) ?: return null
+        val year = match.groupValues[1].toIntOrNull() ?: return null
+        val month = (match.groupValues[2].toIntOrNull() ?: return null) - 1
+        val day = match.groupValues[3].toIntOrNull() ?: return null
+        val hour = match.groupValues[4].toIntOrNull() ?: return null
+        val min = match.groupValues[5].toIntOrNull() ?: return null
+        val sec = match.groupValues[6].toIntOrNull() ?: return null
+        val tzPart = match.groupValues[7]
+        val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+        cal.set(Calendar.MILLISECOND, 0)
+        cal.set(year, month, day, hour, min, sec)
+        var utcMillis = cal.timeInMillis
+        if (tzPart.isNotEmpty() && tzPart != "Z") {
+            val sign = if (tzPart.startsWith("-")) -1 else 1
+            val clean = tzPart.substring(1).replace(":", "")
+            val offH = clean.substring(0, 2).toIntOrNull() ?: 0
+            val offM = clean.substring(2, 4).toIntOrNull() ?: 0
+            utcMillis -= sign * ((offH * 60L + offM) * 60_000L)
+        }
+        return utcMillis
+    }
+
+    private fun isTimestampInFuture(raw: String?): Boolean {
+        val ms = parseIsoMillis(raw) ?: return false
+        return ms > System.currentTimeMillis()
+    }
+
+    private fun isMessageMentioningUser(
+        msg: JSONObject,
+        myUserId: String,
+        myBcId: String,
+    ): Boolean {
+        val cleanBcId = myBcId.trim().removePrefix("@")
+        val mentions = msg.optJSONArray("mentions")
+        if (mentions != null) {
+            for (i in 0 until mentions.length()) {
+                val item = mentions.optString(i, "").trim()
+                if (item.isEmpty()) continue
+                val low = item.lowercase()
+                if ((myUserId.isNotEmpty() && item == myUserId) || low == "all" || low == "@all") {
+                    return true
+                }
+                if (cleanBcId.isNotEmpty() && low.removePrefix("@") == cleanBcId.lowercase()) {
+                    return true
+                }
+            }
+        }
+        return msg.optString("content", "").lowercase().contains("@all")
     }
 
     private fun normalizeBaseUrl(raw: String): String {
@@ -598,7 +728,21 @@ class BcRealtimeAlertService : Service() {
                     val name = obj.optString("name", "")
                     val type = obj.optString("type", obj.optString("kind", "direct"))
                     val isMuted = obj.optBoolean("is_muted", false)
-                    roomCache[id] = RoomMeta(name = name, type = type, isMuted = isMuted)
+                    val mutedUntil = obj.optString(
+                        "muted_until",
+                        obj.optString("mutedUntil", ""),
+                    ).trim()
+                    val isBlockedByMe = obj.optBoolean(
+                        "is_blocked_by_me",
+                        obj.optBoolean("isBlockedByMe", false),
+                    )
+                    roomCache[id] = RoomMeta(
+                        name = name,
+                        type = type,
+                        isMuted = isMuted,
+                        mutedUntil = mutedUntil,
+                        isBlockedByMe = isBlockedByMe,
+                    )
                 }
             }
         } catch (_: Throwable) {
@@ -629,6 +773,18 @@ class BcRealtimeAlertService : Service() {
             "new_message" -> {
                 val msg = payload.optJSONObject("message") ?: return
                 processIncomingMessage(msg)
+            }
+            "call_incoming" -> {
+                val callObj = payload.optJSONObject("call") ?: payload
+                processIncomingCall(callObj, payload)
+            }
+            "call_ended", "call_accepted" -> {
+                val callObj = payload.optJSONObject("call") ?: payload
+                val callId = callObj.optString(
+                    "id",
+                    callObj.optString("_id", payload.optString("call_id", "")),
+                )
+                stopCallRingAndDismiss(callId, dismissNotification = true)
             }
         }
     }
@@ -677,12 +833,22 @@ class BcRealtimeAlertService : Service() {
             val convId = msg.optString("conversation_id", "")
             if (convId.isEmpty()) return
 
+            if (isTimestampInFuture(session.dndUntil)) return
+
             var room = roomCache[convId]
             if (room == null && !session.jwt.isNullOrEmpty()) {
                 refreshRoomsCache(session.apiBase, session.jwt)
                 room = roomCache[convId]
             }
-            if (room?.isMuted == true) return
+            if (room?.isBlockedByMe == true) return
+            val isGroup = room != null && room.type != "direct"
+            val isRoomMuted = room != null && (room.isMuted || isTimestampInFuture(room.mutedUntil))
+            if (isRoomMuted) {
+                val allowMention = isGroup &&
+                    session.notifyOnMention &&
+                    isMessageMentioningUser(msg, myUserId, session.bcId)
+                if (!allowMention) return
+            }
 
             val senderName = msg.optString("sender_name", "ข้อความใหม่").ifEmpty { "ข้อความใหม่" }
             val rawContent = msg.optString("content", "")
@@ -701,6 +867,9 @@ class BcRealtimeAlertService : Service() {
                 msgType == "poll" -> "สร้างแบบโหวต"
                 msgType == "event" -> "สร้างนัดหมาย"
                 msgType == "rich_card" -> "ส่งการ์ดโต้ตอบ"
+                msgType == "location" -> "📍 แชร์ตำแหน่งที่ตั้ง"
+                msgType == "contact" -> "👤 แนะนำเพื่อน"
+                msgType == "ladder" -> "🎲 เกมสุ่มบันได"
                 else -> {
                     val trimmed = rawContent.trim()
                     if (trimmed.length > 120) "${trimmed.substring(0, 120)}…" else trimmed
@@ -709,9 +878,9 @@ class BcRealtimeAlertService : Service() {
 
             val priority = msg.optString("priority", "normal")
             val prioritizedBody = if (priority == "urgent") "⚡ ด่วน: $preview" else preview
-            val isGroup = room != null && room.type != "direct"
             val title = if (isGroup) room?.name?.ifEmpty { senderName } ?: senderName else senderName
             val finalBody = if (isGroup) "$senderName: $prioritizedBody" else prioritizedBody
+            val displayBody = if (session.notifyPreview) finalBody else "คุณมีข้อความใหม่"
 
             val soundEnabled = prefs.getBoolean("flutter.bcaichat_alert_sound", true)
             val chosenSound = when {
@@ -740,8 +909,8 @@ class BcRealtimeAlertService : Service() {
             val notification = NotificationCompat.Builder(this, "$MSG_CHANNEL_PREFIX$soundCode")
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentTitle(title)
-                .setContentText(finalBody)
-                .setStyle(NotificationCompat.BigTextStyle().bigText(finalBody))
+                .setContentText(displayBody)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(displayBody))
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setCategory(NotificationCompat.CATEGORY_MESSAGE)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -762,6 +931,195 @@ class BcRealtimeAlertService : Service() {
                         "bcaichat:screen_wake",
                     )
                     screenWl.acquire(5_000L)
+                } catch (_: Throwable) {
+                }
+            }
+        } finally {
+            try {
+                if (cpuWakeLock?.isHeld == true) {
+                    cpuWakeLock.release()
+                }
+            } catch (_: Throwable) {
+            }
+        }
+    }
+
+    private fun callNotifId(callId: String): Int {
+        if (callId.isEmpty()) return CALL_NOTIFICATION_BASE_ID
+        return CALL_NOTIFICATION_BASE_ID + ((callId.hashCode() and 0x7fffffff) % 400)
+    }
+
+    private fun stopCallRingAndDismiss(callId: String, dismissNotification: Boolean) {
+        try {
+            activeCallRingtone?.stop()
+        } catch (_: Throwable) {
+        }
+        activeCallRingtone = null
+
+        if (!dismissNotification) return
+
+        if (callId.isNotEmpty()) {
+            val id = activeCallNotifIds.remove(callId) ?: callNotifId(callId)
+            try {
+                notificationManager.cancel(id)
+            } catch (_: Throwable) {
+            }
+        } else {
+            val keys = activeCallNotifIds.keys.toList()
+            for (k in keys) {
+                val id = activeCallNotifIds.remove(k) ?: continue
+                try {
+                    notificationManager.cancel(id)
+                } catch (_: Throwable) {
+                }
+            }
+            try {
+                notificationManager.cancel(CALL_NOTIFICATION_BASE_ID)
+            } catch (_: Throwable) {
+            }
+        }
+    }
+
+    private fun processIncomingCall(callObj: JSONObject, rawPayload: JSONObject) {
+        val cpuWakeLock = try {
+            powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "bcaichat:call_cpu").apply {
+                setReferenceCounted(false)
+                acquire(8_000L)
+            }
+        } catch (_: Throwable) {
+            null
+        }
+
+        try {
+            val callId = callObj.optString(
+                "id",
+                callObj.optString("_id", rawPayload.optString("call_id", "")),
+            )
+            val convId = callObj.optString(
+                "conversation_id",
+                rawPayload.optString("conversation_id", ""),
+            )
+            val status = callObj.optString("status", "ringing")
+            if (status == "ended" || status == "missed" || status == "declined") {
+                stopCallRingAndDismiss(callId, dismissNotification = true)
+                return
+            }
+
+            val session = readSession()
+            val myUserId = session.userId.ifEmpty { connectedUserId.orEmpty() }
+            val initiatorId = callObj.optString("initiator_id", "")
+            if (myUserId.isNotEmpty() && initiatorId == myUserId) {
+                return
+            }
+
+            val targetIds = callObj.optJSONArray("target_user_ids")
+                ?: rawPayload.optJSONArray("target_user_ids")
+            if (targetIds != null && targetIds.length() > 0 && myUserId.isNotEmpty()) {
+                var matched = false
+                for (i in 0 until targetIds.length()) {
+                    if (targetIds.optString(i, "") == myUserId) {
+                        matched = true
+                        break
+                    }
+                }
+                if (!matched) return
+            }
+
+            val interactive = powerManager.isInteractive
+            if (MainActivity.isForegroundResumed && interactive) {
+                return
+            }
+
+            val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            if (!prefs.getBoolean("flutter.bcaichat_alert_popup", true)) {
+                return
+            }
+            if (isTimestampInFuture(session.dndUntil)) {
+                return
+            }
+            if (convId.isNotEmpty() && roomCache[convId]?.isBlockedByMe == true) {
+                return
+            }
+
+            val callType = callObj.optString("call_type", "audio")
+            val initiatorName = callObj.optString("initiator_name", "สายเรียกเข้า").ifEmpty {
+                "สายเรียกเข้า"
+            }
+            val title = if (callType == "video") "วิดีโอคอลเข้า" else "สายโทรเข้า"
+            val body = "$initiatorName กำลังโทรหาคุณ"
+            val callKey = callId.ifEmpty { convId }
+            val notifId = callNotifId(callKey)
+
+            val service = this
+            val openIntent = Intent(service, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                if (convId.isNotEmpty()) {
+                    putExtra("conversation_id", convId)
+                }
+                if (callId.isNotEmpty()) {
+                    putExtra("call_id", callId)
+                }
+            }
+            val openPi = PendingIntent.getActivity(
+                service,
+                notifId,
+                openIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+
+            val stopRingIntent = Intent(service, BcRealtimeAlertService::class.java).apply {
+                action = ACTION_STOP_CALL_RING
+                putExtra("call_id", callKey)
+            }
+            val stopRingPi = PendingIntent.getService(
+                service,
+                notifId + 500,
+                stopRingIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+
+            val notification = NotificationCompat.Builder(service, CALL_CHANNEL_ID)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentTitle(title)
+                .setContentText(body)
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setCategory(NotificationCompat.CATEGORY_CALL)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setOngoing(true)
+                .setAutoCancel(true)
+                .setDefaults(NotificationCompat.DEFAULT_LIGHTS or NotificationCompat.DEFAULT_VIBRATE)
+                .setContentIntent(openPi)
+                .setFullScreenIntent(openPi, true)
+                .addAction(0, "หยุดเสียงเรียก", stopRingPi)
+                .build()
+
+            activeCallNotifIds[callKey] = notifId
+            notificationManager.notify(notifId, notification)
+
+            if (prefs.getBoolean("flutter.bcaichat_alert_sound", true)) {
+                try {
+                    activeCallRingtone?.stop()
+                    val ringUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+                    val ring = RingtoneManager.getRingtone(applicationContext, ringUri)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        ring?.isLooping = true
+                    }
+                    ring?.play()
+                    activeCallRingtone = ring
+                } catch (_: Throwable) {
+                }
+            }
+
+            if (!interactive) {
+                try {
+                    @Suppress("DEPRECATION")
+                    val screenWl = powerManager.newWakeLock(
+                        PowerManager.SCREEN_BRIGHT_WAKE_LOCK or
+                            PowerManager.ACQUIRE_CAUSES_WAKEUP or
+                            PowerManager.ON_AFTER_RELEASE,
+                        "bcaichat:call_screen_wake",
+                    )
+                    screenWl.acquire(6_000L)
                 } catch (_: Throwable) {
                 }
             }

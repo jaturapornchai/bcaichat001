@@ -1,108 +1,146 @@
 use bson::{doc, Document, Regex};
-use chrono::{Duration, Utc};
+use chrono::Utc;
 use futures_util::TryStreamExt;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 use crate::{
     models::{
-        AlbumDoc, AttachmentInfo, ConversationDoc, EventData, FileDoc, FriendshipDoc,
-        LastMessageSummary, MessageDoc, MiniAppDoc, NoteComment, NoteDoc, PinnedMessageSummary,
-        PollData, PollOption, UserDoc,
+        AlbumDoc, ConversationDoc, FriendshipDoc, LastMessageSummary, MessageDoc, MiniAppDoc,
+        NoteDoc, OaAccountDoc, OaAutoReplyRuleDoc, OaCouponDoc, OaFollowerDoc, OaRichMenuItem,
+        UserDoc,
     },
     routes::admin_routes::DEFAULT_THEME,
     AppState,
 };
 
-pub const DEMO_CHAT_ROOM_ID: &str = "conv_group_demo5";
-pub const TEST_CHAT_ROOM_ID: &str = DEMO_CHAT_ROOM_ID;
-pub const FAMILY_CHAT_ROOM_ID: &str = "conv_group_family";
-
-/// 5 Personal Demo accounts: (id, email, display_name, bc_id, department, avatar_bg)
-pub const DEMO_ACCOUNTS: [(&str, &str, &str, &str, &str, &str); 5] = [
-    (
-        "user_demo1",
-        "demo1@bcaichat.local",
-        "ก้อง (Demo 1)",
-        "@kong.bc",
-        "เพื่อนสนิท",
-        "812920",
-    ),
-    (
-        "user_demo2",
-        "demo2@bcaichat.local",
-        "แพร (Demo 2)",
-        "@prae.bc",
-        "เพื่อนสนิท",
-        "B45309",
-    ),
-    (
-        "user_demo3",
-        "demo3@bcaichat.local",
-        "บอส (Demo 3)",
-        "@boss.bc",
-        "ครอบครัว",
-        "13795B",
-    ),
-    (
-        "user_demo4",
-        "demo4@bcaichat.local",
-        "มายด์ (Demo 4)",
-        "@mind.bc",
-        "เพื่อนสนิท",
-        "1E40AF",
-    ),
-    (
-        "user_demo5",
-        "demo5@bcaichat.local",
-        "ต้น (Demo 5)",
-        "@ton.bc",
-        "ก๊วนกีฬา",
-        "A04035",
-    ),
+pub const TEST_USER_IDS: [&str; 5] = [
+    "11111111-1111-4111-8111-111111111101",
+    "11111111-1111-4111-8111-111111111102",
+    "11111111-1111-4111-8111-111111111103",
+    "11111111-1111-4111-8111-111111111104",
+    "11111111-1111-4111-8111-111111111105",
 ];
 
-const DEMO_PERSONA_DETAILS: [(&str, &str); 5] = [
-    (
-        "สายเที่ยว & ถ่ายรูป",
-        "ว่างนัดเที่ยวและส่งรูปทริปความละเอียดเต็มได้เสมอ",
-    ),
-    (
-        "สายคาเฟ่ & ชวนกินข้าว",
-        "เจอคาเฟ่น่านั่งหรือร้านอร่อย ส่งพิกัดมาในแก๊งได้เลย!",
-    ),
-    (
-        "สายแกดเจ็ต & เพลง",
-        "แชร์เพลย์ลิสต์เพลงดีๆ และไอเดียแต่งมุมโปรดที่บ้าน",
-    ),
-    (
-        "สายดูหนัง & ซีรีส์",
-        "ป้ายยาหนังและซีรีส์น่าดูประจำสัปดาห์",
-    ),
-    (
-        "สายวิ่ง & แคมป์ปิ้ง",
-        "เช้าวิ่งสวน เย็นกางเต็นท์ ทักชวนออกทริปได้ตลอด",
-    ),
+#[derive(Debug, Clone, Copy)]
+pub struct QuickTestUserSpec {
+    pub slot: u8,
+    pub id: &'static str,
+    pub display_name: &'static str,
+    pub bc_id: &'static str,
+    pub phone: &'static str,
+    pub email: &'static str,
+    pub role: &'static str,
+    pub status_message: &'static str,
+    pub badge: &'static str,
+    pub qr_token: &'static str,
+    pub avatar_bg: &'static str,
+}
+
+pub const QUICK_TEST_USERS: [QuickTestUserSpec; 5] = [
+    QuickTestUserSpec {
+        slot: 1,
+        id: TEST_USER_IDS[0],
+        display_name: "ต้นน้ำ",
+        bc_id: "@tonnam",
+        phone: "0810000001",
+        email: "tonnam@test.bcaichat.app", // pragma: allowlist secret
+        role: "user",
+        status_message: "เจ้าของร้านชาบ้านเชียง & เพื่อนในกลุ่ม",
+        badge: "เจ้าของร้านค้า • เพื่อน",
+        qr_token: "BCQR_TEST_TONNAM_01", // pragma: allowlist secret
+        avatar_bg: "812920",
+    },
+    QuickTestUserSpec {
+        slot: 2,
+        id: TEST_USER_IDS[1],
+        display_name: "แพรไหม",
+        bc_id: "@praemai",
+        phone: "0810000002",
+        email: "praemai@test.bcaichat.app", // pragma: allowlist secret
+        role: "user",
+        status_message: "เพื่อนสนิท & ทีมงานช่วยตอบแชทร้าน",
+        badge: "เพื่อนสนิท • ทีมงานร้านค้า",
+        qr_token: "BCQR_TEST_PRAEMAI_02", // pragma: allowlist secret
+        avatar_bg: "A04035",
+    },
+    QuickTestUserSpec {
+        slot: 3,
+        id: TEST_USER_IDS[2],
+        display_name: "ภูมิ",
+        bc_id: "@phoom",
+        phone: "0810000003",
+        email: "phoom@test.bcaichat.app", // pragma: allowlist secret
+        role: "user",
+        status_message: "สายเที่ยว ถ่ายรูป นัดกินข้าว",
+        badge: "เพื่อนในกลุ่ม",
+        qr_token: "BCQR_TEST_PHOOM_03", // pragma: allowlist secret
+        avatar_bg: "B45309",
+    },
+    QuickTestUserSpec {
+        slot: 4,
+        id: TEST_USER_IDS[3],
+        display_name: "ใบบัว",
+        bc_id: "@baibua",
+        phone: "0810000004",
+        email: "baibua@test.bcaichat.app", // pragma: allowlist secret
+        role: "user",
+        status_message: "ครอบครัว & ลูกค้าประจำร้านชา",
+        badge: "ครอบครัว • ลูกค้าร้านค้า",
+        qr_token: "BCQR_TEST_BAIBUA_04", // pragma: allowlist secret
+        avatar_bg: "13795B",
+    },
+    QuickTestUserSpec {
+        slot: 5,
+        id: TEST_USER_IDS[4],
+        display_name: "คิน",
+        bc_id: "@kin",
+        phone: "0810000005",
+        email: "kin@test.bcaichat.app", // pragma: allowlist secret
+        role: "user",
+        status_message: "เพื่อนใหม่ ทดสอบค้นหาเบอร์ 0810000005",
+        badge: "เพื่อนใหม่ (ลองค้นหา/เพิ่มเพื่อน)",
+        qr_token: "BCQR_TEST_KIN_05", // pragma: allowlist secret
+        avatar_bg: "1E40AF",
+    },
 ];
 
-pub const TEST_ACCOUNTS: [(&str, &str, &str); 5] = [
-    ("user_demo1", "demo1@bcaichat.local", "ก้อง (Demo 1)"),
-    ("user_demo2", "demo2@bcaichat.local", "แพร (Demo 2)"),
-    ("user_demo3", "demo3@bcaichat.local", "บอส (Demo 3)"),
-    ("user_demo4", "demo4@bcaichat.local", "มายด์ (Demo 4)"),
-    ("user_demo5", "demo5@bcaichat.local", "ต้น (Demo 5)"),
+const SEEDED_PURGE_USER_IDS: [&str; 8] = [
+    "user_demo1",
+    "user_demo2",
+    "user_demo3",
+    "user_demo4",
+    "user_demo5",
+    "user_jead",
+    "user_somchai",
+    "user_nida",
+];
+
+const SEEDED_PURGE_CONV_IDS: [&str; 3] = [
+    "conv_group_office",
+    "conv_group_demo5",
+    "conv_group_family",
 ];
 
 pub async fn ensure_mongo_indexes(db: &mongodb::Database) {
-    use mongodb::IndexModel;
-    let _ = db
-        .collection::<UserDoc>("users")
+    use mongodb::{options::IndexOptions, IndexModel};
+    let users_coll = db.collection::<UserDoc>("users");
+    let _ = users_coll
         .create_indexes(vec![
             IndexModel::builder().keys(doc! { "email": 1 }).build(),
-            IndexModel::builder().keys(doc! { "bc_id": 1 }).build(),
+            IndexModel::builder().keys(doc! { "phone": 1 }).build(),
             IndexModel::builder().keys(doc! { "qr_token": 1 }).build(),
+            IndexModel::builder().keys(doc! { "google_id": 1 }).build(),
         ])
         .await;
+    let unique_bc_id = IndexModel::builder()
+        .keys(doc! { "bc_id": 1 })
+        .options(IndexOptions::builder().unique(true).build())
+        .build();
+    if users_coll.create_index(unique_bc_id.clone()).await.is_err() {
+        let _ = users_coll.drop_index("bc_id_1").await;
+        let _ = users_coll.create_index(unique_bc_id).await;
+    }
     let _ = db
         .collection::<ConversationDoc>("conversations")
         .create_indexes(vec![
@@ -111,6 +149,9 @@ pub async fn ensure_mongo_indexes(db: &mongodb::Database) {
                 .build(),
             IndexModel::builder()
                 .keys(doc! { "invite_token": 1 })
+                .build(),
+            IndexModel::builder()
+                .keys(doc! { "oa_id": 1 })
                 .build(),
         ])
         .await;
@@ -129,19 +170,28 @@ pub async fn ensure_mongo_indexes(db: &mongodb::Database) {
             IndexModel::builder()
                 .keys(doc! { "conversation_id": 1, "type": 1 })
                 .build(),
+            IndexModel::builder()
+                .keys(doc! { "conversation_id": 1, "is_unsent": 1, "read_by": 1 })
+                .build(),
         ])
         .await;
     let _ = db
-        .collection::<bson::Document>("device_tokens")
+        .collection::<Document>("device_tokens")
         .create_index(IndexModel::builder().keys(doc! { "user_id": 1 }).build())
         .await;
     let _ = db
         .collection::<FriendshipDoc>("friendships")
-        .create_index(
+        .create_indexes(vec![
             IndexModel::builder()
                 .keys(doc! { "user_id": 1, "friend_id": 1 })
                 .build(),
-        )
+            IndexModel::builder()
+                .keys(doc! { "user_id": 1, "is_blocked": 1, "friend_id": 1 })
+                .build(),
+            IndexModel::builder()
+                .keys(doc! { "friend_id": 1, "is_blocked": 1, "user_id": 1 })
+                .build(),
+        ])
         .await;
     let _ = db
         .collection::<NoteDoc>("notes")
@@ -156,6 +206,63 @@ pub async fn ensure_mongo_indexes(db: &mongodb::Database) {
         .create_index(
             IndexModel::builder()
                 .keys(doc! { "conversation_id": 1, "updated_at": -1 })
+                .build(),
+        )
+        .await;
+    let _ = db
+        .collection::<Document>("otp_sessions")
+        .create_indexes(vec![
+            IndexModel::builder().keys(doc! { "phone": 1, "created_at": -1 }).build(),
+            IndexModel::builder().keys(doc! { "expires_at": 1 }).build(),
+        ])
+        .await;
+    let _ = db
+        .collection::<Document>("google_oauth_states")
+        .create_index(IndexModel::builder().keys(doc! { "expires_at": 1 }).build())
+        .await;
+    let _ = db
+        .collection::<Document>("oa_accounts")
+        .create_indexes(vec![
+            IndexModel::builder().keys(doc! { "handle": 1 }).build(),
+            IndexModel::builder().keys(doc! { "owner_id": 1 }).build(),
+            IndexModel::builder().keys(doc! { "admin_ids": 1 }).build(),
+        ])
+        .await;
+    let _ = db
+        .collection::<Document>("oa_followers")
+        .create_indexes(vec![
+            IndexModel::builder().keys(doc! { "oa_id": 1, "user_id": 1 }).build(),
+            IndexModel::builder().keys(doc! { "user_id": 1 }).build(),
+        ])
+        .await;
+    let _ = db
+        .collection::<Document>("oa_auto_replies")
+        .create_index(IndexModel::builder().keys(doc! { "oa_id": 1 }).build())
+        .await;
+    let _ = db
+        .collection::<Document>("oa_coupons")
+        .create_index(IndexModel::builder().keys(doc! { "oa_id": 1 }).build())
+        .await;
+    let _ = db
+        .collection::<Document>("oa_broadcasts")
+        .create_index(IndexModel::builder().keys(doc! { "oa_id": 1, "created_at": -1 }).build())
+        .await;
+    let _ = db
+        .collection::<Document>("call_sessions")
+        .create_indexes(vec![
+            IndexModel::builder()
+                .keys(doc! { "conversation_id": 1, "status": 1, "started_at": -1 })
+                .build(),
+            IndexModel::builder()
+                .keys(doc! { "target_user_ids": 1, "status": 1 })
+                .build(),
+        ])
+        .await;
+    let _ = db
+        .collection::<Document>("account_recovery_logs")
+        .create_index(
+            IndexModel::builder()
+                .keys(doc! { "user_id": 1, "created_at": -1 })
                 .build(),
         )
         .await;
@@ -180,6 +287,10 @@ async fn upsert_seeded_user(
                 doc! { "_id": &user.id },
                 doc! {
                     "$set": {
+                        "email": &user.email,
+                        "phone": &user.phone,
+                        "phone_verified": user.phone_verified,
+                        "email_verified": user.email_verified,
                         "display_name": &user.display_name,
                         "bc_id": &user.bc_id,
                         "avatar_url": &user.avatar_url,
@@ -187,6 +298,8 @@ async fn upsert_seeded_user(
                         "role": &user.role,
                         "department": &user.department,
                         "job_title": &user.job_title,
+                        "is_oa_bot": user.is_oa_bot,
+                        "oa_id": &user.oa_id,
                     }
                 },
             )
@@ -196,47 +309,166 @@ async fn upsert_seeded_user(
     Ok(())
 }
 
-/// Cleans up legacy pre-personal seed docs in MongoDB & MinIO so live state is 100% personal.
+/// Removes all legacy Demo/test seed users, demo rooms, and sample files from MongoDB & MinIO.
+/// Keeps ONLY `user_ai`, `user_official`, real registered users, and OA bots (`user_oa_*`).
 async fn migrate_legacy_seed_data(state: &AppState) {
     let legacy_file_keys = [
         "seed_tax_invoice_preview.svg",
         "seed_quotation_QT2026_0089.txt",
+        "seed_trip_postcard.svg",
+        "seed_weekend_trip.txt",
     ];
     for key in legacy_file_keys {
         let _ = state.minio.delete_object(key).await;
     }
 
+    let seed_conv_ids: Vec<&str> = SEEDED_PURGE_CONV_IDS.to_vec();
     let _ = state
         .db
         .collection::<Document>("files")
         .delete_many(doc! {
             "$or": [
-                { "_id": { "$in": ["file_seed_invoice_img", "file_seed_quotation_doc"] } },
-                { "key": { "$in": ["seed_tax_invoice_preview.svg", "seed_quotation_QT2026_0089.txt"] } },
-                { "conversation_id": "conv_group_office" }
+                { "_id": { "$in": ["file_seed_invoice_img", "file_seed_quotation_doc", "file_seed_trip_img", "file_seed_trip_doc"] } },
+                { "key": { "$in": legacy_file_keys.as_slice() } },
+                { "conversation_id": { "$in": &seed_conv_ids } }
             ]
         })
         .await;
 
-    let _ = state
-        .db
-        .collection::<Document>("conversations")
-        .delete_one(doc! { "_id": "conv_group_office" })
-        .await;
+    // Identify demo / old seeded users to purge
+    let users_doc_coll = state.db.collection::<Document>("users");
+    let demo_email_rx = Regex {
+        pattern: r"^(demo[0-9]+|jead|somchai|nida)@(bcaichat|bcapp)\.local$".to_string(),
+        options: "i".to_string(),
+    };
+    let fixed_purge_ids: Vec<&str> = SEEDED_PURGE_USER_IDS.to_vec();
+    let mut purged_ids: HashSet<String> = SEEDED_PURGE_USER_IDS
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect();
 
-    let _ = state
-        .db
-        .collection::<Document>("messages")
-        .delete_many(doc! { "conversation_id": "conv_group_office" })
-        .await;
+    if let Ok(cursor) = users_doc_coll
+        .find(doc! {
+            "_id": { "$nin": ["user_ai", "user_official"] },
+            "$or": [
+                { "_id": { "$in": &fixed_purge_ids } },
+                { "email": demo_email_rx.clone() },
+            ]
+        })
+        .await
+    {
+        if let Ok(docs) = cursor.try_collect::<Vec<Document>>().await {
+            for d in docs {
+                if let Ok(id) = d.get_str("_id") {
+                    if !id.starts_with("user_oa_") && !TEST_USER_IDS.contains(&id) {
+                        purged_ids.insert(id.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    let purged_list: Vec<String> = purged_ids.into_iter().collect();
+    if !purged_list.is_empty() {
+        let _ = users_doc_coll
+            .delete_many(doc! { "_id": { "$in": &purged_list } })
+            .await;
+        let _ = state
+            .db
+            .collection::<Document>("friendships")
+            .delete_many(doc! {
+                "$or": [
+                    { "user_id": { "$in": &purged_list } },
+                    { "friend_id": { "$in": &purged_list } },
+                ]
+            })
+            .await;
+        let _ = state
+            .db
+            .collection::<Document>("device_tokens")
+            .delete_many(doc! { "user_id": { "$in": &purged_list } })
+            .await;
+        let personal_note_ids: Vec<String> = purged_list
+            .iter()
+            .map(|id| format!("note_personal_seed_{id}"))
+            .collect();
+        let _ = state
+            .db
+            .collection::<Document>("notes")
+            .delete_many(doc! {
+                "$or": [
+                    { "_id": { "$in": &personal_note_ids } },
+                    { "owner_id": { "$in": &purged_list } },
+                ]
+            })
+            .await;
+    }
+
+    // Collect direct conversations involving purged demo users + fixed seed rooms
+    let conv_docs_coll = state.db.collection::<Document>("conversations");
+    let mut deleted_conv_ids: HashSet<String> = SEEDED_PURGE_CONV_IDS
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect();
+
+    if !purged_list.is_empty() {
+        if let Ok(cursor) = conv_docs_coll
+            .find(doc! {
+                "$or": [
+                    { "_id": { "$in": &seed_conv_ids } },
+                    { "type": { "$in": ["direct", "official"] }, "member_ids": { "$in": &purged_list } },
+                ]
+            })
+            .await
+        {
+            if let Ok(convs) = cursor.try_collect::<Vec<Document>>().await {
+                for c in convs {
+                    if let Ok(id) = c.get_str("_id") {
+                        if !matches!(
+                            id,
+                            "conv_dm_test_1_2"
+                                | "conv_group_test_friends"
+                                | "conv_oa_test_chabanchiang"
+                        ) {
+                            deleted_conv_ids.insert(id.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        // Pull deleted demo users from any remaining group conversations
+        let _ = conv_docs_coll
+            .update_many(
+                doc! {},
+                doc! {
+                    "$pullAll": {
+                        "member_ids": &purged_list,
+                        "admin_ids": &purged_list,
+                    }
+                },
+            )
+            .await;
+    }
+
+    let deleted_conv_list: Vec<String> = deleted_conv_ids.into_iter().collect();
+    if !deleted_conv_list.is_empty() {
+        let _ = conv_docs_coll
+            .delete_many(doc! { "_id": { "$in": &deleted_conv_list } })
+            .await;
+        let _ = state
+            .db
+            .collection::<Document>("messages")
+            .delete_many(doc! { "conversation_id": { "$in": &deleted_conv_list } })
+            .await;
+    }
 
     let _ = state
         .db
         .collection::<Document>("notes")
         .delete_many(doc! {
             "$or": [
-                { "conversation_id": "conv_group_office" },
-                { "_id": "note_group_office_1" }
+                { "conversation_id": { "$in": &deleted_conv_list } },
+                { "_id": { "$in": ["note_group_office_1", "note_group_family_1", "note_demo5_seed_1"] } }
             ]
         })
         .await;
@@ -246,8 +478,8 @@ async fn migrate_legacy_seed_data(state: &AppState) {
         .collection::<Document>("albums")
         .delete_many(doc! {
             "$or": [
-                { "conversation_id": "conv_group_office" },
-                { "_id": "album_office_seed_1" }
+                { "conversation_id": { "$in": &deleted_conv_list } },
+                { "_id": { "$in": ["album_office_seed_1", "album_demo5_seed_1", "album_family_seed_1"] } }
             ]
         })
         .await;
@@ -263,7 +495,6 @@ async fn migrate_legacy_seed_data(state: &AppState) {
         })
         .await;
 
-    // Match legacy seeded text & denormalized business persona patterns via unicode escapes
     let legacy_rx = Regex {
         pattern: concat!(
             "0105566099887|INV-2026-08914|QT-2026-0089|",
@@ -284,7 +515,6 @@ async fn migrate_legacy_seed_data(state: &AppState) {
             "\u{0e1b}\u{0e23}\u{0e30}\u{0e01}\u{0e32}\u{0e28}\u{0e17}\u{0e32}\u{0e07}\u{0e01}\u{0e32}\u{0e23}|",
             "\u{0e1c}\u{0e39}\u{0e49}\u{0e14}\u{0e39}\u{0e41}\u{0e25}\u{0e2a}\u{0e39}\u{0e07}\u{0e2a}\u{0e38}\u{0e14}|",
             "\u{0e1c}\u{0e39}\u{0e49}\u{0e0a}\u{0e48}\u{0e27}\u{0e22}\u{0e2d}\u{0e31}\u{0e08}\u{0e09}\u{0e23}\u{0e34}\u{0e22}\u{0e30}|",
-            "\u{0e18}\u{0e38}\u{0e23}\u{0e01}\u{0e34}\u{0e08}|",
             "\u{0e1e}\u{0e19}\u{0e31}\u{0e01}\u{0e07}\u{0e32}\u{0e19}"
         )
         .to_string(),
@@ -320,97 +550,17 @@ async fn migrate_legacy_seed_data(state: &AppState) {
 
     let _ = state
         .db
-        .collection::<Document>("notes")
-        .delete_many(doc! {
-            "$or": [
-                { "title": legacy_rx.clone() },
-                { "content": legacy_rx.clone() },
-                { "owner_name": legacy_rx.clone() },
-                { "comments.user_name": legacy_rx.clone() },
-                { "comments.content": legacy_rx.clone() }
-            ]
-        })
-        .await;
-
-    let _ = state
-        .db
-        .collection::<Document>("albums")
-        .delete_many(doc! {
-            "$or": [
-                { "title": legacy_rx.clone() },
-                { "description": legacy_rx.clone() },
-                { "created_by_name": legacy_rx.clone() }
-            ]
-        })
-        .await;
-
-    // Remove legacy starter direct/official chats & stale non-seeded work groups so personal onboarding recreates clean ones
-    let conv_docs_coll = state.db.collection::<Document>("conversations");
-    if let Ok(cursor) = conv_docs_coll
-        .find(doc! {
-            "_id": { "$nin": [DEMO_CHAT_ROOM_ID, FAMILY_CHAT_ROOM_ID] },
-            "$or": [
-                { "folder": "work" },
-                { "name": legacy_rx.clone() },
-                { "last_message.content": legacy_rx.clone() },
-                { "last_message.sender_name": legacy_rx.clone() },
-                { "pinned_message.content": legacy_rx.clone() },
-                { "pinned_message.sender_name": legacy_rx.clone() }
-            ]
-        })
-        .await
-    {
-        if let Ok(stale_convs) = cursor.try_collect::<Vec<Document>>().await {
-            let stale_ids: Vec<String> = stale_convs
-                .into_iter()
-                .filter_map(|d| d.get_str("_id").ok().map(str::to_string))
-                .collect();
-            if !stale_ids.is_empty() {
-                let _ = state
-                    .db
-                    .collection::<Document>("messages")
-                    .delete_many(doc! { "conversation_id": { "$in": &stale_ids } })
-                    .await;
-                let _ = conv_docs_coll
-                    .delete_many(doc! { "_id": { "$in": &stale_ids } })
-                    .await;
-            }
-        }
-    }
-
-    let _ = state
-        .db
         .collection::<Document>("messages")
         .delete_many(doc! {
             "$or": [
                 { "content": legacy_rx.clone() },
                 { "sender_name": legacy_rx.clone() },
                 { "accepted_by": legacy_rx.clone() },
-                { "card_payload.title": legacy_rx.clone() },
-                { "flex_payload.title": legacy_rx }
             ]
         })
         .await;
 
-    // Upgrade any non-seeded user records still carrying old default department/job_title
-    let _ = state
-        .db
-        .collection::<Document>("users")
-        .update_many(
-            doc! { "department": { "$in": ["\u{0e1a}\u{0e23}\u{0e34}\u{0e2b}\u{0e32}\u{0e23}", "\u{0e17}\u{0e31}\u{0e48}\u{0e27}\u{0e44}\u{0e1b}", ""] } },
-            doc! { "$set": { "department": "เพื่อน" } },
-        )
-        .await;
-    let _ = state
-        .db
-        .collection::<Document>("users")
-        .update_many(
-            doc! { "job_title": { "$in": ["\u{0e1e}\u{0e19}\u{0e31}\u{0e01}\u{0e07}\u{0e32}\u{0e19}", "\u{0e1e}\u{0e19}\u{0e31}\u{0e01}\u{0e07}\u{0e32}\u{0e19}\u{0e2d}\u{0e07}\u{0e04}\u{0e4c}\u{0e01}\u{0e23}", ""] } },
-            doc! { "$set": { "job_title": "เพื่อน" } },
-        )
-        .await;
-
-    // Ensure AI settings default prompt is upgraded if legacy
+    // Ensure AI & auth settings documents initialize cleanly
     let _ = crate::routes::ai_routes::get_effective_ai_settings(state).await;
 }
 
@@ -425,7 +575,6 @@ pub async fn seed_initial_data(state: &AppState) -> Result<(), String> {
 
     let now = Utc::now().to_rfc3339();
 
-    // Ensure default Ban Chiang theme in app_settings if not already configured
     let settings_coll = state.db.collection::<Document>("app_settings");
     if settings_coll
         .find_one(doc! { "_id": "theme" })
@@ -437,160 +586,14 @@ pub async fn seed_initial_data(state: &AppState) -> Result<(), String> {
             .insert_one(doc! {
                 "_id": "theme",
                 "preset": DEFAULT_THEME,
-                "updated_by": "user_jead",
+                "updated_by": "system",
                 "updated_at": &now,
             })
             .await;
     }
 
     let users_coll = state.db.collection::<UserDoc>("users");
-
-    let initial_users = vec![
-        UserDoc {
-            id: "user_jead".to_string(),
-            email: "jead@bcaichat.local".to_string(),
-            display_name: "ลุงจืด".to_string(),
-            bc_id: "jead.bc".to_string(),
-            avatar_url: "https://ui-avatars.com/api/?name=Lung+Jead&background=812920&color=fff&bold=true".to_string(),
-            status_message: "พื้นที่แชทส่วนตัวของครอบครัวและแก๊งเพื่อน เก็บรูปถาวร".to_string(),
-            qr_token: "BCQR_JEAD_ADMIN".to_string(),
-            role: "admin".to_string(),
-            department: "เจ้าของระบบ".to_string(),
-            job_title: "ผู้ดูแลระบบส่วนตัว".to_string(),
-            google_id: None,
-            created_at: now.clone(),
-        },
-        UserDoc {
-            id: "user_somchai".to_string(),
-            email: "somchai@bcaichat.local".to_string(),
-            display_name: "สมชาย เพื่อนบ้าน".to_string(),
-            bc_id: "somchai.s".to_string(),
-            avatar_url: "https://ui-avatars.com/api/?name=Somchai&background=B45309&color=fff&bold=true".to_string(),
-            status_message: "มีของอร่อยหน้าปากซอยหรือฝากรับพัสดุทักแชทบอกได้เลยครับ".to_string(),
-            qr_token: "BCQR_SOMCHAI_HOME".to_string(),
-            role: "user".to_string(),
-            department: "เพื่อนบ้าน".to_string(),
-            job_title: "เพื่อนสนิทประจำซอย".to_string(),
-            google_id: None,
-            created_at: now.clone(),
-        },
-        UserDoc {
-            id: "user_nida".to_string(),
-            email: "nida@bcaichat.local".to_string(),
-            display_name: "นิดา พี่สาว".to_string(),
-            bc_id: "nida.acc".to_string(),
-            avatar_url: "https://ui-avatars.com/api/?name=Nida&background=13795B&color=fff&bold=true".to_string(),
-            status_message: "ส่งรูปครอบครัวและสูตรอาหารเก็บถาวรในคลัง ไม่มีวันหมดอายุค่ะ".to_string(),
-            qr_token: "BCQR_NIDA_FAM".to_string(),
-            role: "user".to_string(),
-            department: "ครอบครัว".to_string(),
-            job_title: "พี่สาวคนโต".to_string(),
-            google_id: None,
-            created_at: now.clone(),
-        },
-        UserDoc {
-            id: "user_official".to_string(),
-            email: "official@bcaichat.local".to_string(),
-            display_name: "ข่าวสาร BC Ai Chat".to_string(),
-            bc_id: "@bc.official".to_string(),
-            avatar_url: "https://ui-avatars.com/api/?name=BC+News&background=A04035&color=fff&bold=true".to_string(),
-            status_message: "อัปเดตฟีเจอร์ใหม่สำหรับแชทส่วนตัว ครอบครัว และแก๊งเพื่อน".to_string(),
-            qr_token: "BCQR_OFFICIAL_BC".to_string(),
-            role: "admin".to_string(),
-            department: "ข่าวสารแอป".to_string(),
-            job_title: "อัปเดตฟีเจอร์ส่วนตัว".to_string(),
-            google_id: None,
-            created_at: now.clone(),
-        },
-        UserDoc {
-            id: "user_ai".to_string(),
-            email: "ai@bcaichat.local".to_string(),
-            display_name: "🤖 BC AI ผู้ช่วยส่วนตัว".to_string(),
-            bc_id: "@bc.ai".to_string(),
-            avatar_url: "https://ui-avatars.com/api/?name=BC+AI&background=1E40AF&color=fff&bold=true".to_string(),
-            status_message: "ผู้ช่วย AI ส่วนตัวสำหรับทุกคนและทุกกลุ่ม (เรียก @ai ได้ทุกห้อง)".to_string(),
-            qr_token: "BCQR_DEEPSEEK_AI".to_string(),
-            role: "admin".to_string(),
-            department: "AI ส่วนตัว".to_string(),
-            job_title: "เพื่อนคู่คิด & ผู้ช่วยประจำแชท".to_string(),
-            google_id: None,
-            created_at: now.clone(),
-        },
-    ];
-
-    for u in &initial_users {
-        upsert_seeded_user(&users_coll, u).await?;
-    }
-
-    // Seed permanent personal files into MinIO + files collection (Ban Chiang palette, zero banned colors)
-    let files_coll = state.db.collection::<FileDoc>("files");
-    let sample_img_key = "seed_trip_postcard.svg";
-    let sample_img_url = format!("{}/api/files/{}", state.config.public_base_url, sample_img_key);
-    let svg_bytes = r##"<svg xmlns="http://www.w3.org/2000/svg" width="600" height="360" viewBox="0 0 600 360">
-  <rect width="600" height="360" rx="16" fill="#FBF9F8"/>
-  <rect x="20" y="20" width="560" height="70" rx="12" fill="#812920"/>
-  <text x="45" y="63" fill="#FFFFFF" font-family="sans-serif" font-size="23" font-weight="bold">BC AI CHAT - โปสการ์ดทริปเขาใหญ่สุดสัปดาห์</text>
-  <text x="45" y="130" fill="#1B1C1C" font-family="sans-serif" font-size="18">ความทรงจำดีๆ กับครอบครัวและแก๊งเพื่อน (เก็บถาวรบน MinIO)</text>
-  <text x="45" y="168" fill="#615E53" font-family="sans-serif" font-size="16">พิกัด: จุดชมวิวผาเดียวดาย • คาเฟ่กลางหุบเขา • ลานกางเต็นท์ดูดาว</text>
-  <text x="45" y="206" fill="#615E53" font-family="sans-serif" font-size="16">อัลบั้มภาพความละเอียดเต็ม เปิดดูย้อนหลังได้ตลอด ไม่มีวันหมดอายุ</text>
-  <rect x="45" y="240" width="510" height="75" rx="10" fill="#FADBD4"/>
-  <text x="65" y="285" fill="#681F18" font-family="sans-serif" font-size="22" font-weight="bold">ทริปเสาร์-อาทิตย์ • งบหารเฉลี่ยคนละ 1,250 บาท</text>
-</svg>"##
-        .as_bytes();
-
-    let sample_img_attachment = AttachmentInfo {
-        key: sample_img_key.to_string(),
-        url: sample_img_url.clone(),
-        file_name: "โปสการ์ดทริปเขาใหญ่_Weekend.svg".to_string(),
-        mime_type: "image/svg+xml".to_string(),
-        file_size: svg_bytes.len() as u64,
-    };
-
-    let _ = state
-        .minio
-        .put_object(sample_img_key, svg_bytes, "image/svg+xml")
-        .await;
-    let img_fdoc = FileDoc {
-        id: "file_seed_trip_img".to_string(),
-        key: sample_img_key.to_string(),
-        url: sample_img_url.clone(),
-        file_name: "โปสการ์ดทริปเขาใหญ่_Weekend.svg".to_string(),
-        mime_type: "image/svg+xml".to_string(),
-        file_size: svg_bytes.len() as u64,
-        uploader_id: "user_nida".to_string(),
-        uploader_name: "นิดา พี่สาว".to_string(),
-        conversation_id: Some(FAMILY_CHAT_ROOM_ID.to_string()),
-        created_at: now.clone(),
-    };
-    let _ = files_coll
-        .replace_one(doc! { "_id": "file_seed_trip_img" }, &img_fdoc)
-        .upsert(true)
-        .await;
-
-    let sample_doc_key = "seed_weekend_trip.txt";
-    let sample_doc_url = format!("{}/api/files/{}", state.config.public_base_url, sample_doc_key);
-    let doc_bytes = "แผนทริปพักผ่อนสุดสัปดาห์ เขาใหญ่ - ปากช่อง\nผู้ร่วมทริป: ครอบครัวและแก๊งเพื่อนสนิท\nรายการกิจกรรม: แวะจิบกาแฟคาเฟ่โฮมมี่ • ชมวิวพระอาทิตย์ตก • ปิ้งย่างยามเย็น\nงบหารเฉลี่ย: คนละ 1,250 บาท\nหมายเหตุ: ไฟล์และรูปถ่ายทริปนี้จัดเก็บถาวรใน MinIO Object Storage ไม่มีวันหมดอายุ\n".as_bytes();
-
-    let _ = state
-        .minio
-        .put_object(sample_doc_key, doc_bytes, "text/plain; charset=utf-8")
-        .await;
-    let txt_fdoc = FileDoc {
-        id: "file_seed_trip_doc".to_string(),
-        key: sample_doc_key.to_string(),
-        url: sample_doc_url.clone(),
-        file_name: "แผนเที่ยววันหยุดสุดสัปดาห์_เขาใหญ่.txt".to_string(),
-        mime_type: "text/plain".to_string(),
-        file_size: doc_bytes.len() as u64,
-        uploader_id: "user_somchai".to_string(),
-        uploader_name: "สมชาย เพื่อนบ้าน".to_string(),
-        conversation_id: Some(FAMILY_CHAT_ROOM_ID.to_string()),
-        created_at: now.clone(),
-    };
-    let _ = files_coll
-        .replace_one(doc! { "_id": "file_seed_trip_doc" }, &txt_fdoc)
-        .upsert(true)
-        .await;
+    ensure_system_accounts(&users_coll, &now).await?;
 
     // Seed 5 Personal Mini-Apps (Ban Chiang palette)
     let mini_coll = state.db.collection::<MiniAppDoc>("mini_apps");
@@ -676,645 +679,625 @@ pub async fn seed_initial_data(state: &AppState) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
     }
 
-    // Seed family & neighbors group conversation ("กลุ่มครอบครัว & เพื่อนบ้าน")
-    let conv_coll = state.db.collection::<ConversationDoc>("conversations");
-    let msg_coll = state.db.collection::<MessageDoc>("messages");
-
-    let family_pinned_msg = PinnedMessageSummary {
-        id: "msg_group_welcome_1".to_string(),
-        sender_id: "user_jead".to_string(),
-        sender_name: "ลุงจืด".to_string(),
-        msg_type: "text".to_string(),
-        content: "📌 ยินดีต้อนรับสู่กลุ่มครอบครัว & เพื่อนบ้าน: รูปถ่ายและไฟล์ในห้องนี้เก็บถาวรบน MinIO ไม่มีวันหมดอายุ และรองรับข้อความลับส่วนตัวล็อก PIN (ส่งผิดกดยกเลิกหรือลบทำลายไฟล์ออกจากเซิร์ฟเวอร์ได้ทันที)".to_string(),
-        created_at: now.clone(),
-    };
-
-    let family_last_msg = LastMessageSummary {
-        id: "msg_group_welcome_3".to_string(),
-        sender_id: "user_somchai".to_string(),
-        sender_name: "สมชาย เพื่อนบ้าน".to_string(),
-        msg_type: "file".to_string(),
-        content: "แนบไฟล์: แผนเที่ยววันหยุดสุดสัปดาห์_เขาใหญ่.txt (ดูได้ที่คลังไฟล์ หรือลิงก์ https://bcaichat.local/trips/weekend)".to_string(),
-        created_at: now.clone(),
-        read_count: 3,
-    };
-
-    if conv_coll
-        .find_one(doc! { "_id": FAMILY_CHAT_ROOM_ID })
-        .await
-        .map_err(|e| e.to_string())?
-        .is_none()
-    {
-        let group_conv = ConversationDoc {
-            id: FAMILY_CHAT_ROOM_ID.to_string(),
-            conv_type: "group".to_string(),
-            name: "กลุ่มครอบครัว & เพื่อนบ้าน".to_string(),
-            avatar_url: "https://ui-avatars.com/api/?name=BC+Family&background=812920&color=fff&bold=true".to_string(),
-            folder: "family".to_string(),
-            is_pinned: true,
-            is_muted: false,
-            is_archived: false,
-            invite_token: "BCJOIN-FAMILY".to_string(),
-            admin_ids: vec!["user_jead".to_string()],
-            member_ids: vec![
-                "user_jead".to_string(),
-                "user_somchai".to_string(),
-                "user_nida".to_string(),
-                "user_official".to_string(),
-                "user_ai".to_string(),
-            ],
-            user_meta: HashMap::new(),
-            pinned_message: Some(family_pinned_msg.clone()),
-            last_message: Some(family_last_msg),
-            created_at: now.clone(),
-            updated_at: now.clone(),
-        };
-        conv_coll
-            .insert_one(group_conv)
-            .await
-            .map_err(|e| e.to_string())?;
-    } else {
-        let _ = conv_coll
-            .update_one(
-                doc! { "_id": FAMILY_CHAT_ROOM_ID },
-                doc! {
-                    "$set": {
-                        "name": "กลุ่มครอบครัว & เพื่อนบ้าน",
-                        "folder": "family",
-                        "avatar_url": "https://ui-avatars.com/api/?name=BC+Family&background=812920&color=fff&bold=true",
-                        "invite_token": "BCJOIN-FAMILY",
-                    },
-                    "$addToSet": {
-                        "member_ids": {
-                            "$each": ["user_jead", "user_somchai", "user_nida", "user_official", "user_ai"]
-                        }
-                    }
-                },
-            )
-            .await;
-    }
-
-    let family_seed_messages = vec![
-        MessageDoc {
-            id: "msg_group_welcome_1".to_string(),
-            conversation_id: FAMILY_CHAT_ROOM_ID.to_string(),
-            sender_id: "user_jead".to_string(),
-            sender_name: "ลุงจืด".to_string(),
-            sender_avatar: "https://ui-avatars.com/api/?name=Lung+Jead&background=812920&color=fff&bold=true".to_string(),
-            msg_type: "text".to_string(),
-            content: family_pinned_msg.content.clone(),
-            sticker_code: None,
-            attachment: None,
-            card_payload: None,
-            flex_payload: None,
-            reply_to: None,
-            read_by: vec![
-                "user_jead".to_string(),
-                "user_somchai".to_string(),
-                "user_nida".to_string(),
-                "user_official".to_string(),
-            ],
-            is_unsent: false,
-            is_confidential: false,
-            confidential_pin: None,
-            expire_at: None,
-            priority: "normal".to_string(),
-            task_status: None,
-            accepted_by: None,
-            accepted_at: None,
-            reactions: HashMap::from([(
-                "👍".to_string(),
-                vec!["user_somchai".to_string(), "user_nida".to_string()],
-            )]),
-            mentions: Vec::new(),
-            audio_duration_sec: None,
-            poll: None,
-            event_data: None,
-            deleted_for: Vec::new(),
-            created_at: now.clone(),
-        },
-        MessageDoc {
-            id: "msg_group_welcome_2".to_string(),
-            conversation_id: FAMILY_CHAT_ROOM_ID.to_string(),
-            sender_id: "user_nida".to_string(),
-            sender_name: "นิดา พี่สาว".to_string(),
-            sender_avatar: "https://ui-avatars.com/api/?name=Nida&background=13795B&color=fff&bold=true".to_string(),
-            msg_type: "image".to_string(),
-            content: "ส่งโปสการ์ดทริปพักผ่อนสุดสัปดาห์เก็บเข้าคลังภาพถาวรเรียบร้อยค่ะ".to_string(),
-            sticker_code: None,
-            attachment: Some(sample_img_attachment.clone()),
-            card_payload: None,
-            flex_payload: None,
-            reply_to: None,
-            read_by: vec![
-                "user_jead".to_string(),
-                "user_somchai".to_string(),
-                "user_nida".to_string(),
-            ],
-            is_unsent: false,
-            is_confidential: true,
-            confidential_pin: None,
-            expire_at: None,
-            priority: "normal".to_string(),
-            task_status: None,
-            accepted_by: None,
-            accepted_at: None,
-            reactions: HashMap::new(),
-            mentions: Vec::new(),
-            audio_duration_sec: None,
-            poll: None,
-            event_data: None,
-            deleted_for: Vec::new(),
-            created_at: now.clone(),
-        },
-        MessageDoc {
-            id: "msg_group_welcome_3".to_string(),
-            conversation_id: FAMILY_CHAT_ROOM_ID.to_string(),
-            sender_id: "user_somchai".to_string(),
-            sender_name: "สมชาย เพื่อนบ้าน".to_string(),
-            sender_avatar: "https://ui-avatars.com/api/?name=Somchai&background=B45309&color=fff&bold=true".to_string(),
-            msg_type: "file".to_string(),
-            content: "แนบไฟล์: แผนเที่ยววันหยุดสุดสัปดาห์_เขาใหญ่.txt (ดูได้ที่คลังไฟล์ หรือลิงก์ https://bcaichat.local/trips/weekend)".to_string(),
-            sticker_code: None,
-            attachment: Some(AttachmentInfo {
-                key: sample_doc_key.to_string(),
-                url: sample_doc_url,
-                file_name: "แผนเที่ยววันหยุดสุดสัปดาห์_เขาใหญ่.txt".to_string(),
-                mime_type: "text/plain".to_string(),
-                file_size: doc_bytes.len() as u64,
-            }),
-            card_payload: None,
-            flex_payload: None,
-            reply_to: None,
-            read_by: vec![
-                "user_jead".to_string(),
-                "user_somchai".to_string(),
-                "user_nida".to_string(),
-            ],
-            is_unsent: false,
-            is_confidential: false,
-            confidential_pin: None,
-            expire_at: None,
-            priority: "normal".to_string(),
-            task_status: None,
-            accepted_by: None,
-            accepted_at: None,
-            reactions: HashMap::new(),
-            mentions: Vec::new(),
-            audio_duration_sec: None,
-            poll: None,
-            event_data: None,
-            deleted_for: Vec::new(),
-            created_at: now.clone(),
-        },
-        MessageDoc {
-            id: "msg_group_urgent_task".to_string(),
-            conversation_id: FAMILY_CHAT_ROOM_ID.to_string(),
-            sender_id: "user_jead".to_string(),
-            sender_name: "ลุงจืด".to_string(),
-            sender_avatar: "https://ui-avatars.com/api/?name=Lung+Jead&background=812920&color=fff&bold=true".to_string(),
-            msg_type: "text".to_string(),
-            content: "🚨 เรื่องด่วน: ฝากสมชายช่วยรับพัสดุผลไม้สดหน้าบ้านให้หน่อยนะครับ เย็นนี้แวะไปรับครับ".to_string(),
-            sticker_code: None,
-            attachment: None,
-            card_payload: None,
-            flex_payload: None,
-            reply_to: None,
-            read_by: vec![
-                "user_jead".to_string(),
-                "user_somchai".to_string(),
-                "user_nida".to_string(),
-            ],
-            is_unsent: false,
-            is_confidential: false,
-            confidential_pin: None,
-            expire_at: None,
-            priority: "urgent".to_string(),
-            task_status: Some("accepted".to_string()),
-            accepted_by: Some("สมชาย เพื่อนบ้าน".to_string()),
-            accepted_at: Some(now.clone()),
-            reactions: HashMap::new(),
-            mentions: Vec::new(),
-            audio_duration_sec: None,
-            poll: None,
-            event_data: None,
-            deleted_for: Vec::new(),
-            created_at: now.clone(),
-        },
-        {
-            let card = serde_json::json!({
-                "app_code": "split_bill",
-                "title": "หารค่าข้าวกับเพื่อน — มื้อเย็นวันเสาร์",
-                "color_hex": "#A04035",
-                "heading": "ร้านครัวบ้านสวน ริมน้ำ",
-                "subtitle": "มื้อเย็นครอบครัวและเพื่อนบ้าน (4 คน)",
-                "highlight_value": "คนละ 350 บาท (รวม 1,400 บาท)",
-                "status": "รอโอน",
-                "status_label": "รอโอน"
-            });
-            MessageDoc {
-                id: "msg_group_rich_card".to_string(),
-                conversation_id: FAMILY_CHAT_ROOM_ID.to_string(),
-                sender_id: "user_somchai".to_string(),
-                sender_name: "สมชาย เพื่อนบ้าน".to_string(),
-                sender_avatar: "https://ui-avatars.com/api/?name=Somchai&background=B45309&color=fff&bold=true".to_string(),
-                msg_type: "rich_card".to_string(),
-                content: "[หารค่าข้าวกับเพื่อน] ร้านครัวบ้านสวน ริมน้ำ — คนละ 350 บาท".to_string(),
-                sticker_code: None,
-                attachment: None,
-                card_payload: Some(card.clone()),
-                flex_payload: Some(card),
-                reply_to: None,
-                read_by: vec!["user_jead".to_string(), "user_somchai".to_string()],
-                is_unsent: false,
-                is_confidential: false,
-                confidential_pin: None,
-                expire_at: None,
-                priority: "normal".to_string(),
-                task_status: None,
-                accepted_by: None,
-                accepted_at: None,
-                reactions: HashMap::new(),
-                mentions: Vec::new(),
-                audio_duration_sec: None,
-                poll: None,
-                event_data: None,
-                deleted_for: Vec::new(),
-                created_at: now.clone(),
-            }
-        },
-    ];
-
-    for m in family_seed_messages {
-        let _ = msg_coll
-            .replace_one(doc! { "_id": &m.id }, &m)
-            .upsert(true)
-            .await;
-    }
-
-    // Ensure 5 Demo accounts + conv_group_demo5 + sample album, group note, poll, and event!
-    ensure_demo_chat_room(state, &sample_img_attachment).await?;
-
-    // Onboard default admin user ("user_jead") and 5 Demo accounts so personal notes & starter 1-1 chats exist on boot
-    let mut onboard_ids = vec!["user_jead"];
-    for (id, ..) in DEMO_ACCOUNTS.iter() {
-        onboard_ids.push(*id);
-    }
-    for uid in onboard_ids {
-        if let Some(u) = users_coll
-            .find_one(doc! { "_id": uid })
-            .await
-            .map_err(|e| e.to_string())?
-        {
-            ensure_user_onboarding(state, &u).await?;
-        }
+    if state.config.enable_test_users {
+        ensure_quick_test_users(state).await?;
     }
 
     Ok(())
 }
 
-pub async fn ensure_demo_chat_room(
-    state: &AppState,
-    sample_img: &AttachmentInfo,
+async fn ensure_system_accounts(
+    users_coll: &mongodb::Collection<UserDoc>,
+    now: &str,
 ) -> Result<(), String> {
-    let users_coll = state.db.collection::<UserDoc>("users");
-    let now = Utc::now().to_rfc3339();
-
-    for (i, (id, email, name, bc_id, dept, bg)) in DEMO_ACCOUNTS.iter().enumerate() {
-        let (job_title, status_msg) = DEMO_PERSONA_DETAILS[i];
-        let user = UserDoc {
-            id: id.to_string(),
-            email: email.to_string(),
-            display_name: name.to_string(),
-            bc_id: bc_id.to_string(),
-            avatar_url: format!(
-                "https://ui-avatars.com/api/?name=Demo+{}&background={}&color=fff&bold=true",
-                i + 1,
-                bg
-            ),
-            status_message: status_msg.to_string(),
-            qr_token: format!("BCQR_DEMO{}", i + 1),
-            role: "user".to_string(),
-            department: dept.to_string(),
-            job_title: job_title.to_string(),
+    let system_accounts = [
+        UserDoc {
+            id: "user_official".to_string(),
+            email: "official@bcaichat.local".to_string(),
+            phone: String::new(),
+            phone_verified: false,
+            email_verified: false,
+            display_name: "ข่าวสาร BC Ai Chat".to_string(),
+            bc_id: "@bc.official".to_string(),
+            avatar_url: "https://ui-avatars.com/api/?name=BC+News&background=A04035&color=fff&bold=true".to_string(),
+            status_message: "อัปเดตฟีเจอร์ใหม่ แนะนำการใช้งานแชทส่วนตัว และร้านค้า".to_string(),
+            qr_token: "BCQR_OFFICIAL_BC".to_string(),
+            role: "admin".to_string(),
+            department: "ข่าวสารแอป".to_string(),
+            job_title: "บัญชีทางการ".to_string(),
             google_id: None,
+            is_oa_bot: false,
+            oa_id: None,
+            allow_add_by_phone: true,
+            allow_add_by_id: true,
+            allow_add_by_email: true,
+            notify_preview: true,
+            notify_on_mention: true,
+            dnd_until: None,
+            recovery_pin_hash: None,
+            recovery_code_hashes: Vec::new(),
+            recovery_failed_attempts: 0,
+            recovery_locked_until: None,
+            token_version: 0,
+            last_recovered_at: None,
+            created_at: now.to_string(),
+        },
+        UserDoc {
+            id: "user_ai".to_string(),
+            email: "ai@bcaichat.local".to_string(),
+            phone: String::new(),
+            phone_verified: false,
+            email_verified: false,
+            display_name: "🤖 BC AI ผู้ช่วยส่วนตัว".to_string(),
+            bc_id: "@bc.ai".to_string(),
+            avatar_url: "https://ui-avatars.com/api/?name=BC+AI&background=812920&color=fff&bold=true".to_string(),
+            status_message: "ผู้ช่วย AI ส่วนตัวสำหรับทุกคนและทุกกลุ่ม (เรียก @ai ได้ทุกห้อง)".to_string(),
+            qr_token: "BCQR_DEEPSEEK_AI".to_string(),
+            role: "admin".to_string(),
+            department: "AI ส่วนตัว".to_string(),
+            job_title: "เพื่อนคู่คิด & ผู้ช่วยประจำแชท".to_string(),
+            google_id: None,
+            is_oa_bot: false,
+            oa_id: None,
+            allow_add_by_phone: true,
+            allow_add_by_id: true,
+            allow_add_by_email: true,
+            notify_preview: true,
+            notify_on_mention: true,
+            dnd_until: None,
+            recovery_pin_hash: None,
+            recovery_code_hashes: Vec::new(),
+            recovery_failed_attempts: 0,
+            recovery_locked_until: None,
+            token_version: 0,
+            last_recovered_at: None,
+            created_at: now.to_string(),
+        },
+    ];
+
+    for u in &system_accounts {
+        upsert_seeded_user(users_coll, u).await?;
+    }
+    Ok(())
+}
+
+pub async fn ensure_quick_test_users(state: &AppState) -> Result<(), String> {
+    let now = Utc::now().to_rfc3339();
+    let users_coll = state.db.collection::<UserDoc>("users");
+    let conv_coll = state.db.collection::<ConversationDoc>("conversations");
+    let msg_coll = state.db.collection::<MessageDoc>("messages");
+
+    ensure_system_accounts(&users_coll, &now).await?;
+
+    let mut test_docs = Vec::with_capacity(QUICK_TEST_USERS.len());
+    for spec in &QUICK_TEST_USERS {
+        let avatar_url = format!(
+            "https://ui-avatars.com/api/?name={}&background={}&color=fff&bold=true",
+            urlencoding::encode(spec.display_name),
+            spec.avatar_bg
+        );
+        let user_doc = UserDoc {
+            id: spec.id.to_string(),
+            email: spec.email.to_string(),
+            phone: spec.phone.to_string(),
+            phone_verified: true,
+            email_verified: true,
+            display_name: spec.display_name.to_string(),
+            bc_id: spec.bc_id.to_string(),
+            avatar_url,
+            status_message: spec.status_message.to_string(),
+            qr_token: spec.qr_token.to_string(),
+            role: spec.role.to_string(),
+            department: "เพื่อน".to_string(),
+            job_title: String::new(),
+            google_id: None,
+            is_oa_bot: false,
+            oa_id: None,
+            allow_add_by_phone: true,
+            allow_add_by_id: true,
+            allow_add_by_email: true,
+            notify_preview: true,
+            notify_on_mention: true,
+            dnd_until: None,
+            recovery_pin_hash: None,
+            recovery_code_hashes: Vec::new(),
+            recovery_failed_attempts: 0,
+            recovery_locked_until: None,
+            token_version: 0,
+            last_recovered_at: None,
             created_at: now.clone(),
         };
-        upsert_seeded_user(&users_coll, &user).await?;
+        upsert_seeded_user(&users_coll, &user_doc).await?;
+        let stored = users_coll
+            .find_one(doc! { "_id": spec.id })
+            .await
+            .map_err(|e| e.to_string())?
+            .unwrap_or(user_doc);
+        ensure_user_onboarding(state, &stored).await?;
+        test_docs.push(stored);
     }
 
-    // All 5 Demo users are friends with each other
-    for (a, ..) in DEMO_ACCOUNTS.iter() {
-        for (b, ..) in DEMO_ACCOUNTS.iter() {
-            if a < b {
-                ensure_friendship_pair(state, a, b, false).await?;
-            }
+    // Slots 1..4 are friends with each other (all is_favorite: false).
+    // Slot 5 (คิน, 0810000005, @kin) stays un-friended for live search/add-friend testing!
+    for i in 0..4 {
+        for j in (i + 1)..4 {
+            ensure_friendship_pair(state, TEST_USER_IDS[i], TEST_USER_IDS[j], false).await?;
         }
     }
 
-    let conv_coll = state.db.collection::<ConversationDoc>("conversations");
-    let msg_coll = state.db.collection::<MessageDoc>("messages");
-    let notes_coll = state.db.collection::<NoteDoc>("notes");
-    let albums_coll = state.db.collection::<AlbumDoc>("albums");
-
-    let mut member_ids: Vec<String> = DEMO_ACCOUNTS
-        .iter()
-        .map(|(id, ..)| id.to_string())
-        .collect();
-    member_ids.push("user_ai".to_string());
-
-    let welcome_msg_id = "msg_demo5_welcome".to_string();
-    let welcome_text =
-        "สวัสดีเพื่อนๆ ครบแก๊งทั้ง 5 คนเลย! ห้องนี้มี 🤖 BC AI ผู้ช่วยส่วนตัว อยู่ด้วย พิมพ์ @ai ให้ช่วยจัดทริป เลือกร้านอร่อย หรือหารค่าข้าวได้ทันทีเลยนะ"
-            .to_string();
-    let demo_pinned = PinnedMessageSummary {
-        id: welcome_msg_id.clone(),
-        sender_id: "user_demo1".to_string(),
-        sender_name: "ก้อง (Demo 1)".to_string(),
-        msg_type: "text".to_string(),
-        content: welcome_text.clone(),
-        created_at: now.clone(),
-    };
-    let demo_last = LastMessageSummary {
-        id: welcome_msg_id.clone(),
-        sender_id: "user_demo1".to_string(),
-        sender_name: "ก้อง (Demo 1)".to_string(),
-        msg_type: "text".to_string(),
-        content: welcome_text.clone(),
-        created_at: now.clone(),
-        read_count: 4,
-    };
-
-    if conv_coll
-        .find_one(doc! { "_id": DEMO_CHAT_ROOM_ID })
+    // 1-on-1 DM between Slot 1 (ต้นน้ำ) and Slot 2 (แพรไหม): conv_dm_test_1_2 (is_pinned: false)
+    let u1 = &test_docs[0];
+    let u2 = &test_docs[1];
+    let u4 = &test_docs[3];
+    let dm_exists = conv_coll
+        .find_one(doc! {
+            "$or": [
+                { "_id": "conv_dm_test_1_2" },
+                { "type": "direct", "member_ids": { "$all": [&u1.id, &u2.id], "$size": 2 } }
+            ]
+        })
         .await
         .map_err(|e| e.to_string())?
-        .is_none()
-    {
-        let room = ConversationDoc {
-            id: DEMO_CHAT_ROOM_ID.to_string(),
-            conv_type: "group".to_string(),
-            name: "แก๊งเพื่อนสนิท 5 คน + BC AI".to_string(),
-            avatar_url: "https://ui-avatars.com/api/?name=BC+5&background=812920&color=fff&bold=true"
-                .to_string(),
-            folder: "group".to_string(),
-            is_pinned: true,
+        .is_some();
+
+    if !dm_exists {
+        let dm_msg_id = "msg_dm_test_1_2_seed".to_string();
+        let dm_text =
+            "สวัสดีต้นน้ำ! วันนี้ที่ร้านชาบ้านเชียงมีเมนูชามัทฉะตัวใหม่เข้าแล้วนะ".to_string();
+        let dm_conv = ConversationDoc {
+            id: "conv_dm_test_1_2".to_string(),
+            conv_type: "direct".to_string(),
+            name: u2.display_name.clone(),
+            avatar_url: u2.avatar_url.clone(),
+            folder: "personal".to_string(),
+            is_pinned: false,
             is_muted: false,
             is_archived: false,
-            invite_token: "BCJOIN-DEMO5".to_string(), // pragma: allowlist secret
-            admin_ids: vec!["user_demo1".to_string()],
-            member_ids,
+            invite_token: String::new(),
+            admin_ids: Vec::new(),
+            member_ids: vec![u1.id.clone(), u2.id.clone()],
+            oa_id: None,
+            oa_handle: None,
             user_meta: HashMap::new(),
-            pinned_message: Some(demo_pinned),
-            last_message: Some(demo_last),
+            pinned_message: None,
+            last_message: Some(LastMessageSummary {
+                id: dm_msg_id.clone(),
+                sender_id: u2.id.clone(),
+                sender_name: u2.display_name.clone(),
+                msg_type: "text".to_string(),
+                content: dm_text.clone(),
+                created_at: now.clone(),
+                read_count: 1,
+            }),
             created_at: now.clone(),
             updated_at: now.clone(),
         };
         conv_coll
-            .insert_one(room)
+            .insert_one(&dm_conv)
             .await
             .map_err(|e| e.to_string())?;
-    } else {
-        let pinned_bson = bson::to_bson(&demo_pinned).unwrap_or(bson::Bson::Null);
-        let last_bson = bson::to_bson(&demo_last).unwrap_or(bson::Bson::Null);
-        let _ = conv_coll
-            .update_one(
-                doc! { "_id": DEMO_CHAT_ROOM_ID },
-                doc! {
-                    "$set": {
-                        "name": "แก๊งเพื่อนสนิท 5 คน + BC AI",
-                        "folder": "group",
-                        "avatar_url": "https://ui-avatars.com/api/?name=BC+5&background=812920&color=fff&bold=true",
-                        "invite_token": "BCJOIN-DEMO5", // pragma: allowlist secret
-                        "pinned_message": pinned_bson,
-                        "last_message": last_bson,
-                        "member_ids": &member_ids,
-                    }
-                },
-            )
-            .await;
+        if msg_coll
+            .find_one(doc! { "_id": &dm_msg_id })
+            .await
+            .map_err(|e| e.to_string())?
+            .is_none()
+        {
+            let _ = msg_coll
+                .insert_one(MessageDoc {
+                    id: dm_msg_id,
+                    conversation_id: "conv_dm_test_1_2".to_string(),
+                    sender_id: u2.id.clone(),
+                    sender_name: u2.display_name.clone(),
+                    sender_avatar: u2.avatar_url.clone(),
+                    msg_type: "text".to_string(),
+                    content: dm_text,
+                    sticker_code: None,
+                    attachment: None,
+                    card_payload: None,
+                    flex_payload: None,
+                    reply_to: None,
+                    read_by: vec![u2.id.clone(), u1.id.clone()],
+                    is_unsent: false,
+                    is_confidential: false,
+                    confidential_pin: None,
+                    expire_at: None,
+                    priority: "normal".to_string(),
+                    task_status: None,
+                    accepted_by: None,
+                    accepted_at: None,
+                    reactions: HashMap::new(),
+                    mentions: Vec::new(),
+                    audio_duration_sec: None,
+                    poll: None,
+                    event_data: None,
+                    location_data: None,
+                    contact_data: None,
+                    ladder_data: None,
+                    edited_at: None,
+                    forwarded_from: None,
+                    deleted_for: Vec::new(),
+                    created_at: now.clone(),
+                })
+                .await;
+        }
     }
 
-    let welcome_doc = MessageDoc {
-        id: welcome_msg_id,
-        conversation_id: DEMO_CHAT_ROOM_ID.to_string(),
-        sender_id: "user_demo1".to_string(),
-        sender_name: "ก้อง (Demo 1)".to_string(),
-        sender_avatar:
-            "https://ui-avatars.com/api/?name=Demo+1&background=812920&color=fff&bold=true"
-                .to_string(),
-        msg_type: "text".to_string(),
-        content: welcome_text,
-        sticker_code: None,
-        attachment: None,
-        card_payload: None,
-        flex_payload: None,
-        reply_to: None,
-        read_by: vec![
-            "user_demo1".to_string(),
-            "user_demo2".to_string(),
-            "user_demo3".to_string(),
-            "user_demo4".to_string(),
-            "user_demo5".to_string(),
-        ],
-        is_unsent: false,
-        is_confidential: false,
-        confidential_pin: None,
-        expire_at: None,
-        priority: "normal".to_string(),
-        task_status: None,
-        accepted_by: None,
-        accepted_at: None,
-        reactions: HashMap::from([(
-            "👍".to_string(),
-            vec!["user_demo2".to_string(), "user_demo3".to_string()],
-        )]),
-        mentions: vec!["user_ai".to_string()],
-        audio_duration_sec: None,
-        poll: None,
-        event_data: None,
-        deleted_for: Vec::new(),
-        created_at: now.clone(),
-    };
-    let _ = msg_coll
-        .replace_one(doc! { "_id": "msg_demo5_welcome" }, &welcome_doc)
-        .upsert(true)
-        .await;
-
-    // Seed 1 Sample Poll in conv_group_demo5 ("เสาร์นี้ไปกินข้าวร้านไหนดี?")
-    let poll_msg = MessageDoc {
-        id: "msg_demo5_seed_poll".to_string(),
-        conversation_id: DEMO_CHAT_ROOM_ID.to_string(),
-        sender_id: "user_demo1".to_string(),
-        sender_name: "ก้อง (Demo 1)".to_string(),
-        sender_avatar:
-            "https://ui-avatars.com/api/?name=Demo+1&background=812920&color=fff&bold=true"
-                .to_string(),
-        msg_type: "poll".to_string(),
-        content: "📊 โพล: เสาร์นี้ไปกินข้าวร้านไหนดี?".to_string(),
-        sticker_code: None,
-        attachment: None,
-        card_payload: None,
-        flex_payload: None,
-        reply_to: None,
-        read_by: vec!["user_demo1".to_string(), "user_demo2".to_string()],
-        is_unsent: false,
-        is_confidential: false,
-        confidential_pin: None,
-        expire_at: None,
-        priority: "normal".to_string(),
-        task_status: None,
-        accepted_by: None,
-        accepted_at: None,
-        reactions: HashMap::new(),
-        mentions: Vec::new(),
-        audio_duration_sec: None,
-        poll: Some(PollData {
-            question: "เสาร์นี้ไปกินข้าวร้านไหนดี?".to_string(),
-            options: vec![
-                PollOption {
-                    id: "opt_1".to_string(),
-                    text: "หมูกระทะริมน้ำ บรรยากาศชิล".to_string(),
-                    voter_ids: vec!["user_demo1".to_string(), "user_demo2".to_string()],
-                },
-                PollOption {
-                    id: "opt_2".to_string(),
-                    text: "ชาบูหม้อไฟ ซุปใส-น้ำดำ".to_string(),
-                    voter_ids: vec!["user_demo3".to_string()],
-                },
-                PollOption {
-                    id: "opt_3".to_string(),
-                    text: "คาเฟ่โฮมมี่ กาแฟดริป & เค้กส้ม".to_string(),
-                    voter_ids: vec!["user_demo4".to_string()],
-                },
+    // Group room: conv_group_test_friends ("แก๊งเพื่อนวันหยุด", Slots 1..4 + user_ai, is_pinned: false)
+    if conv_coll
+        .find_one(doc! { "_id": "conv_group_test_friends" })
+        .await
+        .map_err(|e| e.to_string())?
+        .is_none()
+    {
+        let grp_msg_id = "msg_group_test_friends_seed".to_string();
+        let grp_text =
+            "สวัสดีทุกคน! เสาร์อาทิตย์นี้ไปจิบชาถ่ายรูปเล่นกันไหม พิมพ์ @ai ให้ช่วยจัดทริปได้เลยนะ"
+                .to_string();
+        let grp_avatar = format!(
+            "https://ui-avatars.com/api/?name={}&background=A04035&color=fff&bold=true",
+            urlencoding::encode("แก๊งเพื่อนวันหยุด")
+        );
+        let grp_conv = ConversationDoc {
+            id: "conv_group_test_friends".to_string(),
+            conv_type: "group".to_string(),
+            name: "แก๊งเพื่อนวันหยุด".to_string(),
+            avatar_url: grp_avatar,
+            folder: "group".to_string(),
+            is_pinned: false,
+            is_muted: false,
+            is_archived: false,
+            invite_token: "BCINV-TESTFRND".to_string(),
+            admin_ids: vec![u1.id.clone()],
+            member_ids: vec![
+                TEST_USER_IDS[0].to_string(),
+                TEST_USER_IDS[1].to_string(),
+                TEST_USER_IDS[2].to_string(),
+                TEST_USER_IDS[3].to_string(),
+                "user_ai".to_string(),
             ],
-            allow_multiple: false,
-            is_anonymous: false,
-            is_closed: false,
-            closed_at: None,
-        }),
-        event_data: None,
-        deleted_for: Vec::new(),
-        created_at: now.clone(),
-    };
-    let _ = msg_coll
-        .replace_one(doc! { "_id": "msg_demo5_seed_poll" }, &poll_msg)
-        .upsert(true)
-        .await;
-
-    // Seed 1 Sample Event in conv_group_demo5 ("นัดกินหมูกระทะ & คาเฟ่เสาร์นี้")
-    let starts = (Utc::now() + Duration::days(2)).to_rfc3339();
-    let ends = (Utc::now() + Duration::days(2) + Duration::hours(3)).to_rfc3339();
-    let event_msg = MessageDoc {
-        id: "msg_demo5_seed_event".to_string(),
-        conversation_id: DEMO_CHAT_ROOM_ID.to_string(),
-        sender_id: "user_demo2".to_string(),
-        sender_name: "แพร (Demo 2)".to_string(),
-        sender_avatar:
-            "https://ui-avatars.com/api/?name=Demo+2&background=B45309&color=fff&bold=true"
-                .to_string(),
-        msg_type: "event".to_string(),
-        content: "📅 นัดหมาย: นัดกินหมูกระทะ & คาเฟ่เสาร์นี้".to_string(),
-        sticker_code: None,
-        attachment: None,
-        card_payload: None,
-        flex_payload: None,
-        reply_to: None,
-        read_by: vec!["user_demo1".to_string(), "user_demo2".to_string()],
-        is_unsent: false,
-        is_confidential: false,
-        confidential_pin: None,
-        expire_at: None,
-        priority: "normal".to_string(),
-        task_status: None,
-        accepted_by: None,
-        accepted_at: None,
-        reactions: HashMap::new(),
-        mentions: Vec::new(),
-        audio_duration_sec: None,
-        poll: None,
-        event_data: Some(EventData {
-            title: "นัดกินหมูกระทะ & คาเฟ่เสาร์นี้".to_string(),
-            description: "เจอกันบ่ายสามถ่ายรูปคาเฟ่ ต่อด้วยหมูกระทะริมน้ำตอนเย็นครบแก๊ง 5 คน".to_string(),
-            starts_at: starts,
-            ends_at: Some(ends),
-            location: "ย่านอารีย์ - สะพานควาย".to_string(),
-            going_ids: vec![
-                "user_demo1".to_string(),
-                "user_demo2".to_string(),
-                "user_demo3".to_string(),
-            ],
-            maybe_ids: vec!["user_demo4".to_string()],
-            not_going_ids: Vec::new(),
-        }),
-        deleted_for: Vec::new(),
-        created_at: now.clone(),
-    };
-    let _ = msg_coll
-        .replace_one(doc! { "_id": "msg_demo5_seed_event" }, &event_msg)
-        .upsert(true)
-        .await;
-
-    // Seed 1 Sample Group Note in conv_group_demo5 ("ลิสต์ร้านอร่อยและแผนเที่ยว")
-    let demo_note = NoteDoc {
-        id: "note_demo5_seed_1".to_string(),
-        conversation_id: Some(DEMO_CHAT_ROOM_ID.to_string()),
-        owner_id: "user_demo1".to_string(),
-        owner_name: "ก้อง (Demo 1)".to_string(),
-        title: "ลิสต์ร้านอร่อยและแผนเที่ยว".to_string(),
-        content: "1. ร้านหมูกระทะริมน้ำ จองโต๊ะ 18:00 น.\n2. คาเฟ่โฮมมี่ แวะถ่ายรูปก่อนมื้อเย็น\n3. ทริปหน้าเขาใหญ่ เตรียมเต็นท์และกล้องถ่ายรูป\n4. เรียก @ai ช่วยหารค่าข้าวและสรุปนัดหมายได้ตลอด".to_string(),
-        attachments: Vec::new(),
-        is_pinned: true,
-        liked_by: vec!["user_demo2".to_string(), "user_demo4".to_string()],
-        comments: vec![NoteComment {
-            id: "comment_demo5_1".to_string(),
-            user_id: "user_demo2".to_string(),
-            user_name: "แพร (Demo 2)".to_string(),
-            content: "ปักหมุดไว้เลยค่ะ รูปทริปอัปโหลดเข้าอัลบั้มถาวรเรียบร้อยไม่กลัวรูปหายแล้ว!".to_string(),
-            created_at: now.clone(),
-        }],
-        created_at: now.clone(),
-        updated_at: now.clone(),
-    };
-    let _ = notes_coll
-        .replace_one(doc! { "_id": "note_demo5_seed_1" }, &demo_note)
-        .upsert(true)
-        .await;
-
-    // Seed Personal Albums in conv_group_demo5 & conv_group_family
-    for (album_id, conv_id, title, desc, creator_id, creator_name) in [
-        (
-            "album_demo5_seed_1",
-            DEMO_CHAT_ROOM_ID,
-            "อัลบั้มทริปเที่ยวและมื้ออร่อย",
-            "รวมภาพความทรงจำแก๊งเพื่อน เก็บความละเอียดเต็มถาวรบน MinIO ไม่หมดอายุ",
-            "user_demo2",
-            "แพร (Demo 2)",
-        ),
-        (
-            "album_family_seed_1",
-            FAMILY_CHAT_ROOM_ID,
-            "อัลบั้มภาพครอบครัวและวันหยุด",
-            "รวมรูปถ่ายครอบครัวและทริปพักผ่อนจัดเก็บถาวรบน MinIO",
-            "user_nida",
-            "นิดา พี่สาว",
-        ),
-    ] {
-        let album = AlbumDoc {
-            id: album_id.to_string(),
-            conversation_id: conv_id.to_string(),
-            title: title.to_string(),
-            description: desc.to_string(),
-            photos: vec![sample_img.clone()],
-            created_by: creator_id.to_string(),
-            created_by_name: creator_name.to_string(),
+            oa_id: None,
+            oa_handle: None,
+            user_meta: HashMap::new(),
+            pinned_message: None,
+            last_message: Some(LastMessageSummary {
+                id: grp_msg_id.clone(),
+                sender_id: u1.id.clone(),
+                sender_name: u1.display_name.clone(),
+                msg_type: "text".to_string(),
+                content: grp_text.clone(),
+                created_at: now.clone(),
+                read_count: 3,
+            }),
             created_at: now.clone(),
             updated_at: now.clone(),
         };
-        let _ = albums_coll
-            .replace_one(doc! { "_id": album_id }, &album)
-            .upsert(true)
-            .await;
+        conv_coll
+            .insert_one(&grp_conv)
+            .await
+            .map_err(|e| e.to_string())?;
+        if msg_coll
+            .find_one(doc! { "_id": &grp_msg_id })
+            .await
+            .map_err(|e| e.to_string())?
+            .is_none()
+        {
+            let _ = msg_coll
+                .insert_one(MessageDoc {
+                    id: grp_msg_id,
+                    conversation_id: "conv_group_test_friends".to_string(),
+                    sender_id: u1.id.clone(),
+                    sender_name: u1.display_name.clone(),
+                    sender_avatar: u1.avatar_url.clone(),
+                    msg_type: "text".to_string(),
+                    content: grp_text,
+                    sticker_code: None,
+                    attachment: None,
+                    card_payload: None,
+                    flex_payload: None,
+                    reply_to: None,
+                    read_by: vec![
+                        TEST_USER_IDS[0].to_string(),
+                        TEST_USER_IDS[1].to_string(),
+                        TEST_USER_IDS[2].to_string(),
+                        TEST_USER_IDS[3].to_string(),
+                    ],
+                    is_unsent: false,
+                    is_confidential: false,
+                    confidential_pin: None,
+                    expire_at: None,
+                    priority: "normal".to_string(),
+                    task_status: None,
+                    accepted_by: None,
+                    accepted_at: None,
+                    reactions: HashMap::new(),
+                    mentions: Vec::new(),
+                    audio_duration_sec: None,
+                    poll: None,
+                    event_data: None,
+                    location_data: None,
+                    contact_data: None,
+                    ladder_data: None,
+                    edited_at: None,
+                    forwarded_from: None,
+                    deleted_for: Vec::new(),
+                    created_at: now.clone(),
+                })
+                .await;
+        }
+    }
+
+    // Sample Shop: oa_test_chabanchiang ("ชาบ้านเชียง", owner = Slot 1, agent = Slot 2, customer = Slot 4)
+    let oa_id = "oa_test_chabanchiang";
+    let bot_id = "user_oa_test_chabanchiang";
+    let oa_avatar = format!(
+        "https://ui-avatars.com/api/?name={}&background=812920&color=fff&bold=true",
+        urlencoding::encode("ชาบ้านเชียง")
+    );
+    let oa_bio = "ชงสดหอมกรุ่นจากใบชาคัดพิเศษ พร้อมขนมโฮมเมดทุกวัน";
+    let oa_greeting =
+        "สวัสดีค่ะ ยินดีต้อนรับสู่ร้านชาบ้านเชียง พิมพ์คำว่า เมนู เพื่อดูรายการเครื่องดื่มยอดนิยมได้เลยนะคะ";
+
+    let bot_doc = UserDoc {
+        id: bot_id.to_string(),
+        email: "oa+cha_banchiang@bcaichat.local".to_string(),
+        phone: String::new(),
+        phone_verified: false,
+        email_verified: false,
+        display_name: "ชาบ้านเชียง".to_string(),
+        bc_id: "@cha_banchiang".to_string(),
+        avatar_url: oa_avatar.clone(),
+        status_message: oa_bio.to_string(),
+        qr_token: "BCOA_oa_test_chabanchiang".to_string(),
+        role: "user".to_string(),
+        department: "เครื่องดื่ม & คาเฟ่".to_string(),
+        job_title: "ร้านค้า".to_string(),
+        google_id: None,
+        is_oa_bot: true,
+        oa_id: Some(oa_id.to_string()),
+        allow_add_by_phone: true,
+        allow_add_by_id: true,
+        allow_add_by_email: true,
+        notify_preview: true,
+        notify_on_mention: true,
+        dnd_until: None,
+        recovery_pin_hash: None,
+        recovery_code_hashes: Vec::new(),
+        recovery_failed_attempts: 0,
+        recovery_locked_until: None,
+        token_version: 0,
+        last_recovered_at: None,
+        created_at: now.clone(),
+    };
+    upsert_seeded_user(&users_coll, &bot_doc).await?;
+
+    let oa_coll = state.db.collection::<OaAccountDoc>("oa_accounts");
+    if oa_coll
+        .find_one(doc! { "_id": oa_id })
+        .await
+        .map_err(|e| e.to_string())?
+        .is_none()
+    {
+        let mut staff_roles = HashMap::new();
+        staff_roles.insert(u2.id.clone(), "agent".to_string());
+        let oa_doc = OaAccountDoc {
+            id: oa_id.to_string(),
+            handle: "cha_banchiang".to_string(),
+            display_name: "ชาบ้านเชียง".to_string(),
+            category: "เครื่องดื่ม & คาเฟ่".to_string(),
+            bio: oa_bio.to_string(),
+            avatar_url: oa_avatar.clone(),
+            theme_color: "#812920".to_string(),
+            greeting_message: oa_greeting.to_string(),
+            business_hours: "ทุกวัน 08:30–19:30 น.".to_string(),
+            owner_id: u1.id.clone(),
+            admin_ids: vec![u2.id.clone()],
+            staff_roles,
+            bot_user_id: bot_id.to_string(),
+            is_verified: true,
+            is_active: true,
+            calls_enabled: true,
+            ai_enabled: true,
+            ai_knowledge_prompt:
+                "ร้านชาบ้านเชียง จำหน่ายชาไทย มัทฉะลาเต้ ชาพีชโซดา และขนมปังปิ้งเตาถ่าน เปิดบริการทุกวัน 08:30–19:30 น."
+                    .to_string(),
+            rich_menu: vec![
+                OaRichMenuItem {
+                    id: "rm_menu".to_string(),
+                    label: "ดูเมนูเครื่องดื่ม".to_string(),
+                    subtitle: "รายการชายอดนิยม".to_string(),
+                    action_type: "keyword".to_string(),
+                    action_value: "เมนู".to_string(),
+                    icon: "storefront".to_string(),
+                },
+                OaRichMenuItem {
+                    id: "rm_coupon".to_string(),
+                    label: "คูปองส่วนลด".to_string(),
+                    subtitle: "รับส่วนลด 20 บาท".to_string(),
+                    action_type: "coupon".to_string(),
+                    action_value: "CHABC20".to_string(),
+                    icon: "local_offer".to_string(),
+                },
+                OaRichMenuItem {
+                    id: "rm_hours".to_string(),
+                    label: "เวลาเปิด-ปิดร้าน".to_string(),
+                    subtitle: "เปิดทุกวัน 08:30–19:30 น.".to_string(),
+                    action_type: "keyword".to_string(),
+                    action_value: "เวลาเปิด-ปิด".to_string(),
+                    icon: "schedule".to_string(),
+                },
+            ],
+            follower_count: 1,
+            created_at: now.clone(),
+            updated_at: now.clone(),
+        };
+        oa_coll
+            .insert_one(&oa_doc)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+
+    let oa_conv_id = "conv_oa_test_chabanchiang";
+    if conv_coll
+        .find_one(doc! { "_id": oa_conv_id })
+        .await
+        .map_err(|e| e.to_string())?
+        .is_none()
+    {
+        let oa_msg_id = "msg_oa_test_chabanchiang_seed".to_string();
+        let oa_conv = ConversationDoc {
+            id: oa_conv_id.to_string(),
+            conv_type: "oa".to_string(),
+            name: "ชาบ้านเชียง".to_string(),
+            avatar_url: oa_avatar.clone(),
+            folder: "personal".to_string(),
+            is_pinned: false,
+            is_muted: false,
+            is_archived: false,
+            invite_token: String::new(),
+            admin_ids: vec![u1.id.clone(), u2.id.clone()],
+            member_ids: vec![u4.id.clone(), bot_id.to_string()],
+            oa_id: Some(oa_id.to_string()),
+            oa_handle: Some("cha_banchiang".to_string()),
+            user_meta: HashMap::new(),
+            pinned_message: None,
+            last_message: Some(LastMessageSummary {
+                id: oa_msg_id.clone(),
+                sender_id: bot_id.to_string(),
+                sender_name: "ชาบ้านเชียง".to_string(),
+                msg_type: "text".to_string(),
+                content: oa_greeting.to_string(),
+                created_at: now.clone(),
+                read_count: 1,
+            }),
+            created_at: now.clone(),
+            updated_at: now.clone(),
+        };
+        conv_coll
+            .insert_one(&oa_conv)
+            .await
+            .map_err(|e| e.to_string())?;
+        if msg_coll
+            .find_one(doc! { "_id": &oa_msg_id })
+            .await
+            .map_err(|e| e.to_string())?
+            .is_none()
+        {
+            let _ = msg_coll
+                .insert_one(MessageDoc {
+                    id: oa_msg_id,
+                    conversation_id: oa_conv_id.to_string(),
+                    sender_id: bot_id.to_string(),
+                    sender_name: "ชาบ้านเชียง".to_string(),
+                    sender_avatar: oa_avatar,
+                    msg_type: "text".to_string(),
+                    content: oa_greeting.to_string(),
+                    sticker_code: None,
+                    attachment: None,
+                    card_payload: None,
+                    flex_payload: None,
+                    reply_to: None,
+                    read_by: vec![bot_id.to_string(), u4.id.clone()],
+                    is_unsent: false,
+                    is_confidential: false,
+                    confidential_pin: None,
+                    expire_at: None,
+                    priority: "normal".to_string(),
+                    task_status: None,
+                    accepted_by: None,
+                    accepted_at: None,
+                    reactions: HashMap::new(),
+                    mentions: Vec::new(),
+                    audio_duration_sec: None,
+                    poll: None,
+                    event_data: None,
+                    location_data: None,
+                    contact_data: None,
+                    ladder_data: None,
+                    edited_at: None,
+                    forwarded_from: None,
+                    deleted_for: Vec::new(),
+                    created_at: now.clone(),
+                })
+                .await;
+        }
+    }
+
+    let fol_coll = state.db.collection::<OaFollowerDoc>("oa_followers");
+    if fol_coll
+        .find_one(doc! { "oa_id": oa_id, "user_id": &u4.id })
+        .await
+        .map_err(|e| e.to_string())?
+        .is_none()
+    {
+        let fol = OaFollowerDoc {
+            id: "fol_oa_test_chabanchiang_4".to_string(),
+            oa_id: oa_id.to_string(),
+            user_id: u4.id.clone(),
+            conversation_id: oa_conv_id.to_string(),
+            tags: vec!["ลูกค้าประจำ".to_string()],
+            crm_note: "ชอบชาไทยหวานน้อย".to_string(),
+            ai_paused: false,
+            is_following: true,
+            followed_at: now.clone(),
+            updated_at: now.clone(),
+        };
+        fol_coll
+            .insert_one(&fol)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+
+    let ar_coll = state.db.collection::<OaAutoReplyRuleDoc>("oa_auto_replies");
+    if ar_coll
+        .find_one(doc! { "_id": "ar_oa_test_chabanchiang_menu" })
+        .await
+        .map_err(|e| e.to_string())?
+        .is_none()
+    {
+        let rule = OaAutoReplyRuleDoc {
+            id: "ar_oa_test_chabanchiang_menu".to_string(),
+            oa_id: oa_id.to_string(),
+            keyword: "เมนู".to_string(),
+            match_mode: "contains".to_string(),
+            reply_text:
+                "เมนูแนะนำร้านชาบ้านเชียง: ชาไทยต้นตำรับ 55.-, มัทฉะลาเต้ 65.-, ชาพีชโซดา 60.- สั่งผ่านแชทนี้ได้เลยค่ะ!"
+                    .to_string(),
+            card_payload: None,
+            is_active: true,
+            hit_count: 0,
+            created_at: now.clone(),
+        };
+        ar_coll
+            .insert_one(&rule)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+
+    let cp_coll = state.db.collection::<OaCouponDoc>("oa_coupons");
+    if cp_coll
+        .find_one(doc! { "_id": "cp_oa_test_chabanchiang_20" })
+        .await
+        .map_err(|e| e.to_string())?
+        .is_none()
+    {
+        let cp = OaCouponDoc {
+            id: "cp_oa_test_chabanchiang_20".to_string(),
+            oa_id: oa_id.to_string(),
+            code: "CHABC20".to_string(),
+            title: "ส่วนลด 20 บาท ชาบ้านเชียง".to_string(),
+            description: "เมื่อสั่งเครื่องดื่มครบ 100 บาทขึ้นไปที่ร้านชาบ้านเชียง".to_string(),
+            discount_text: "ลด 20 บาท".to_string(),
+            expires_at: None,
+            max_claims: 100,
+            claimed_by: Vec::new(),
+            redeemed_by: Vec::new(),
+            is_active: true,
+            created_at: now,
+        };
+        cp_coll
+            .insert_one(&cp)
+            .await
+            .map_err(|e| e.to_string())?;
     }
 
     Ok(())
@@ -1326,46 +1309,32 @@ pub async fn ensure_friendship_pair(
     uid_b: &str,
     fav_a: bool,
 ) -> Result<(), String> {
-    if uid_a == uid_b {
-        return Ok(());
-    }
     let friends_coll = state.db.collection::<FriendshipDoc>("friendships");
     let now = Utc::now().to_rfc3339();
 
-    if friends_coll
-        .find_one(doc! { "user_id": uid_a, "friend_id": uid_b })
-        .await
-        .map_err(|e| e.to_string())?
-        .is_none()
-    {
-        let f1 = FriendshipDoc {
-            id: Uuid::new_v4().to_string(),
-            user_id: uid_a.to_string(),
-            friend_id: uid_b.to_string(),
-            is_favorite: fav_a,
-            is_blocked: false,
-            is_hidden: false,
-            created_at: now.clone(),
-        };
-        let _ = friends_coll.insert_one(f1).await;
-    }
-
-    if friends_coll
-        .find_one(doc! { "user_id": uid_b, "friend_id": uid_a })
-        .await
-        .map_err(|e| e.to_string())?
-        .is_none()
-    {
-        let f2 = FriendshipDoc {
-            id: Uuid::new_v4().to_string(),
-            user_id: uid_b.to_string(),
-            friend_id: uid_a.to_string(),
-            is_favorite: false,
-            is_blocked: false,
-            is_hidden: false,
-            created_at: now,
-        };
-        let _ = friends_coll.insert_one(f2).await;
+    for (u, f, fav) in [(uid_a, uid_b, fav_a), (uid_b, uid_a, false)] {
+        if u == f {
+            continue;
+        }
+        let exists = friends_coll
+            .find_one(doc! { "user_id": u, "friend_id": f })
+            .await
+            .map_err(|e| e.to_string())?;
+        if exists.is_none() {
+            let doc_item = FriendshipDoc {
+                id: Uuid::new_v4().to_string(),
+                user_id: u.to_string(),
+                friend_id: f.to_string(),
+                is_favorite: fav,
+                is_blocked: false,
+                is_hidden: false,
+                created_at: now.clone(),
+            };
+            friends_coll
+                .insert_one(doc_item)
+                .await
+                .map_err(|e| e.to_string())?;
+        }
     }
 
     Ok(())
@@ -1423,6 +1392,8 @@ pub async fn ensure_direct_conversation(
         user_meta: HashMap::new(),
         pinned_message: None,
         last_message: Some(last_msg),
+        oa_id: None,
+        oa_handle: None,
         created_at: now.clone(),
         updated_at: now.clone(),
     };
@@ -1459,6 +1430,11 @@ pub async fn ensure_direct_conversation(
         audio_duration_sec: None,
         poll: None,
         event_data: None,
+        location_data: None,
+        contact_data: None,
+        ladder_data: None,
+        edited_at: None,
+        forwarded_from: None,
         deleted_for: Vec::new(),
         created_at: now,
     };
@@ -1471,9 +1447,120 @@ pub async fn ensure_direct_conversation(
     Ok(conv)
 }
 
-pub async fn ensure_user_onboarding(state: &AppState, user: &UserDoc) -> Result<(), String> {
-    let users_coll = state.db.collection::<UserDoc>("users");
+pub async fn ensure_keep_conversation_for_user(
+    state: &AppState,
+    user: &UserDoc,
+) -> Result<ConversationDoc, String> {
     let conv_coll = state.db.collection::<ConversationDoc>("conversations");
+    let msg_coll = state.db.collection::<MessageDoc>("messages");
+    let keep_id = format!("conv_keep_{}", user.id);
+
+    if let Some(existing) = conv_coll
+        .find_one(doc! { "_id": &keep_id })
+        .await
+        .map_err(|e| e.to_string())?
+    {
+        return Ok(existing);
+    }
+
+    let now = Utc::now().to_rfc3339();
+    let msg_id = format!("msg_keep_seed_{}", user.id);
+    let welcome_text = "📌 พื้นที่บันทึกช่วยจำส่วนตัว (Keep) — เก็บข้อความ รูปภาพ ไฟล์ พิกัด และลิงก์สำคัญไว้ดูคนเดียวได้ทุกอุปกรณ์";
+    let avatar_url = format!(
+        "https://ui-avatars.com/api/?name={}&background=812920&color=fff&bold=true",
+        urlencoding::encode("Keep")
+    );
+
+    let conv = ConversationDoc {
+        id: keep_id.clone(),
+        conv_type: "keep".to_string(),
+        name: "บันทึกช่วยจำส่วนตัว (Keep)".to_string(),
+        avatar_url,
+        folder: "personal".to_string(),
+        is_pinned: false,
+        is_muted: true,
+        is_archived: false,
+        invite_token: String::new(),
+        admin_ids: vec![user.id.clone()],
+        member_ids: vec![user.id.clone()],
+        user_meta: HashMap::new(),
+        pinned_message: None,
+        last_message: Some(LastMessageSummary {
+            id: msg_id.clone(),
+            sender_id: user.id.clone(),
+            sender_name: user.display_name.clone(),
+            msg_type: "text".to_string(),
+            content: welcome_text.to_string(),
+            created_at: now.clone(),
+            read_count: 0,
+        }),
+        oa_id: None,
+        oa_handle: None,
+        created_at: now.clone(),
+        updated_at: now.clone(),
+    };
+
+    let _ = conv_coll
+        .replace_one(doc! { "_id": &keep_id }, &conv)
+        .upsert(true)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if msg_coll
+        .find_one(doc! { "_id": &msg_id })
+        .await
+        .map_err(|e| e.to_string())?
+        .is_none()
+    {
+        let welcome_msg = MessageDoc {
+            id: msg_id,
+            conversation_id: keep_id,
+            sender_id: user.id.clone(),
+            sender_name: user.display_name.clone(),
+            sender_avatar: user.avatar_url.clone(),
+            msg_type: "text".to_string(),
+            content: welcome_text.to_string(),
+            sticker_code: None,
+            attachment: None,
+            card_payload: None,
+            flex_payload: None,
+            reply_to: None,
+            read_by: vec![user.id.clone()],
+            is_unsent: false,
+            is_confidential: false,
+            confidential_pin: None,
+            expire_at: None,
+            priority: "silent".to_string(),
+            task_status: None,
+            accepted_by: None,
+            accepted_at: None,
+            reactions: HashMap::new(),
+            mentions: Vec::new(),
+            audio_duration_sec: None,
+            poll: None,
+            event_data: None,
+            location_data: None,
+            contact_data: None,
+            ladder_data: None,
+            edited_at: None,
+            forwarded_from: None,
+            deleted_for: Vec::new(),
+            created_at: now,
+        };
+        let _ = msg_coll.insert_one(welcome_msg).await;
+    }
+
+    Ok(conv)
+}
+
+pub async fn ensure_user_onboarding(state: &AppState, user: &UserDoc) -> Result<(), String> {
+    if user.is_oa_bot {
+        return Ok(());
+    }
+    if user.id != "user_ai" && user.id != "user_official" {
+        let _ = ensure_keep_conversation_for_user(state, user).await;
+    }
+    let users_coll = state.db.collection::<UserDoc>("users");
     let notes_coll = state.db.collection::<NoteDoc>("notes");
 
     let starter_contacts = vec![
@@ -1481,41 +1568,17 @@ pub async fn ensure_user_onboarding(state: &AppState, user: &UserDoc) -> Result<
             "user_ai",
             "official",
             "personal",
-            true,
-            true,
+            false,
+            false,
             "สวัสดีครับ! ผมคือ 🤖 BC AI ผู้ช่วยส่วนตัวของคุณ พิมพ์คุยปรึกษาได้ทุกเรื่องในห้องนี้ หรือพิมพ์ @ai ในกลุ่มเพื่อนและครอบครัวให้ช่วยจัดทริป แนะนำร้านอร่อย หารค่าข้าว หรือสรุปนัดหมายได้เลยครับ!",
         ),
         (
             "user_official",
             "official",
             "personal",
-            true,
-            true,
-            "ยินดีต้อนรับสู่ BC Ai Chat! ซิงค์แชทข้ามอุปกรณ์, เก็บรูปและไฟล์ความทรงจำถาวรบน MinIO พร้อมโหมดข้อความลับส่วนตัวล็อก PIN ส่งผิดลบทำลายไฟล์ได้ทันทีครับ",
-        ),
-        (
-            "user_somchai",
-            "direct",
-            "family",
-            false,
-            true,
-            "สวัสดีครับ มีธุระแถวบ้านหรือชวนกินข้าวมื้อเย็น ทักแชทหรือส่งการ์ดชวนนัดเจอมาได้เลยครับ!",
-        ),
-        (
-            "user_nida",
-            "direct",
-            "family",
             false,
             false,
-            "สวัสดีจ้า ส่งรูปทริปครอบครัวหรือสูตรอาหารไว้ในแชทนี้ได้เลยนะ รูปเก็บถาวรในคลังไม่มีวันหมดอายุจ้า",
-        ),
-        (
-            "user_jead",
-            "direct",
-            "family",
-            false,
-            true,
-            "ยินดีต้อนรับสู่พื้นที่แชทส่วนตัวของครอบครัวและแก๊งเพื่อนบน BC Ai Chat ครับ",
+            "ยินดีต้อนรับสู่ BC Ai Chat! สมัครด้วยเบอร์มือถือ เชื่อมต่อยืนยัน Gmail ได้อย่างปลอดภัย ซิงค์แชทข้ามอุปกรณ์ เก็บรูปถาวรบน MinIO พร้อมระบบร้านค้าสำหรับเจ้าของกิจการ",
         ),
     ];
 
@@ -1542,31 +1605,6 @@ pub async fn ensure_user_onboarding(state: &AppState, user: &UserDoc) -> Result<
         }
     }
 
-    // Ensure user is a member of "conv_group_family"
-    let _ = conv_coll
-        .update_one(
-            doc! { "_id": FAMILY_CHAT_ROOM_ID },
-            doc! { "$addToSet": { "member_ids": &user.id } },
-        )
-        .await;
-
-    // If user is one of Demo 1..5, ensure they are friends with all Demo 1..5 and in conv_group_demo5 + user_ai
-    let is_demo = DEMO_ACCOUNTS.iter().any(|(id, ..)| *id == user.id);
-    if is_demo {
-        for (other_id, ..) in DEMO_ACCOUNTS.iter() {
-            if *other_id != user.id {
-                ensure_friendship_pair(state, &user.id, other_id, false).await?;
-            }
-        }
-        let _ = conv_coll
-            .update_one(
-                doc! { "_id": DEMO_CHAT_ROOM_ID },
-                doc! { "$addToSet": { "member_ids": { "$each": [&user.id, "user_ai"] } } },
-            )
-            .await;
-    }
-
-    // Ensure initial personal note in สมุดบันทึก BC and group note in conv_group_family exist
     let now = Utc::now().to_rfc3339();
     let personal_seed_id = format!("note_personal_seed_{}", user.id);
     if notes_coll
@@ -1580,46 +1618,20 @@ pub async fn ensure_user_onboarding(state: &AppState, user: &UserDoc) -> Result<
             conversation_id: None,
             owner_id: user.id.clone(),
             owner_name: user.display_name.clone(),
-            title: "บันทึกส่วนตัวของฉัน — รหัส Wi-Fi บ้าน & ลิสต์หนังน่าดู".to_string(),
-            content: "🏠 รหัส Wi-Fi บ้าน: BanChiang_Home5G / รหัส: cozy2026\n🎬 ลิสต์หนัง & ซีรีส์น่าดูวันหยุด: ทริปตามล่าแสงเหนือ, สูตรลับครัวโฮมเมด\n🎒 ของต้องเตรียมออกทริป: กล้องถ่ายรูป, พาวเวอร์แบงก์, เสื้อกันลม\n(บันทึกส่วนตัวในสมุดบันทึก BC ซิงค์อัตโนมัติทุกอุปกรณ์ ไม่มีวันหมดอายุ)".to_string(),
+            title: "บันทึกส่วนตัวของฉัน — ลิสต์ไอเดีย & เตือนความจำ".to_string(),
+            content: "จดบันทึกส่วนตัว ลิสต์ของฝาก หรือนัดหมายสำคัญในสมุดบันทึก BC ได้เลย ซิงค์อัตโนมัติทุกอุปกรณ์ ไม่มีวันหมดอายุ".to_string(),
             attachments: vec![],
-            is_pinned: true,
+            is_pinned: false,
             liked_by: vec![],
             comments: vec![],
             created_at: now.clone(),
-            updated_at: now.clone(),
+            updated_at: now,
         };
         let _ = notes_coll
             .replace_one(doc! { "_id": &personal_seed_id }, personal_note)
             .upsert(true)
             .await;
-    } else {
-        let _ = notes_coll
-            .update_one(
-                doc! { "_id": &personal_seed_id },
-                doc! { "$set": { "owner_name": &user.display_name } },
-            )
-            .await;
     }
-
-    let family_note = NoteDoc {
-        id: "note_group_family_1".to_string(),
-        conversation_id: Some(FAMILY_CHAT_ROOM_ID.to_string()),
-        owner_id: "user_jead".to_string(),
-        owner_name: "ลุงจืด".to_string(),
-        title: "เบอร์ติดต่อฉุกเฉินและข้อตกลงประจำบ้าน".to_string(),
-        content: "1. รูปถ่ายและไฟล์ในกลุ่มครอบครัวเก็บถาวรบน MinIO ไม่หมดอายุ\n2. รหัสหรือข้อมูลสำคัญเปิดโหมดข้อความลับส่วนตัวล็อก PIN ได้\n3. หากส่งข้อความหรือรูปผิดห้อง สามารถกดยกเลิกหรือลบทำลายไฟล์ออกจาก MinIO ได้ทันที".to_string(),
-        attachments: vec![],
-        is_pinned: true,
-        liked_by: vec!["user_somchai".to_string(), "user_nida".to_string()],
-        comments: vec![],
-        created_at: now.clone(),
-        updated_at: now,
-    };
-    let _ = notes_coll
-        .replace_one(doc! { "_id": "note_group_family_1" }, &family_note)
-        .upsert(true)
-        .await;
 
     Ok(())
 }

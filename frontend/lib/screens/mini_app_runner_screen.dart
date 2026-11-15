@@ -337,30 +337,13 @@ class _MiniAppRunnerScreenState extends State<MiniAppRunnerScreen> {
                 ),
                 const SizedBox(height: 18),
 
-                LayoutBuilder(
-                  builder: (ctx, constraints) {
-                    final isWide = constraints.maxWidth >= 680;
-                    if (isWide) {
-                      return Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(flex: 6, child: _buildFormCard(accentColor)),
-                          const SizedBox(width: 20),
-                          Expanded(
-                            flex: 5,
-                            child: _buildRichCardPreview(accentColor),
-                          ),
-                        ],
-                      );
-                    }
-                    return Column(
-                      children: [
-                        _buildFormCard(accentColor),
-                        const SizedBox(height: 18),
-                        _buildRichCardPreview(accentColor),
-                      ],
-                    );
-                  },
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildFormCard(accentColor),
+                    const SizedBox(height: 14),
+                    _buildRichCardPreview(accentColor),
+                  ],
                 ),
               ],
             ),

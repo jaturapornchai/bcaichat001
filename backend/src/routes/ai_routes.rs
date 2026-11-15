@@ -11,7 +11,7 @@ use crate::{
     auth::{AdminUser, ApiError, AuthUser},
     models::{
         mask_secret_key, AiSettingsDoc, AiSettingsDto, ConversationDoc, LastMessageSummary,
-        MessageDoc, MessageDto, UserDoc,
+        MessageDoc, MessageDto, OaAccountDoc, OaCouponDoc, UserDoc,
     },
     AppState,
 };
@@ -236,7 +236,7 @@ const SUMMARY_PROMPT: &str = "สรุปบทสนทนาและนั�
 fn history_text(m: &MessageDoc, redact_confidential: bool) -> String {
     if redact_confidential && m.confidential_pin.is_some() {
         "[ข้อความลับส่วนตัวล็อก PIN - ปกปิดข้อมูลอัตโนมัติ]".to_string()
-    } else if m.sender_id == "user_ai" {
+    } else if m.sender_id == "user_ai" || m.sender_id.starts_with("user_oa_") {
         m.content.clone()
     } else {
         format!("{}: {}{}", m.sender_name, m.content, task_note(m))
@@ -283,7 +283,7 @@ pub async fn call_deepseek_brain(
                 continue;
             }
             let content_text = history_text(m, settings.redact_confidential);
-            let role = if m.sender_id == "user_ai" {
+            let role = if m.sender_id == "user_ai" || m.sender_id.starts_with("user_oa_") {
                 "assistant"
             } else {
                 "user"
@@ -652,44 +652,24 @@ pub async fn assist_message_handler(
     })))
 }
 
-pub async fn insert_ai_message(
+pub async fn insert_bot_message(
     state: &AppState,
     conv: &mut ConversationDoc,
+    bot_user: &UserDoc,
     ai_text: &str,
 ) -> Result<MessageDto, String> {
-    let users_coll = state.db.collection::<UserDoc>("users");
     let msg_coll = state.db.collection::<MessageDoc>("messages");
     let conv_coll = state.db.collection::<ConversationDoc>("conversations");
-
-    let ai_user = users_coll
-        .find_one(doc! { "_id": "user_ai" })
-        .await
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| UserDoc {
-            id: "user_ai".to_string(),
-            email: "ai@bcaichat.local".to_string(),
-            display_name: "🤖 BC AI ผู้ช่วยส่วนตัว".to_string(),
-            bc_id: "@bc.ai".to_string(),
-            avatar_url: "https://ui-avatars.com/api/?name=BC+AI&background=812920&color=fff&bold=true".to_string(),
-            status_message: "ผู้ช่วย AI ส่วนตัวสำหรับทุกคนและทุกกลุ่ม".to_string(),
-            qr_token: "BCQR_DEEPSEEK_AI".to_string(),
-            role: "admin".to_string(),
-            department: "AI ส่วนตัว".to_string(),
-            job_title: "เพื่อนคู่คิด & ผู้ช่วยประจำแชท".to_string(),
-            google_id: None,
-            created_at: Utc::now().to_rfc3339(),
-        });
 
     let now = Utc::now().to_rfc3339();
     let msg_id = Uuid::new_v4().to_string();
 
-    let ai_msg = MessageDoc {
+    let bot_msg = MessageDoc {
         id: msg_id.clone(),
         conversation_id: conv.id.clone(),
-        sender_id: ai_user.id.clone(),
-        sender_name: ai_user.display_name.clone(),
-        sender_avatar: ai_user.avatar_url.clone(),
+        sender_id: bot_user.id.clone(),
+        sender_name: bot_user.display_name.clone(),
+        sender_avatar: bot_user.avatar_url.clone(),
         msg_type: "text".to_string(),
         content: ai_text.to_string(),
         sticker_code: None,
@@ -697,7 +677,7 @@ pub async fn insert_ai_message(
         card_payload: None,
         flex_payload: None,
         reply_to: None,
-        read_by: vec![ai_user.id.clone()],
+        read_by: vec![bot_user.id.clone()],
         is_unsent: false,
         is_confidential: false,
         confidential_pin: None,
@@ -711,19 +691,24 @@ pub async fn insert_ai_message(
         audio_duration_sec: None,
         poll: None,
         event_data: None,
+        location_data: None,
+        contact_data: None,
+        ladder_data: None,
+        edited_at: None,
+        forwarded_from: None,
         deleted_for: Vec::new(),
         created_at: now.clone(),
     };
 
     msg_coll
-        .insert_one(&ai_msg)
+        .insert_one(&bot_msg)
         .await
         .map_err(|e| e.to_string())?;
 
     conv.last_message = Some(LastMessageSummary {
         id: msg_id,
-        sender_id: ai_user.id,
-        sender_name: ai_user.display_name,
+        sender_id: bot_user.id.clone(),
+        sender_name: bot_user.display_name.clone(),
         msg_type: "text".to_string(),
         content: ai_text.chars().take(120).collect(),
         created_at: now.clone(),
@@ -735,7 +720,7 @@ pub async fn insert_ai_message(
         .replace_one(doc! { "_id": &conv.id }, &*conv)
         .await;
 
-    let dto = MessageDto::from(ai_msg);
+    let dto = MessageDto::from(bot_msg);
     state.ws_hub.broadcast_event(json!({
         "event": "new_message",
         "conversation_id": conv.id,
@@ -744,6 +729,124 @@ pub async fn insert_ai_message(
     crate::push::notify_new_message(state, conv, &dto);
 
     Ok(dto)
+}
+
+pub async fn insert_ai_message(
+    state: &AppState,
+    conv: &mut ConversationDoc,
+    ai_text: &str,
+) -> Result<MessageDto, String> {
+    let users_coll = state.db.collection::<UserDoc>("users");
+
+    let ai_user = users_coll
+        .find_one(doc! { "_id": "user_ai" })
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| UserDoc {
+            id: "user_ai".to_string(),
+            email: "ai@bcaichat.local".to_string(),
+            phone: String::new(),
+            phone_verified: false,
+            email_verified: false,
+            display_name: "🤖 BC AI ผู้ช่วยส่วนตัว".to_string(),
+            bc_id: "@bc.ai".to_string(),
+            avatar_url: "https://ui-avatars.com/api/?name=BC+AI&background=812920&color=fff&bold=true".to_string(),
+            status_message: "ผู้ช่วย AI ส่วนตัวสำหรับทุกคนและทุกกลุ่ม".to_string(),
+            qr_token: "BCQR_DEEPSEEK_AI".to_string(),
+            role: "admin".to_string(),
+            department: "AI ส่วนตัว".to_string(),
+            job_title: "เพื่อนคู่คิด & ผู้ช่วยประจำแชท".to_string(),
+            google_id: None,
+            is_oa_bot: false,
+            oa_id: None,
+            allow_add_by_phone: true,
+            allow_add_by_id: true,
+            allow_add_by_email: true,
+            notify_preview: true,
+            notify_on_mention: true,
+            dnd_until: None,
+            recovery_pin_hash: None,
+            recovery_code_hashes: Vec::new(),
+            recovery_failed_attempts: 0,
+            recovery_locked_until: None,
+            token_version: 0,
+            last_recovered_at: None,
+            created_at: Utc::now().to_rfc3339(),
+        });
+
+    insert_bot_message(state, conv, &ai_user, ai_text).await
+}
+
+pub async fn maybe_trigger_oa_ai_reply(
+    state: &AppState,
+    oa: &OaAccountDoc,
+    bot_user: &UserDoc,
+    conv: &mut ConversationDoc,
+    trigger_msg: &MessageDoc,
+) -> Option<MessageDto> {
+    if !oa.ai_enabled
+        || trigger_msg.is_unsent
+        || trigger_msg.sender_id == bot_user.id
+        || trigger_msg.sender_id.starts_with("user_oa_")
+    {
+        return None;
+    }
+
+    let coupons_coll = state.db.collection::<OaCouponDoc>("oa_coupons");
+    let coupons: Vec<OaCouponDoc> = match coupons_coll
+        .find(doc! { "oa_id": &oa.id, "is_active": true })
+        .await
+    {
+        Ok(cursor) => cursor.try_collect().await.unwrap_or_default(),
+        Err(_) => vec![],
+    };
+    let coupon_info = if coupons.is_empty() {
+        "คูปองที่เปิดใช้งาน: ยังไม่มีคูปองพิเศษในขณะนี้".to_string()
+    } else {
+        let items: Vec<String> = coupons
+            .iter()
+            .take(5)
+            .map(|c| format!("- {} (รหัส: {}, ส่วนลด: {})", c.title, c.code, c.discount_text))
+            .collect();
+        format!("คูปองส่วนลดที่ลูกค้ากดรับได้:\n{}", items.join("\n"))
+    };
+
+    let custom_prompt = format!(
+        "คุณคือผู้ช่วยแอดมินร้าน \"{}\" (@{}) หมวดหมู่ \"{}\"\nรายละเอียดร้าน: {}\nเวลาทำการ: {}\nข้อมูลสินค้า/บริการ/โปรโมชั่นของร้าน: {}\n{}\nคำสั่ง: ตอบคำถามลูกค้าด้วยภาษาไทยที่สุภาพ กระชับ จริงใจ หากไม่มีข้อมูลราคาเฉพาะให้แจ้งลูกค้าว่าส่งข้อความถึงแอดมินร้านแล้ว",
+        oa.display_name, oa.handle, oa.category, oa.bio, oa.business_hours, oa.ai_knowledge_prompt, coupon_info
+    );
+
+    let msg_coll = state.db.collection::<MessageDoc>("messages");
+    let mut history: Vec<MessageDoc> = match msg_coll
+        .find(doc! { "conversation_id": &conv.id, "is_unsent": false })
+        .await
+    {
+        Ok(cursor) => cursor.try_collect().await.unwrap_or_default(),
+        Err(_) => vec![],
+    };
+    history.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+
+    let (ai_reply_text, _, is_live) =
+        call_deepseek_brain(state, Some(&custom_prompt), &trigger_msg.content, &history).await;
+
+    let final_reply = if is_live {
+        ai_reply_text
+    } else {
+        let knowledge_hint = if !oa.ai_knowledge_prompt.trim().is_empty() {
+            oa.ai_knowledge_prompt.trim()
+        } else if !oa.greeting_message.trim().is_empty() {
+            oa.greeting_message.trim()
+        } else {
+            &oa.bio
+        };
+        format!(
+            "สวัสดีค่ะ จากร้าน {} (@{})\n{}\n\nข้อความของท่านถูกส่งถึงทีมแอดมินร้านแล้ว จะรีบตอบกลับโดยเร็วที่สุดค่ะ",
+            oa.display_name, oa.handle, knowledge_hint
+        )
+    };
+
+    insert_bot_message(state, conv, bot_user, &final_reply).await.ok()
 }
 
 pub async fn maybe_trigger_ai_reply(

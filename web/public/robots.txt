@@ -22,4 +22,4 @@ Allow: /
 User-agent: *
 Allow: /
 
-Sitemap: http://localhost:3096/sitemap.xml
+Sitemap: https://www.bcaichat.com/sitemap.xml

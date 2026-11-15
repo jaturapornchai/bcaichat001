@@ -1,15 +1,36 @@
 import type {
+  AccountRecoveryLogItem,
+  AdminAuthSettings,
   AdminOverview,
   AiAssistResult,
   AiSettings,
   AiSummaryResult,
   AlbumItem,
   AttachmentInfo,
+  AuthConfig,
+  AuthSessionResponse,
+  BcIdCheckResult,
+  CallJoinResponse,
+  CallSession,
   ChatMessage,
+  ContactCardData,
   Conversation,
   FriendItem,
+  GooglePollResponse,
+  LadderGameData,
+  LocationData,
   MiniAppItem,
   NoteItem,
+  OaAccount,
+  OaAutoReplyRule,
+  OaBroadcast,
+  OaCoupon,
+  OaCustomerChat,
+  OaFollowerCrm,
+  OaOverview,
+  OaRichMenuItem,
+  OaStaffMember,
+  OtpChallengeResponse,
   RichCardPayload,
   RoomToneId,
   ThemePresetId,
@@ -64,15 +85,90 @@ export function saveRoomTone(tone: RoomToneId): void {
 }
 
 export function getWsUrl(token: string, deviceId = "web_tab"): string {
-  const configured = process.env.NEXT_PUBLIC_WS_URL;
+  const configured = process.env.NEXT_PUBLIC_WS_URL?.trim();
   let base = configured || "ws://127.0.0.1:8096/ws";
   if (!configured && typeof window !== "undefined") {
     const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const host = window.location.hostname || "127.0.0.1";
-    base = `${proto}//${host}:8096/ws`;
+    const hostname = window.location.hostname || "127.0.0.1";
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      base = `${proto}//${hostname}:8096/ws`;
+    } else {
+      base = `${proto}//${window.location.host}/ws`;
+    }
   }
   const sep = base.includes("?") ? "&" : "?";
   return `${base}${sep}token=${encodeURIComponent(token)}&device=${encodeURIComponent(deviceId)}`;
+}
+
+export function resolveLiveKitUrl(rawUrl?: string | null): string {
+  const trimmed = (rawUrl || "").trim();
+  const sameOrigin =
+    typeof window !== "undefined"
+      ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`
+      : "ws://127.0.0.1:7880";
+  if (!trimmed || trimmed === "same_origin") {
+    return sameOrigin;
+  }
+  let clean = trimmed.replace(/\/+$/, "");
+  if (clean.endsWith("/rtc")) {
+    clean = clean.slice(0, -4).replace(/\/+$/, "");
+  }
+  return clean || sameOrigin;
+}
+
+function normalizeIdDoc<T extends { id?: string; _id?: string }>(
+  raw: T & Record<string, unknown>
+): T & { id: string } {
+  return {
+    ...raw,
+    id: String(raw.id ?? raw._id ?? ""),
+  };
+}
+
+function normalizeOaCustomerChat(raw: Record<string, unknown>): OaCustomerChat {
+  return {
+    conversation_id: String(raw.conversation_id ?? ""),
+    oa_id: String(raw.oa_id ?? ""),
+    follower_user_id: String(raw.follower_user_id ?? raw.customer_id ?? ""),
+    follower_name: String(raw.follower_name ?? raw.customer_name ?? "ลูกค้า"),
+    follower_bc_id: String(raw.follower_bc_id ?? raw.customer_bc_id ?? ""),
+    follower_phone: String(raw.follower_phone ?? raw.customer_phone ?? ""),
+    follower_email: String(raw.follower_email ?? raw.customer_email ?? ""),
+    follower_avatar: String(raw.follower_avatar ?? raw.customer_avatar ?? ""),
+    tags: Array.isArray(raw.tags) ? raw.tags.map(String) : [],
+    crm_note: String(raw.crm_note ?? ""),
+    ai_paused: Boolean(raw.ai_paused),
+    unread_for_oa: Number(raw.unread_for_oa ?? 0),
+    last_message: (raw.last_message as OaCustomerChat["last_message"]) ?? null,
+    updated_at: String(raw.updated_at ?? ""),
+  };
+}
+
+function normalizeOaCoupon(raw: Record<string, unknown>): OaCoupon {
+  const src =
+    !raw.id && !raw._id && raw.coupon && typeof raw.coupon === "object"
+      ? (raw.coupon as Record<string, unknown>)
+      : raw;
+  const claimedBy = Array.isArray(src.claimed_by) ? src.claimed_by.map(String) : [];
+  const redeemedBy = Array.isArray(src.redeemed_by) ? src.redeemed_by.map(String) : [];
+  return {
+    id: String(src.id ?? src._id ?? ""),
+    oa_id: String(src.oa_id ?? ""),
+    code: String(src.code ?? ""),
+    title: String(src.title ?? ""),
+    description: String(src.description ?? ""),
+    discount_text: String(src.discount_text ?? ""),
+    expires_at: (src.expires_at as string | null | undefined) ?? null,
+    max_claims: Number(src.max_claims ?? 0),
+    claimed_by: claimedBy,
+    redeemed_by: redeemedBy,
+    claimed_count: Number(src.claimed_count ?? src.claims_count ?? claimedBy.length),
+    redeemed_count: Number(src.redeemed_count ?? redeemedBy.length),
+    is_claimed: Boolean(src.is_claimed ?? raw.is_claimed),
+    is_redeemed: Boolean(src.is_redeemed ?? raw.is_redeemed),
+    is_active: Boolean(src.is_active ?? true),
+    created_at: String(src.created_at ?? ""),
+  };
 }
 
 export function resolveMediaUrl(rawUrl?: string | null): string {
@@ -129,6 +225,11 @@ export function normalizeMessage(raw: Record<string, unknown>): ChatMessage {
         : null,
     poll: (raw.poll as ChatMessage["poll"]) ?? null,
     event_data: (raw.event_data as ChatMessage["event_data"]) ?? null,
+    location_data: (raw.location_data as LocationData | null | undefined) ?? null,
+    contact_data: (raw.contact_data as ContactCardData | null | undefined) ?? null,
+    ladder_data: (raw.ladder_data as LadderGameData | null | undefined) ?? null,
+    edited_at: (raw.edited_at as string | null | undefined) ?? null,
+    forwarded_from: (raw.forwarded_from as string | null | undefined) ?? null,
     created_at: String(raw.created_at ?? ""),
   };
 }
@@ -177,7 +278,9 @@ export class ApiClient {
         parsed && typeof parsed === "object" && "error" in parsed
           ? String((parsed as { error: unknown }).error)
           : `คำขอไม่สำเร็จ (HTTP ${res.status})`;
-      throw new Error(msg);
+      const err = new Error(msg) as Error & { status?: number };
+      err.status = res.status;
+      throw err;
     }
 
     return parsed as T;
@@ -198,31 +301,203 @@ export class ApiClient {
     });
   }
 
-  async loginDemoOrEmail(params: {
-    email: string;
+  async getAuthConfig(): Promise<AuthConfig> {
+    return this.request<AuthConfig>("/api/auth/config", {}, true);
+  }
+
+  async bootstrapAdmin(payload: {
+    code: string;
     display_name?: string;
-    department?: string;
-    job_title?: string;
-  }): Promise<{ token: string; user: UserProfile }> {
-    const res = await this.request<{ token: string; user: UserProfile }>(
-      "/api/auth/google",
+  }): Promise<AuthSessionResponse> {
+    return this.request<AuthSessionResponse>(
+      "/api/auth/bootstrap-admin",
       {
         method: "POST",
-        body: JSON.stringify({
-          email: params.email,
-          display_name: params.display_name,
-          department: params.department,
-          job_title: params.job_title,
-          id_token: `demo_${Date.now()}`,
-        }),
+        body: JSON.stringify(payload),
       },
       true
     );
-    return res;
+  }
+
+  async testQuickLogin(payload: {
+    slot?: number;
+    user_id?: string;
+  }): Promise<AuthSessionResponse> {
+    return this.request<AuthSessionResponse>(
+      "/api/auth/test-login",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      true
+    );
+  }
+
+  async requestPhoneOtp(payload: {
+    phone: string;
+    purpose?: "auth" | "link" | "recover";
+  }): Promise<OtpChallengeResponse> {
+    return this.request<OtpChallengeResponse>(
+      "/api/auth/otp/request",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      payload.purpose !== "link"
+    );
+  }
+
+  async verifyPhoneOtp(payload: {
+    challenge_id: string;
+    otp_code: string;
+    display_name?: string;
+    ref_code?: string;
+  }): Promise<AuthSessionResponse> {
+    return this.request<AuthSessionResponse>(
+      "/api/auth/otp/verify",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      true
+    );
+  }
+
+  async linkPhone(payload: {
+    challenge_id: string;
+    otp_code: string;
+    ref_code?: string;
+    recovery_pin?: string;
+  }): Promise<{ user: UserProfile }> {
+    return this.request<{ user: UserProfile }>("/api/auth/link/phone", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async loginWithGoogle(payload: {
+    id_token?: string;
+    access_token?: string;
+    display_name?: string;
+    avatar_url?: string;
+  }): Promise<AuthSessionResponse> {
+    return this.request<AuthSessionResponse>(
+      "/api/auth/google",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      true
+    );
+  }
+
+  async linkGoogle(payload: {
+    id_token?: string;
+    access_token?: string;
+    display_name?: string;
+    avatar_url?: string;
+    recovery_pin?: string;
+  }): Promise<{ user: UserProfile }> {
+    return this.request<{ user: UserProfile }>("/api/auth/link/google", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async unlinkGoogle(): Promise<{ user: UserProfile }> {
+    return this.request<{ user: UserProfile }>("/api/auth/link/google", {
+      method: "DELETE",
+    });
+  }
+
+  async setupRecoveryPin(payload: {
+    recovery_pin: string;
+    current_pin?: string;
+    regenerate_codes?: boolean;
+  }): Promise<{ user: UserProfile; backup_codes: string[] }> {
+    return this.request<{ user: UserProfile; backup_codes: string[] }>(
+      "/api/auth/recovery/setup",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }
+    );
+  }
+
+  async getRecoveryLogs(): Promise<AccountRecoveryLogItem[]> {
+    const res = await this.request<{ logs: AccountRecoveryLogItem[] }>(
+      "/api/auth/recovery/logs"
+    );
+    return Array.isArray(res.logs) ? res.logs : [];
+  }
+
+  async recoverChangePhone(payload: {
+    method: "google" | "pin_or_code";
+    google_id_token?: string;
+    google_access_token?: string;
+    google_oauth_state?: string;
+    identifier?: string;
+    recovery_secret?: string;
+    new_phone_challenge_id: string;
+    new_phone_otp_code: string;
+    new_phone_ref_code?: string;
+    revoke_other_sessions?: boolean;
+  }): Promise<AuthSessionResponse & { recovered?: boolean }> {
+    return this.request<AuthSessionResponse & { recovered?: boolean }>(
+      "/api/auth/recover/change-phone",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      true
+    );
+  }
+
+  async recoverChangeGoogle(payload: {
+    method: "phone_otp" | "pin_or_code";
+    phone_challenge_id?: string;
+    phone_otp_code?: string;
+    phone_ref_code?: string;
+    identifier?: string;
+    recovery_secret?: string;
+    new_google_id_token?: string;
+    new_google_access_token?: string;
+    new_google_oauth_state?: string;
+    revoke_other_sessions?: boolean;
+  }): Promise<AuthSessionResponse & { recovered?: boolean }> {
+    return this.request<AuthSessionResponse & { recovered?: boolean }>(
+      "/api/auth/recover/change-google",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      true
+    );
+  }
+
+  async pollGoogleOAuth(state: string): Promise<GooglePollResponse> {
+    return this.request<GooglePollResponse>(
+      `/api/auth/google/poll?state=${encodeURIComponent(state)}`,
+      {},
+      true
+    );
+  }
+
+  getGoogleStartUrl(mode: "login" | "link" | "recover", state: string): string {
+    const token = this.getToken();
+    const tokenPart =
+      mode === "link" && token ? `&token=${encodeURIComponent(token)}` : "";
+    return `/api/auth/google/start?mode=${encodeURIComponent(mode)}&state=${encodeURIComponent(state)}${tokenPart}`;
   }
 
   async getMe(): Promise<UserProfile> {
     return this.request<UserProfile>("/api/auth/me");
+  }
+
+  async checkBcId(bcId: string): Promise<BcIdCheckResult> {
+    return this.request<BcIdCheckResult>(
+      `/api/auth/bc-id/check?bc_id=${encodeURIComponent(bcId)}`
+    );
   }
 
   async updateProfile(payload: {
@@ -231,11 +506,42 @@ export class ApiClient {
     status_message?: string;
     department?: string;
     job_title?: string;
+    allow_add_by_phone?: boolean;
+    allow_add_by_id?: boolean;
+    allow_add_by_email?: boolean;
+    notify_preview?: boolean;
+    notify_on_mention?: boolean;
+    dnd_mode?: "off" | "1h" | "8h" | "until_8am";
+    dnd_until?: string | null;
   }): Promise<UserProfile> {
-    return this.request<UserProfile>("/api/auth/profile", {
+    return this.request<UserProfile>("/api/users/me", {
       method: "PUT",
       body: JSON.stringify(payload),
     });
+  }
+
+  async updateMeSettings(payload: {
+    display_name?: string;
+    bc_id?: string;
+    status_message?: string;
+    department?: string;
+    job_title?: string;
+    allow_add_by_phone?: boolean;
+    allow_add_by_id?: boolean;
+    allow_add_by_email?: boolean;
+    notify_preview?: boolean;
+    notify_on_mention?: boolean;
+    dnd_mode?: "off" | "1h" | "8h" | "until_8am";
+    dnd_until?: string | null;
+  }): Promise<UserProfile> {
+    return this.updateProfile(payload);
+  }
+
+  async resetMyQr(): Promise<{ qr_token: string; user: UserProfile }> {
+    return this.request<{ qr_token: string; user: UserProfile }>(
+      "/api/users/me/reset-qr",
+      { method: "POST" }
+    );
   }
 
   async listFriends(): Promise<FriendItem[]> {
@@ -252,12 +558,26 @@ export class ApiClient {
     });
   }
 
-  async searchUsers(q: string): Promise<UserProfile[]> {
-    return this.request<UserProfile[]>(`/api/users/search?q=${encodeURIComponent(q)}`);
+  async deleteFriend(friendId: string): Promise<{ ok: boolean }> {
+    return this.request<{ ok: boolean }>(`/api/friends/${encodeURIComponent(friendId)}`, {
+      method: "DELETE",
+    });
+  }
+
+  async searchUsers(
+    q: string,
+    by?: "phone" | "email" | "id" | "qr"
+  ): Promise<UserProfile[]> {
+    const byPart = by ? `&by=${encodeURIComponent(by)}` : "";
+    return this.request<UserProfile[]>(
+      `/api/users/search?q=${encodeURIComponent(q)}${byPart}`
+    );
   }
 
   async addFriend(payload: {
+    query?: string;
     target_id?: string;
+    phone?: string;
     bc_id?: string;
     email?: string;
     qr_token?: string;
@@ -306,6 +626,8 @@ export class ApiClient {
       folder?: string;
       is_pinned?: boolean;
       is_muted?: boolean;
+      mute_duration?: "off" | "1h" | "8h" | "until_8am" | "forever";
+      muted_until?: string | null;
       is_archived?: boolean;
       name?: string;
       avatar_url?: string;
@@ -364,6 +686,10 @@ export class ApiClient {
       sticker_code?: string;
       attachment?: AttachmentInfo;
       card_payload?: RichCardPayload;
+      location_data?: LocationData;
+      contact_data?: ContactCardData;
+      ladder_data?: LadderGameData;
+      forwarded_from?: string;
       reply_to_id?: string;
       is_confidential?: boolean;
       confidential_pin?: string;
@@ -390,6 +716,18 @@ export class ApiClient {
     };
     if (payload.card_payload) {
       bodyPayload.card_payload = payload.card_payload;
+    }
+    if (payload.location_data) {
+      bodyPayload.location_data = payload.location_data;
+    }
+    if (payload.contact_data) {
+      bodyPayload.contact_data = payload.contact_data;
+    }
+    if (payload.ladder_data) {
+      bodyPayload.ladder_data = payload.ladder_data;
+    }
+    if (payload.forwarded_from) {
+      bodyPayload.forwarded_from = payload.forwarded_from;
     }
     const raw = await this.request<Record<string, unknown>>(
       `/api/conversations/${encodeURIComponent(convId)}/messages`,
@@ -431,6 +769,50 @@ export class ApiClient {
         method: "DELETE",
       }
     );
+  }
+
+  async editMessage(msgId: string, content: string): Promise<ChatMessage> {
+    const raw = await this.request<Record<string, unknown>>(
+      `/api/messages/${encodeURIComponent(msgId)}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ content }),
+      }
+    );
+    return normalizeMessage(raw);
+  }
+
+  async forwardMessage(
+    msgId: string,
+    targetConversationIds: string[]
+  ): Promise<{ forwarded_count: number; messages: ChatMessage[] }> {
+    const raw = await this.request<{
+      forwarded_count?: number;
+      messages?: Record<string, unknown>[];
+    }>(`/api/messages/${encodeURIComponent(msgId)}/forward`, {
+      method: "POST",
+      body: JSON.stringify({ target_conversation_ids: targetConversationIds }),
+    });
+    return {
+      forwarded_count: Number(raw.forwarded_count ?? 0),
+      messages: Array.isArray(raw.messages) ? raw.messages.map(normalizeMessage) : [],
+    };
+  }
+
+  async ensureKeepConversation(): Promise<Conversation> {
+    return this.request<Conversation>("/api/conversations/keep", {
+      method: "POST",
+    });
+  }
+
+  async saveMessageToKeep(msgId: string): Promise<ChatMessage> {
+    const raw = await this.request<Record<string, unknown>>(
+      `/api/messages/${encodeURIComponent(msgId)}/save-to-keep`,
+      {
+        method: "POST",
+      }
+    );
+    return normalizeMessage(raw);
   }
 
   async clearConfidential(convId: string): Promise<{ purged_messages: number; purged_files: number }> {
@@ -746,15 +1128,408 @@ export class ApiClient {
     });
   }
 
+  async adminGetAuthSettings(): Promise<AdminAuthSettings> {
+    return this.request<AdminAuthSettings>("/api/admin/auth-settings");
+  }
+
+  async adminUpdateAuthSettings(payload: {
+    smsmkt_api_key?: string;
+    smsmkt_secret_key?: string;
+    smsmkt_project_key?: string;
+    smsmkt_sender_name?: string;
+    google_client_id?: string;
+  }): Promise<AdminAuthSettings> {
+    return this.request<AdminAuthSettings>("/api/admin/auth-settings", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  }
+
   async adminBroadcast(title: string, content: string): Promise<{ sent_count: number }> {
     return this.request("/api/admin/broadcast", {
       method: "POST",
       body: JSON.stringify({ title, content }),
     });
   }
+
+  // ---- BCAiChatOA ----
+
+  async discoverOas(q = "", category = ""): Promise<OaAccount[]> {
+    const params = new URLSearchParams();
+    if (q.trim()) params.set("q", q.trim());
+    if (category.trim()) params.set("category", category.trim());
+    const qs = params.toString();
+    const list = await this.request<Array<OaAccount & Record<string, unknown>>>(
+      `/api/oa/discover${qs ? `?${qs}` : ""}`
+    );
+    return list.map((o) => normalizeIdDoc(o));
+  }
+
+  async listMyOas(): Promise<OaAccount[]> {
+    const list = await this.request<Array<OaAccount & Record<string, unknown>>>("/api/oa/mine");
+    return list.map((o) => normalizeIdDoc(o));
+  }
+
+  async createOa(payload: {
+    handle: string;
+    display_name: string;
+    category?: string;
+    bio?: string;
+    avatar_url?: string;
+    theme_color?: string;
+    greeting_message?: string;
+    business_hours?: string;
+    ai_enabled?: boolean;
+    calls_enabled?: boolean;
+    ai_knowledge_prompt?: string;
+    rich_menu?: OaRichMenuItem[];
+  }): Promise<OaAccount> {
+    const res = await this.request<OaAccount & Record<string, unknown>>("/api/oa", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    return normalizeIdDoc(res);
+  }
+
+  async getOa(oaId: string): Promise<OaAccount> {
+    const res = await this.request<OaAccount & Record<string, unknown>>(
+      `/api/oa/${encodeURIComponent(oaId)}`
+    );
+    return normalizeIdDoc(res);
+  }
+
+  async updateOa(
+    oaId: string,
+    payload: Partial<{
+      display_name: string;
+      category: string;
+      bio: string;
+      avatar_url: string;
+      theme_color: string;
+      greeting_message: string;
+      business_hours: string;
+      is_active: boolean;
+      ai_enabled: boolean;
+      calls_enabled: boolean;
+      ai_knowledge_prompt: string;
+      rich_menu: OaRichMenuItem[];
+    }>
+  ): Promise<OaAccount> {
+    const res = await this.request<OaAccount & Record<string, unknown>>(
+      `/api/oa/${encodeURIComponent(oaId)}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      }
+    );
+    return normalizeIdDoc(res);
+  }
+
+  async listOaAdmins(oaId: string): Promise<OaStaffMember[]> {
+    return this.request<OaStaffMember[]>(`/api/oa/${encodeURIComponent(oaId)}/admins`);
+  }
+
+  async addOaAdmin(
+    oaId: string,
+    payload: {
+      query?: string;
+      user_id?: string;
+      phone?: string;
+      bc_id?: string;
+      email?: string;
+      role?: string;
+    }
+  ): Promise<OaAccount> {
+    const res = await this.request<OaAccount & Record<string, unknown>>(
+      `/api/oa/${encodeURIComponent(oaId)}/admins`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }
+    );
+    return normalizeIdDoc(res);
+  }
+
+  async updateOaAdminRole(
+    oaId: string,
+    userId: string,
+    role: string
+  ): Promise<OaAccount> {
+    const res = await this.request<OaAccount & Record<string, unknown>>(
+      `/api/oa/${encodeURIComponent(oaId)}/admins/${encodeURIComponent(userId)}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ role }),
+      }
+    );
+    return normalizeIdDoc(res);
+  }
+
+  async removeOaAdmin(oaId: string, userId: string): Promise<OaAccount> {
+    const res = await this.request<OaAccount & Record<string, unknown>>(
+      `/api/oa/${encodeURIComponent(oaId)}/admins/${encodeURIComponent(userId)}`,
+      { method: "DELETE" }
+    );
+    return normalizeIdDoc(res);
+  }
+
+  async followOa(
+    oaId: string
+  ): Promise<{ oa: OaAccount; conversation: Conversation; conversation_id: string }> {
+    const res = await this.request<{
+      oa: OaAccount & Record<string, unknown>;
+      conversation: Conversation;
+      conversation_id: string;
+    }>(`/api/oa/${encodeURIComponent(oaId)}/follow`, { method: "POST" });
+    return {
+      ...res,
+      oa: normalizeIdDoc(res.oa),
+    };
+  }
+
+  async unfollowOa(oaId: string): Promise<OaAccount> {
+    const res = await this.request<OaAccount & Record<string, unknown>>(
+      `/api/oa/${encodeURIComponent(oaId)}/unfollow`,
+      { method: "POST" }
+    );
+    return normalizeIdDoc(res);
+  }
+
+  async getOaOverview(oaId: string): Promise<OaOverview> {
+    return this.request<OaOverview>(`/api/oa/${encodeURIComponent(oaId)}/overview`);
+  }
+
+  async listOaChats(oaId: string, q = "", tag = ""): Promise<OaCustomerChat[]> {
+    const params = new URLSearchParams();
+    if (q.trim()) params.set("q", q.trim());
+    if (tag.trim()) params.set("tag", tag.trim());
+    const qs = params.toString();
+    const rows = await this.request<Array<Record<string, unknown>>>(
+      `/api/oa/${encodeURIComponent(oaId)}/chats${qs ? `?${qs}` : ""}`
+    );
+    return rows.map(normalizeOaCustomerChat);
+  }
+
+  async listOaChatMessages(oaId: string, convId: string): Promise<ChatMessage[]> {
+    const rows = await this.request<Array<Record<string, unknown>>>(
+      `/api/oa/${encodeURIComponent(oaId)}/chats/${encodeURIComponent(convId)}/messages`
+    );
+    return rows.map(normalizeMessage);
+  }
+
+  async sendOaChatMessage(
+    oaId: string,
+    convId: string,
+    payload: {
+      msg_type?: string;
+      content?: string;
+      sticker_code?: string;
+      card_payload?: RichCardPayload;
+      coupon_id?: string;
+    }
+  ): Promise<ChatMessage> {
+    const row = await this.request<Record<string, unknown>>(
+      `/api/oa/${encodeURIComponent(oaId)}/chats/${encodeURIComponent(convId)}/messages`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }
+    );
+    return normalizeMessage(row);
+  }
+
+  async updateOaFollowerCrm(
+    oaId: string,
+    userId: string,
+    payload: { tags?: string[]; crm_note?: string; ai_paused?: boolean }
+  ): Promise<OaFollowerCrm> {
+    const res = await this.request<OaFollowerCrm & Record<string, unknown>>(
+      `/api/oa/${encodeURIComponent(oaId)}/followers/${encodeURIComponent(userId)}/crm`,
+      {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      }
+    );
+    return normalizeIdDoc(res);
+  }
+
+  async listOaAutoReplies(oaId: string): Promise<OaAutoReplyRule[]> {
+    const list = await this.request<Array<OaAutoReplyRule & Record<string, unknown>>>(
+      `/api/oa/${encodeURIComponent(oaId)}/auto-replies`
+    );
+    return list.map((r) => normalizeIdDoc(r));
+  }
+
+  async createOaAutoReply(
+    oaId: string,
+    payload: {
+      keyword: string;
+      match_mode?: string;
+      reply_text: string;
+      card_payload?: RichCardPayload;
+      is_active?: boolean;
+    }
+  ): Promise<OaAutoReplyRule> {
+    const res = await this.request<OaAutoReplyRule & Record<string, unknown>>(
+      `/api/oa/${encodeURIComponent(oaId)}/auto-replies`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }
+    );
+    return normalizeIdDoc(res);
+  }
+
+  async deleteOaAutoReply(oaId: string, ruleId: string): Promise<void> {
+    await this.request(
+      `/api/oa/${encodeURIComponent(oaId)}/auto-replies/${encodeURIComponent(ruleId)}`,
+      { method: "DELETE" }
+    );
+  }
+
+  async listOaCoupons(oaId: string): Promise<OaCoupon[]> {
+    const list = await this.request<Array<Record<string, unknown>>>(
+      `/api/oa/${encodeURIComponent(oaId)}/coupons`
+    );
+    return list.map(normalizeOaCoupon);
+  }
+
+  async createOaCoupon(
+    oaId: string,
+    payload: {
+      code: string;
+      title: string;
+      description?: string;
+      discount_text?: string;
+      expires_at?: string;
+      max_claims?: number;
+    }
+  ): Promise<OaCoupon> {
+    const res = await this.request<Record<string, unknown>>(
+      `/api/oa/${encodeURIComponent(oaId)}/coupons`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }
+    );
+    return normalizeOaCoupon(res);
+  }
+
+  async claimOaCoupon(oaId: string, couponId: string): Promise<OaCoupon> {
+    const res = await this.request<Record<string, unknown>>(
+      `/api/oa/${encodeURIComponent(oaId)}/coupons/${encodeURIComponent(couponId)}/claim`,
+      { method: "POST" }
+    );
+    return normalizeOaCoupon(res);
+  }
+
+  async redeemOaCoupon(
+    oaId: string,
+    couponId: string,
+    userId?: string
+  ): Promise<OaCoupon> {
+    const res = await this.request<Record<string, unknown>>(
+      `/api/oa/${encodeURIComponent(oaId)}/coupons/${encodeURIComponent(couponId)}/redeem`,
+      {
+        method: "POST",
+        body: JSON.stringify(userId ? { user_id: userId } : {}),
+      }
+    );
+    return normalizeOaCoupon(res);
+  }
+
+  async listOaBroadcasts(oaId: string): Promise<OaBroadcast[]> {
+    const list = await this.request<Array<OaBroadcast & Record<string, unknown>>>(
+      `/api/oa/${encodeURIComponent(oaId)}/broadcasts`
+    );
+    return list.map((b) => normalizeIdDoc(b));
+  }
+
+  async createOaBroadcast(
+    oaId: string,
+    payload: {
+      target_tag?: string;
+      msg_type?: string;
+      content?: string;
+      card_payload?: RichCardPayload;
+      coupon_id?: string;
+    }
+  ): Promise<{ broadcast: OaBroadcast; recipient_count: number }> {
+    const res = await this.request<{
+      broadcast: OaBroadcast & Record<string, unknown>;
+      recipient_count: number;
+    }>(`/api/oa/${encodeURIComponent(oaId)}/broadcasts`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    return {
+      ...res,
+      broadcast: normalizeIdDoc(res.broadcast),
+    };
+  }
+
+  // ---- Voice & Video Calls ----
+
+  async startCall(
+    conversationId: string,
+    callType: "audio" | "video"
+  ): Promise<CallJoinResponse> {
+    return this.request<CallJoinResponse>("/api/calls/start", {
+      method: "POST",
+      body: JSON.stringify({ conversation_id: conversationId, call_type: callType }),
+    });
+  }
+
+  async listActiveCalls(conversationId?: string): Promise<CallSession[]> {
+    const qs = conversationId
+      ? `?conversation_id=${encodeURIComponent(conversationId)}`
+      : "";
+    const res = await this.request<{ calls: CallSession[] }>(`/api/calls/active${qs}`);
+    return res.calls || [];
+  }
+
+  async acceptCall(callId: string): Promise<CallJoinResponse> {
+    return this.request<CallJoinResponse>(
+      `/api/calls/${encodeURIComponent(callId)}/accept`,
+      { method: "POST" }
+    );
+  }
+
+  async getCallToken(callId: string): Promise<CallJoinResponse> {
+    return this.request<CallJoinResponse>(
+      `/api/calls/${encodeURIComponent(callId)}/token`
+    );
+  }
+
+  async declineCall(callId: string): Promise<CallSession> {
+    const res = await this.request<{ call: CallSession }>(
+      `/api/calls/${encodeURIComponent(callId)}/decline`,
+      { method: "POST" }
+    );
+    return res.call;
+  }
+
+  async hangupCall(callId: string): Promise<CallSession> {
+    const res = await this.request<{ call: CallSession }>(
+      `/api/calls/${encodeURIComponent(callId)}/hangup`,
+      { method: "POST" }
+    );
+    return res.call;
+  }
 }
 
 export const api = new ApiClient();
+
+export function formatCallDuration(sec?: number | null): string {
+  const s = Math.max(0, Math.floor(Number(sec || 0)));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const rem = s % 60;
+  const mm = String(m).padStart(2, "0");
+  const ss = String(rem).padStart(2, "0");
+  if (h > 0) return `${h}:${mm}:${ss}`;
+  return `${mm}:${ss}`;
+}
 
 export function formatThaiTime(iso?: string | null): string {
   if (!iso) return "";
@@ -779,4 +1554,161 @@ export function formatFileSize(bytes: number): string {
   const kb = bytes / 1024;
   if (kb < 1024) return `${kb.toFixed(1)} KB`;
   return `${(kb / 1024).toFixed(2)} MB`;
+}
+
+export function isTimestampFuture(iso?: string | null): boolean {
+  if (!iso) return false;
+  const ts = Date.parse(iso);
+  return Number.isFinite(ts) && ts > Date.now();
+}
+
+export function isConversationMutedNow(
+  conv?: Pick<Conversation, "is_muted" | "muted_until"> | null
+): boolean {
+  if (!conv) return false;
+  if (conv.muted_until) {
+    return isTimestampFuture(conv.muted_until);
+  }
+  return Boolean(conv.is_muted);
+}
+
+export function isDndActiveNow(user?: Pick<UserProfile, "dnd_until"> | null): boolean {
+  return isTimestampFuture(user?.dnd_until);
+}
+
+export function formatThaiUntil(iso?: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  if (sameDay) return `ถึง ${hh}:${mm} น.`;
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mo = String(d.getMonth() + 1).padStart(2, "0");
+  return `ถึง ${dd}/${mo} ${hh}:${mm} น.`;
+}
+
+export function makeOAuthState(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `st_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export interface GoogleOAuthPopupResult {
+  status?: string;
+  token?: string;
+  user?: UserProfile;
+  oauth_state?: string;
+  email?: string;
+  error?: string;
+}
+
+export function openGoogleOAuthPopup(opts: {
+  mode: "login" | "link" | "recover";
+  windowName?: string;
+  onResult: (data: GoogleOAuthPopupResult, state: string) => void;
+  onError: (message: string) => void;
+  onCancel?: () => void;
+}): (() => void) | null {
+  const state = makeOAuthState();
+  const startUrl = api.getGoogleStartUrl(opts.mode, state);
+  const popup = window.open(
+    startUrl,
+    opts.windowName || `bcaichat_google_${opts.mode}`,
+    "width=500,height=640,menubar=no,toolbar=no"
+  );
+  if (!popup) {
+    opts.onError("เบราว์เซอร์บล็อกหน้าต่างป๊อปอัป กรุณาอนุญาตป๊อปอัปแล้วลองอีกครั้ง");
+    return null;
+  }
+
+  let settled = false;
+  const cleanup = (notifyCancel = false) => {
+    if (settled) return;
+    settled = true;
+    window.removeEventListener("message", onMessage);
+    clearInterval(pollTimer);
+    try {
+      if (!popup.closed) popup.close();
+    } catch {
+      // Ignore cross-origin close error
+    }
+    if (notifyCancel) opts.onCancel?.();
+  };
+
+  const handleData = (data: GoogleOAuthPopupResult) => {
+    if (settled) return;
+    if (data.error) {
+      cleanup(false);
+      opts.onError(data.error);
+      return;
+    }
+    if (
+      data.token ||
+      data.user ||
+      data.status === "verified_for_recovery"
+    ) {
+      cleanup(false);
+      opts.onResult({ ...data, oauth_state: data.oauth_state || state }, state);
+    }
+  };
+
+  const onMessage = (ev: MessageEvent) => {
+    const payload = ev.data as
+      | { type?: string; state?: string; data?: GoogleOAuthPopupResult }
+      | undefined;
+    if (!payload || payload.type !== "bc_google_oauth_done") return;
+    if (payload.state && payload.state !== state) return;
+    if (payload.data) handleData(payload.data);
+  };
+
+  window.addEventListener("message", onMessage);
+
+  const checkPoll = async (): Promise<boolean> => {
+    const res = await api.pollGoogleOAuth(state);
+    if (settled) return true;
+    if (res.status === "completed" || res.status === "verified_for_recovery") {
+      handleData({
+        status: res.status,
+        token: res.token,
+        user: res.user,
+        oauth_state: res.oauth_state || state,
+        email: res.email,
+      });
+      return true;
+    }
+    if (res.status === "error") {
+      handleData({ error: res.error || "ดำเนินการผ่าน Gmail ไม่สำเร็จ" });
+      return true;
+    }
+    return false;
+  };
+
+  const pollTimer = setInterval(async () => {
+    if (settled) return;
+    try {
+      if (await checkPoll()) return;
+    } catch {
+      // Continue polling while OAuth completes
+    }
+    if (popup.closed && !settled) {
+      setTimeout(async () => {
+        if (settled) return;
+        try {
+          if (await checkPoll()) return;
+        } catch {
+          // Ignore
+        }
+        cleanup(true);
+      }, 400);
+    }
+  }, 1500);
+
+  return () => cleanup(true);
 }

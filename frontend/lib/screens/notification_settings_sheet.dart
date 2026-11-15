@@ -3,28 +3,18 @@ import 'package:flutter/material.dart';
 import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
 
-/// Per-device alert settings: pop-up on/off, sound on/off and a sound for
-/// each kind of message. Tapping a sound plays it.
-Future<void> showNotificationSettingsSheet(BuildContext context) {
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    backgroundColor: Colors.white,
-    builder: (_) => const _NotificationSettingsSheet(),
-  );
-}
-
-class _NotificationSettingsSheet extends StatefulWidget {
-  const _NotificationSettingsSheet();
+/// Inline collapsible per-device alert settings: pop-up on/off, sound on/off
+/// and a sound for each kind of message. Tapping a sound plays it.
+class NotificationSettingsInlinePanel extends StatefulWidget {
+  const NotificationSettingsInlinePanel({super.key});
 
   @override
-  State<_NotificationSettingsSheet> createState() =>
-      _NotificationSettingsSheetState();
+  State<NotificationSettingsInlinePanel> createState() =>
+      _NotificationSettingsInlinePanelState();
 }
 
-class _NotificationSettingsSheetState
-    extends State<_NotificationSettingsSheet> {
+class _NotificationSettingsInlinePanelState
+    extends State<NotificationSettingsInlinePanel> {
   final _svc = NotificationService.instance;
 
   Future<void> _pickSound(AlertKind kind, String code) async {
@@ -46,16 +36,11 @@ class _NotificationSettingsSheetState
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(context).height * 0.85,
-        ),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
               const Text(
                 'เสียงและการแจ้งเตือน',
                 style: TextStyle(
@@ -134,8 +119,6 @@ class _NotificationSettingsSheetState
               ),
             ],
           ),
-        ),
-      ),
-    );
+        );
   }
 }

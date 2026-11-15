@@ -16,7 +16,7 @@ export function UserAvatar({
   isAi?: boolean;
   isOfficial?: boolean;
 }) {
-  const initial = (name || "B").trim().charAt(0).toUpperCase();
+  const initial = (Array.from((name || "B").trim())[0] || "B").toUpperCase();
   const resolved = resolveMediaUrl(avatarUrl);
   const showImage = Boolean(resolved && !resolved.includes("ui-avatars.com"));
 
@@ -26,15 +26,19 @@ export function UserAvatar({
       ? "linear-gradient(135deg, var(--bc-deep), var(--bc-primary))"
       : "linear-gradient(135deg, var(--bc-primary), var(--bc-ring))";
 
-  if (showImage) {
+  if (showImage || isOfficial) {
     return (
       <img
-        src={resolved}
+        src={showImage ? resolved : "/icons/logo.png"}
         alt={name}
         width={size}
         height={size}
         style={{ width: size, height: size }}
-        className="shrink-0 rounded-full border border-[var(--bc-border)] object-cover"
+        className={
+          showImage
+            ? "shrink-0 rounded-full border border-[var(--bc-border)] object-cover"
+            : "shrink-0 rounded-full object-cover shadow-2xs"
+        }
       />
     );
   }

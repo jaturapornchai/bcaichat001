@@ -17,10 +17,18 @@ pub struct Claims {
     pub sub: String,
     pub email: String,
     pub role: String,
+    #[serde(default)]
+    pub tv: u32,
     pub exp: usize,
 }
 
-pub fn create_jwt(user_id: &str, email: &str, role: &str, secret: &str) -> Result<String, String> {
+pub fn create_jwt_versioned(
+    user_id: &str,
+    email: &str,
+    role: &str,
+    tv: u32,
+    secret: &str,
+) -> Result<String, String> {
     let expiration = Utc::now()
         .checked_add_signed(Duration::days(30))
         .expect("valid timestamp")
@@ -30,6 +38,7 @@ pub fn create_jwt(user_id: &str, email: &str, role: &str, secret: &str) -> Resul
         sub: user_id.to_string(),
         email: email.to_string(),
         role: role.to_string(),
+        tv,
         exp: expiration,
     };
 
@@ -39,6 +48,21 @@ pub fn create_jwt(user_id: &str, email: &str, role: &str, secret: &str) -> Resul
         &EncodingKey::from_secret(secret.as_bytes()),
     )
     .map_err(|e| format!("JWT encode error: {}", e))
+}
+
+pub fn create_jwt(user_id: &str, email: &str, role: &str, secret: &str) -> Result<String, String> {
+    create_jwt_versioned(user_id, email, role, 0, secret)
+}
+
+/// Zero-DB-overhead O(1) session revocation check against in-memory token_versions map.
+pub fn is_token_version_valid(state: &AppState, user_id: &str, claim_tv: u32) -> bool {
+    let min_tv = state
+        .token_versions
+        .read()
+        .ok()
+        .and_then(|m| m.get(user_id).copied())
+        .unwrap_or(0);
+    claim_tv >= min_tv
 }
 
 pub fn verify_jwt(token: &str, secret: &str) -> Result<Claims, String> {
@@ -88,6 +112,13 @@ impl ApiError {
     pub fn not_found(msg: impl Into<String>) -> Self {
         Self {
             status: StatusCode::NOT_FOUND,
+            message: msg.into(),
+        }
+    }
+
+    pub fn conflict(msg: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::CONFLICT,
             message: msg.into(),
         }
     }
@@ -175,6 +206,11 @@ impl FromRequestParts<AppState> for AuthUser {
         let token = token_opt.ok_or_else(|| ApiError::unauthorized("กรุณาเข้าสู่ระบบ (ไม่พบโทเคน)"))?;
         let claims = verify_jwt(&token, &state.config.jwt_secret)
             .map_err(|_| ApiError::unauthorized("โทเคนไม่ถูกต้องหรือหมดอายุ"))?;
+        if !is_token_version_valid(state, &claims.sub, claims.tv) {
+            return Err(ApiError::unauthorized(
+                "เซสชันหมดอายุจากการกู้คืนบัญชีหรือเปลี่ยนข้อมูลสำคัญ กรุณาเข้าสู่ระบบใหม่",
+            ));
+        }
 
         Ok(AuthUser {
             user_id: claims.sub,

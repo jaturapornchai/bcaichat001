@@ -3,22 +3,23 @@ use axum::{
     Json,
 };
 use bson::{doc, Regex};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use futures_util::TryStreamExt;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 use crate::{
     auth::{ApiError, AuthUser},
     models::{
-        AlbumDoc, AlbumDto, AttachmentInfo, ConversationDoc, ConversationDto,
-        ConversationMemberDto, EventData, FileDoc, LastMessageSummary, MessageDoc, MessageDto,
-        NoteComment, NoteDoc, NoteDto, PinnedMessageSummary, PollData, PollOption, ReplyInfo,
-        UserConvMeta, UserDoc, VaultFileItem, VaultLinkItem, VaultResponse,
+        compute_timed_window, resolve_effective_mute, AlbumDoc, AlbumDto, AttachmentInfo,
+        ContactCardData, ConversationDoc, ConversationDto, ConversationMemberDto, EventData,
+        FileDoc, FriendshipDoc, LadderGameData, LastMessageSummary, LocationData, MessageDoc,
+        MessageDto, NoteComment, NoteDoc, NoteDto, OaAccountDoc, PinnedMessageSummary, PollData,
+        PollOption, ReplyInfo, UserConvMeta, UserDoc, VaultFileItem, VaultLinkItem, VaultResponse,
     },
-    seed::ensure_direct_conversation,
+    seed::{ensure_direct_conversation, ensure_keep_conversation_for_user},
     AppState,
 };
 
@@ -40,25 +41,31 @@ pub async fn require_member(
         .await
         .map_err(|e| ApiError::internal(e.to_string()))?
         .ok_or_else(|| ApiError::not_found("ไม่พบห้องแชท"))?;
-    if !conv.member_ids.iter().any(|id| id == user_id) {
+    let is_oa_staff = conv.oa_id.is_some() && conv.admin_ids.iter().any(|id| id == user_id);
+    if !conv.member_ids.iter().any(|id| id == user_id) && !is_oa_staff {
         return Err(ApiError::forbidden("คุณไม่ได้เป็นสมาชิกของห้องแชทนี้"));
     }
     Ok(conv)
 }
 
-fn resolve_user_conv_meta(conv: &ConversationDoc, user_id: &str) -> (String, bool, bool, bool) {
+fn resolve_user_conv_meta(
+    conv: &ConversationDoc,
+    user_id: &str,
+) -> (String, bool, bool, Option<String>, bool) {
+    let (is_muted, muted_until) = resolve_effective_mute(conv, user_id, Utc::now());
     if let Some(meta) = conv.user_meta.get(user_id) {
         let folder = if meta.folder.is_empty() {
             conv.folder.clone()
         } else {
             meta.folder.clone()
         };
-        (folder, meta.is_pinned, meta.is_muted, meta.is_archived)
+        (folder, meta.is_pinned, is_muted, muted_until, meta.is_archived)
     } else {
         (
             conv.folder.clone(),
             conv.is_pinned,
-            conv.is_muted,
+            is_muted,
+            muted_until,
             conv.is_archived,
         )
     }
@@ -105,6 +112,7 @@ pub async fn build_conversation_dto(
         .map(|u| ConversationMemberDto {
             id: u.id.clone(),
             email: u.email.clone(),
+            phone: u.phone.clone(),
             display_name: u.display_name.clone(),
             bc_id: u.bc_id.clone(),
             avatar_url: u.avatar_url.clone(),
@@ -134,7 +142,28 @@ pub async fn build_conversation_dto(
             (conv.name.clone(), conv.avatar_url.clone())
         };
 
-    let (folder, is_pinned, is_muted, is_archived) = resolve_user_conv_meta(&conv, current_user_id);
+    let (folder, is_pinned, is_muted, muted_until, is_archived) =
+        resolve_user_conv_meta(&conv, current_user_id);
+
+    let is_blocked_by_me = if conv.conv_type == "direct" && conv.oa_id.is_none() {
+        if let Some(other_id) = conv.member_ids.iter().find(|id| *id != current_user_id) {
+            state
+                .db
+                .collection::<bson::Document>("friendships")
+                .count_documents(doc! {
+                    "user_id": current_user_id,
+                    "friend_id": other_id,
+                    "is_blocked": true,
+                })
+                .await
+                .unwrap_or(0)
+                > 0
+        } else {
+            false
+        }
+    } else {
+        false
+    };
 
     let unread_count = msg_coll
         .count_documents(doc! {
@@ -148,18 +177,37 @@ pub async fn build_conversation_dto(
         .unwrap_or(0) as usize;
 
     let mut last_message = conv.last_message.clone();
-    if let Some(ref mut lm) = last_message {
-        if let Ok(Some(mdoc)) = msg_coll.find_one(doc! { "_id": &lm.id }).await {
-            lm.read_count = mdoc
-                .read_by
-                .iter()
-                .filter(|uid| *uid != &mdoc.sender_id)
-                .count();
-            if mdoc.is_unsent {
-                lm.content = mdoc.content;
+    if let Some(lm_id) = last_message.as_ref().map(|lm| lm.id.clone()) {
+        if let Ok(Some(mdoc)) = msg_coll.find_one(doc! { "_id": &lm_id }).await {
+            if mdoc.deleted_for.iter().any(|uid| uid == current_user_id) {
+                last_message = None;
+            } else if let Some(ref mut lm) = last_message {
+                lm.read_count = mdoc
+                    .read_by
+                    .iter()
+                    .filter(|uid| *uid != &mdoc.sender_id)
+                    .count();
+                if mdoc.is_unsent {
+                    lm.content = mdoc.content;
+                }
             }
         }
     }
+
+    let (oa_handle, rich_menu) = if let Some(ref oid) = conv.oa_id {
+        if let Ok(Some(oa)) = state
+            .db
+            .collection::<OaAccountDoc>("oa_accounts")
+            .find_one(doc! { "_id": oid })
+            .await
+        {
+            (Some(oa.handle), oa.rich_menu)
+        } else {
+            (conv.oa_handle.clone(), Vec::new())
+        }
+    } else {
+        (conv.oa_handle.clone(), Vec::new())
+    };
 
     let member_count = conv.member_ids.len().max(members.len());
     Ok(ConversationDto {
@@ -170,10 +218,15 @@ pub async fn build_conversation_dto(
         folder,
         is_pinned,
         is_muted,
+        muted_until,
+        is_blocked_by_me,
         is_archived,
         invite_token: conv.invite_token,
         admin_ids: conv.admin_ids,
         member_ids: conv.member_ids,
+        oa_id: conv.oa_id,
+        oa_handle,
+        rich_menu,
         pinned_message: conv.pinned_message,
         unread_count,
         member_count,
@@ -241,6 +294,76 @@ pub async fn list_conversations_handler(
     let lm_map: HashMap<String, MessageDoc> =
         lm_docs.into_iter().map(|m| (m.id.clone(), m)).collect();
 
+    // Batch fetch OA accounts in 1 query (prevent N+1)
+    let mut all_oa_ids: Vec<String> = docs.iter().filter_map(|c| c.oa_id.clone()).collect();
+    all_oa_ids.sort();
+    all_oa_ids.dedup();
+    let oa_map: HashMap<String, OaAccountDoc> = if all_oa_ids.is_empty() {
+        HashMap::new()
+    } else {
+        state
+            .db
+            .collection::<OaAccountDoc>("oa_accounts")
+            .find(doc! { "_id": { "$in": &all_oa_ids } })
+            .await
+            .map_err(|e| ApiError::internal(e.to_string()))?
+            .try_collect::<Vec<OaAccountDoc>>()
+            .await
+            .map_err(|e| ApiError::internal(e.to_string()))?
+            .into_iter()
+            .map(|o| (o.id.clone(), o))
+            .collect()
+    };
+
+    // Batch unread counts across ALL conversations in 1 MongoDB aggregate (0 N+1 queries)
+    let conv_ids: Vec<String> = docs.iter().map(|c| c.id.clone()).collect();
+    let mut unread_map: HashMap<String, usize> = HashMap::new();
+    if !conv_ids.is_empty() {
+        let pipeline = vec![
+            doc! {
+                "$match": {
+                    "conversation_id": { "$in": &conv_ids },
+                    "sender_id": { "$ne": &auth.user_id },
+                    "read_by": { "$ne": &auth.user_id },
+                    "deleted_for": { "$ne": &auth.user_id },
+                    "is_unsent": false,
+                }
+            },
+            doc! {
+                "$group": {
+                    "_id": "$conversation_id",
+                    "count": { "$sum": 1_i32 }
+                }
+            },
+        ];
+        if let Ok(mut agg_cursor) = msg_coll.aggregate(pipeline).await {
+            while let Ok(Some(row)) = agg_cursor.try_next().await {
+                if let Ok(cid) = row.get_str("_id") {
+                    let cnt = row
+                        .get_i32("count")
+                        .map(|v| v as usize)
+                        .or_else(|_| row.get_i64("count").map(|v| v as usize))
+                        .unwrap_or(0);
+                    unread_map.insert(cid.to_string(), cnt);
+                }
+            }
+        }
+    }
+
+    // Batch fetch blocked friend IDs in 1 query for is_blocked_by_me
+    let blocked_friend_ids: HashSet<String> = state
+        .db
+        .collection::<FriendshipDoc>("friendships")
+        .find(doc! { "user_id": &auth.user_id, "is_blocked": true })
+        .await
+        .map_err(|e| ApiError::internal(e.to_string()))?
+        .try_collect::<Vec<FriendshipDoc>>()
+        .await
+        .map_err(|e| ApiError::internal(e.to_string()))?
+        .into_iter()
+        .map(|f| f.friend_id)
+        .collect();
+
     let mut dtos = Vec::with_capacity(docs.len());
     for mut conv in docs {
         if conv.conv_type == "group" && conv.invite_token.is_empty() {
@@ -264,6 +387,7 @@ pub async fn list_conversations_handler(
             .map(|u| ConversationMemberDto {
                 id: u.id.clone(),
                 email: u.email.clone(),
+                phone: u.phone.clone(),
                 display_name: u.display_name.clone(),
                 bc_id: u.bc_id.clone(),
                 avatar_url: u.avatar_url.clone(),
@@ -293,33 +417,45 @@ pub async fn list_conversations_handler(
                 (conv.name.clone(), conv.avatar_url.clone())
             };
 
-        let (folder, is_pinned, is_muted, is_archived) =
+        let (folder, is_pinned, is_muted, muted_until, is_archived) =
             resolve_user_conv_meta(&conv, &auth.user_id);
 
-        let unread_count = msg_coll
-            .count_documents(doc! {
-                "conversation_id": &conv.id,
-                "sender_id": { "$ne": &auth.user_id },
-                "read_by": { "$ne": &auth.user_id },
-                "deleted_for": { "$ne": &auth.user_id },
-                "is_unsent": false,
-            })
-            .await
-            .unwrap_or(0) as usize;
+        let is_blocked_by_me = conv.conv_type == "direct"
+            && conv.oa_id.is_none()
+            && conv
+                .member_ids
+                .iter()
+                .any(|id| id != &auth.user_id && blocked_friend_ids.contains(id));
+
+        let unread_count = unread_map.get(&conv.id).copied().unwrap_or(0);
 
         let mut last_message = conv.last_message.clone();
-        if let Some(ref mut lm) = last_message {
-            if let Some(mdoc) = lm_map.get(&lm.id) {
-                lm.read_count = mdoc
-                    .read_by
-                    .iter()
-                    .filter(|uid| *uid != &mdoc.sender_id)
-                    .count();
-                if mdoc.is_unsent {
-                    lm.content = mdoc.content.clone();
+        if let Some(lm_id) = last_message.as_ref().map(|lm| lm.id.clone()) {
+            if let Some(mdoc) = lm_map.get(&lm_id) {
+                if mdoc.deleted_for.iter().any(|uid| uid == &auth.user_id) {
+                    last_message = None;
+                } else if let Some(ref mut lm) = last_message {
+                    lm.read_count = mdoc
+                        .read_by
+                        .iter()
+                        .filter(|uid| *uid != &mdoc.sender_id)
+                        .count();
+                    if mdoc.is_unsent {
+                        lm.content = mdoc.content.clone();
+                    }
                 }
             }
         }
+
+        let (oa_handle, rich_menu) = if let Some(ref oid) = conv.oa_id {
+            if let Some(oa) = oa_map.get(oid) {
+                (Some(oa.handle.clone()), oa.rich_menu.clone())
+            } else {
+                (conv.oa_handle.clone(), Vec::new())
+            }
+        } else {
+            (conv.oa_handle.clone(), Vec::new())
+        };
 
         let member_count = conv.member_ids.len().max(members.len());
         let dto = ConversationDto {
@@ -330,10 +466,15 @@ pub async fn list_conversations_handler(
             folder,
             is_pinned,
             is_muted,
+            muted_until,
+            is_blocked_by_me,
             is_archived,
             invite_token: conv.invite_token,
             admin_ids: conv.admin_ids,
             member_ids: conv.member_ids,
+            oa_id: conv.oa_id,
+            oa_handle,
+            rich_menu,
             pinned_message: conv.pinned_message,
             unread_count,
             member_count,
@@ -345,7 +486,9 @@ pub async fn list_conversations_handler(
 
         let keep = match folder_filter.as_str() {
             "all" | "" => true,
-            "personal" => dto.folder == "personal" && !dto.is_archived,
+            "personal" => {
+                (dto.folder == "personal" || dto.conv_type == "keep") && !dto.is_archived
+            }
             "family" | "work" => {
                 (dto.folder == "family" || dto.folder == "work") && !dto.is_archived
             }
@@ -355,6 +498,7 @@ pub async fn list_conversations_handler(
             "pinned" => dto.is_pinned && !dto.is_archived,
             "unread" => dto.unread_count > 0 && !dto.is_archived,
             "archived" | "archive" => dto.is_archived,
+            "keep" => dto.conv_type == "keep",
             other => dto.folder == other,
         };
 
@@ -474,6 +618,8 @@ pub async fn create_group_conversation_handler(
         invite_token: generate_invite_token(),
         admin_ids: vec![me.id.clone()],
         member_ids: members,
+        oa_id: None,
+        oa_handle: None,
         user_meta: HashMap::new(),
         pinned_message: None,
         last_message: Some(LastMessageSummary {
@@ -523,6 +669,11 @@ pub async fn create_group_conversation_handler(
         audio_duration_sec: None,
         poll: None,
         event_data: None,
+        location_data: None,
+        contact_data: None,
+        ladder_data: None,
+        edited_at: None,
+        forwarded_from: None,
         deleted_for: Vec::new(),
         created_at: now,
     };
@@ -545,6 +696,8 @@ pub struct UpdateConvMetaRequest {
     pub folder: Option<String>,
     pub is_pinned: Option<bool>,
     pub is_muted: Option<bool>,
+    pub mute_duration: Option<String>,
+    pub muted_until: Option<String>,
     pub is_archived: Option<bool>,
     pub name: Option<String>,
     pub avatar_url: Option<String>,
@@ -559,7 +712,7 @@ pub async fn update_conversation_meta_handler(
     let conv_coll = state.db.collection::<ConversationDoc>("conversations");
     let mut conv = require_member(&state, &conv_id, &auth.user_id).await?;
 
-    let (cur_folder, cur_pinned, cur_muted, cur_archived) =
+    let (cur_folder, cur_pinned, cur_muted, cur_muted_until, cur_archived) =
         resolve_user_conv_meta(&conv, &auth.user_id);
     let entry = conv
         .user_meta
@@ -568,6 +721,7 @@ pub async fn update_conversation_meta_handler(
             folder: cur_folder,
             is_pinned: cur_pinned,
             is_muted: cur_muted,
+            muted_until: cur_muted_until,
             is_archived: cur_archived,
         });
 
@@ -580,9 +734,48 @@ pub async fn update_conversation_meta_handler(
     if let Some(pinned) = payload.is_pinned {
         entry.is_pinned = pinned;
     }
-    if let Some(muted) = payload.is_muted {
+
+    if let Some(ref mode) = payload.mute_duration {
+        let trimmed = mode.trim();
+        if !trimmed.is_empty() {
+            match compute_timed_window(trimmed, Utc::now()) {
+                Some((false, _)) => {
+                    entry.is_muted = false;
+                    entry.muted_until = None;
+                }
+                Some((true, Some(until))) => {
+                    entry.is_muted = true;
+                    entry.muted_until = Some(until);
+                }
+                Some((true, None)) => {
+                    entry.is_muted = true;
+                    entry.muted_until = None;
+                }
+                None => {
+                    return Err(ApiError::bad_request(
+                        "รูปแบบ mute_duration ไม่ถูกต้อง (รองรับ off, 1h, 8h, until_8am, forever)",
+                    ));
+                }
+            }
+        }
+    } else if let Some(raw_until) = payload.muted_until {
+        let trimmed = raw_until.trim();
+        if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("off") {
+            entry.is_muted = false;
+            entry.muted_until = None;
+        } else if DateTime::parse_from_rfc3339(trimmed).is_ok() {
+            entry.is_muted = true;
+            entry.muted_until = Some(trimmed.to_string());
+        } else {
+            return Err(ApiError::bad_request("รูปแบบเวลา muted_until ไม่ถูกต้อง"));
+        }
+    } else if let Some(muted) = payload.is_muted {
         entry.is_muted = muted;
+        if !muted {
+            entry.muted_until = None;
+        }
     }
+
     if let Some(archived) = payload.is_archived {
         entry.is_archived = archived;
     }
@@ -650,6 +843,11 @@ async fn insert_and_broadcast_system_msg(
         audio_duration_sec: None,
         poll: None,
         event_data: None,
+        location_data: None,
+        contact_data: None,
+        ladder_data: None,
+        edited_at: None,
+        forwarded_from: None,
         deleted_for: Vec::new(),
         created_at: now.clone(),
     };
@@ -999,6 +1197,10 @@ pub struct SendMessageRequest {
     pub audio_duration_sec: Option<u32>,
     pub poll: Option<PollData>,
     pub event_data: Option<EventData>,
+    pub location_data: Option<LocationData>,
+    pub contact_data: Option<ContactCardData>,
+    pub ladder_data: Option<LadderGameData>,
+    pub forwarded_from: Option<String>,
 }
 
 pub async fn send_message_handler(
@@ -1019,15 +1221,106 @@ pub async fn send_message_handler(
 
     let mut conv = require_member(&state, &conv_id, &auth.user_id).await?;
 
+    // Check friendship blocks (1-1 sender block -> 400; 1-1 recipient block -> LINE silent drop; group -> WS/push exclusion)
+    let friends_coll = state.db.collection::<FriendshipDoc>("friendships");
+    let other_member_ids: Vec<String> = conv
+        .member_ids
+        .iter()
+        .filter(|id| *id != &sender.id)
+        .cloned()
+        .collect();
+
+    if conv.conv_type == "direct" && conv.oa_id.is_none() {
+        if let Some(peer_id) = other_member_ids.first() {
+            let blocked_by_sender = friends_coll
+                .count_documents(doc! {
+                    "user_id": &sender.id,
+                    "friend_id": peer_id,
+                    "is_blocked": true,
+                })
+                .await
+                .map_err(|e| ApiError::internal(e.to_string()))?
+                > 0;
+            if blocked_by_sender {
+                return Err(ApiError::bad_request(
+                    "คุณได้บล็อกผู้ใช้นี้ กรุณาปลดบล็อกก่อนส่งข้อความ",
+                ));
+            }
+        }
+    }
+
+    let excluded_user_ids: Vec<String> = if other_member_ids.is_empty() {
+        Vec::new()
+    } else {
+        friends_coll
+            .find(doc! {
+                "friend_id": &sender.id,
+                "user_id": { "$in": &other_member_ids },
+                "is_blocked": true,
+            })
+            .await
+            .map_err(|e| ApiError::internal(e.to_string()))?
+            .try_collect::<Vec<FriendshipDoc>>()
+            .await
+            .map_err(|e| ApiError::internal(e.to_string()))?
+            .into_iter()
+            .map(|f| f.user_id)
+            .collect()
+    };
+
+    let is_direct_silently_blocked = conv.conv_type == "direct"
+        && conv.oa_id.is_none()
+        && other_member_ids
+            .first()
+            .is_some_and(|pid| excluded_user_ids.contains(pid));
+
+    let mut location_data = payload.location_data;
+    if let Some(ref mut loc) = location_data {
+        if !loc.latitude.is_finite()
+            || !loc.longitude.is_finite()
+            || !(-90.0..=90.0).contains(&loc.latitude)
+            || !(-180.0..=180.0).contains(&loc.longitude)
+        {
+            return Err(ApiError::bad_request("พิกัดละติจูด/ลองจิจูดไม่ถูกต้อง"));
+        }
+        if loc.map_url.trim().is_empty() {
+            loc.map_url = format!(
+                "https://www.google.com/maps/search/?api=1&query={},{}",
+                loc.latitude, loc.longitude
+            );
+        }
+        if loc.title.trim().is_empty() {
+            loc.title = format!("{:.5}, {:.5}", loc.latitude, loc.longitude);
+        } else {
+            loc.title = loc.title.trim().to_string();
+        }
+        loc.address = loc.address.trim().to_string();
+    }
+
     let raw_type = payload
         .msg_type
-        .unwrap_or_else(|| "text".to_string())
-        .to_lowercase();
+        .map(|t| t.trim().to_lowercase())
+        .filter(|t| !t.is_empty())
+        .unwrap_or_else(|| {
+            if location_data.is_some() {
+                "location".to_string()
+            } else if payload.contact_data.is_some() {
+                "contact".to_string()
+            } else if payload.ladder_data.is_some() {
+                "ladder".to_string()
+            } else {
+                "text".to_string()
+            }
+        });
     let msg_type = if raw_type == "flex_card" {
         "rich_card".to_string()
     } else {
         raw_type
     };
+
+    if msg_type == "location" && location_data.is_none() {
+        return Err(ApiError::bad_request("พิกัดละติจูด/ลองจิจูดไม่ถูกต้อง"));
+    }
 
     let effective_card = payload.card_payload.or(payload.flex_payload);
 
@@ -1057,6 +1350,20 @@ pub async fn send_message_handler(
                 .as_ref()
                 .map(|e| format!("📅 นัดหมาย: {}", e.title))
                 .unwrap_or_else(|| "[นัดหมาย]".to_string()),
+            "location" => location_data
+                .as_ref()
+                .map(|l| format!("📍 ตำแหน่งที่ตั้ง: {}", l.title))
+                .unwrap_or_else(|| "📍 ตำแหน่งที่ตั้ง".to_string()),
+            "contact" => payload
+                .contact_data
+                .as_ref()
+                .map(|c| format!("👤 แนะนำเพื่อน: {}", c.display_name.trim()))
+                .unwrap_or_else(|| "👤 แนะนำเพื่อน".to_string()),
+            "ladder" => payload
+                .ladder_data
+                .as_ref()
+                .map(|g| format!("🎲 เกมสุ่มบันได: {}", g.title.trim()))
+                .unwrap_or_else(|| "🎲 เกมสุ่มบันได".to_string()),
             _ => "".to_string(),
         };
     }
@@ -1131,7 +1438,19 @@ pub async fn send_message_handler(
         audio_duration_sec: payload.audio_duration_sec,
         poll: payload.poll,
         event_data: payload.event_data,
-        deleted_for: Vec::new(),
+        location_data,
+        contact_data: payload.contact_data,
+        ladder_data: payload.ladder_data,
+        edited_at: None,
+        forwarded_from: payload
+            .forwarded_from
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()),
+        deleted_for: if is_direct_silently_blocked {
+            excluded_user_ids.clone()
+        } else {
+            Vec::new()
+        },
         created_at: now.clone(),
     };
 
@@ -1140,38 +1459,58 @@ pub async fn send_message_handler(
         .await
         .map_err(|e| ApiError::internal(e.to_string()))?;
 
-    let preview_content = if payload.is_confidential {
-        format!("🔒 [ข้อความลับส่วนตัวล็อก PIN] {}", content)
-    } else {
-        content
-    };
+    let sender_id_clone = sender.id.clone();
 
-    conv.last_message = Some(LastMessageSummary {
-        id: msg_id,
-        sender_id: sender.id,
-        sender_name: sender.display_name,
-        msg_type,
-        content: preview_content,
-        created_at: now.clone(),
-        read_count: 0,
-    });
-    conv.updated_at = now;
+    if !is_direct_silently_blocked {
+        let preview_content = if payload.is_confidential {
+            format!("🔒 [ข้อความลับส่วนตัวล็อก PIN] {}", content)
+        } else {
+            content
+        };
 
-    let _ = conv_coll
-        .replace_one(doc! { "_id": &conv_id }, &conv)
-        .await;
+        conv.last_message = Some(LastMessageSummary {
+            id: msg_id,
+            sender_id: sender.id,
+            sender_name: sender.display_name,
+            msg_type,
+            content: preview_content,
+            created_at: now.clone(),
+            read_count: 0,
+        });
+        conv.updated_at = now;
+
+        let _ = conv_coll
+            .replace_one(doc! { "_id": &conv_id }, &conv)
+            .await;
+    }
 
     let dto = MessageDto::from(msg_doc.clone());
+
+    if is_direct_silently_blocked {
+        state.ws_hub.broadcast_event(json!({
+            "event": "new_message",
+            "conversation_id": conv_id,
+            "target_user_ids": [&sender_id_clone],
+            "excluded_user_ids": &excluded_user_ids,
+            "message": dto,
+        }));
+        return Ok(Json(dto));
+    }
 
     state.ws_hub.broadcast_event(json!({
         "event": "new_message",
         "conversation_id": conv_id,
+        "excluded_user_ids": &excluded_user_ids,
         "message": dto,
     }));
     crate::push::notify_new_message(&state, &conv, &dto);
 
-    // Trigger BC AI Co-Pilot if message is in 1-1 chat with AI or mentions @ai
-    let _ = crate::routes::ai_routes::maybe_trigger_ai_reply(&state, &mut conv, &msg_doc).await;
+    if conv.oa_id.is_some() {
+        crate::routes::oa_routes::handle_customer_message_to_oa(&state, &mut conv, &msg_doc).await;
+    } else {
+        // Trigger BC AI Co-Pilot if message is in 1-1 chat with AI or mentions @ai
+        let _ = crate::routes::ai_routes::maybe_trigger_ai_reply(&state, &mut conv, &msg_doc).await;
+    }
 
     Ok(Json(dto))
 }
@@ -1341,6 +1680,11 @@ pub async fn create_poll_handler(
         audio_duration_sec: None,
         poll: Some(poll_data),
         event_data: None,
+        location_data: None,
+        contact_data: None,
+        ladder_data: None,
+        edited_at: None,
+        forwarded_from: None,
         deleted_for: Vec::new(),
         created_at: now.clone(),
     };
@@ -1552,6 +1896,11 @@ pub async fn create_event_handler(
         audio_duration_sec: None,
         poll: None,
         event_data: Some(ev_data),
+        location_data: None,
+        contact_data: None,
+        ladder_data: None,
+        edited_at: None,
+        forwarded_from: None,
         deleted_for: Vec::new(),
         created_at: now.clone(),
     };
@@ -2657,6 +3006,438 @@ pub async fn approve_card_handler(
     state.ws_hub.broadcast_event(json!({
         "event": "message_updated",
         "conversation_id": dto.conversation_id,
+        "message": dto,
+    }));
+
+    Ok(Json(dto))
+}
+
+// =============================================================================
+// Wave 4: Edit Message, Forward Message, Personal Keep Memo (#60)
+// =============================================================================
+
+#[derive(Debug, Deserialize)]
+pub struct EditMessageRequest {
+    pub content: String,
+}
+
+pub async fn edit_message_handler(
+    auth: AuthUser,
+    Path(msg_id): Path<String>,
+    State(state): State<AppState>,
+    Json(payload): Json<EditMessageRequest>,
+) -> Result<Json<MessageDto>, ApiError> {
+    let trimmed = payload.content.trim().to_string();
+    if trimmed.is_empty() {
+        return Err(ApiError::bad_request("กรุณาระบุข้อความที่ต้องการแก้ไข"));
+    }
+    if trimmed.chars().count() > 4000 {
+        return Err(ApiError::bad_request("ข้อความต้องมีความยาวไม่เกิน 4,000 ตัวอักษร"));
+    }
+
+    let msg_coll = state.db.collection::<MessageDoc>("messages");
+    let conv_coll = state.db.collection::<ConversationDoc>("conversations");
+
+    let mut msg = msg_coll
+        .find_one(doc! { "_id": &msg_id })
+        .await
+        .map_err(|e| ApiError::internal(e.to_string()))?
+        .ok_or_else(|| ApiError::not_found("ไม่พบข้อความที่ต้องการแก้ไข"))?;
+
+    let mut conv = require_member(&state, &msg.conversation_id, &auth.user_id).await?;
+
+    if msg.sender_id != auth.user_id {
+        return Err(ApiError::forbidden(
+            "คุณสามารถแก้ไขได้เฉพาะข้อความของตัวเองเท่านั้น",
+        ));
+    }
+    if msg.is_unsent {
+        return Err(ApiError::bad_request("ไม่สามารถแก้ไขข้อความที่ยกเลิกแล้วได้"));
+    }
+    if msg.msg_type != "text" {
+        return Err(ApiError::bad_request("แก้ไขได้เฉพาะข้อความตัวอักษรเท่านั้น"));
+    }
+
+    let now = Utc::now().to_rfc3339();
+    msg.content = trimmed.clone();
+    msg.edited_at = Some(now.clone());
+
+    msg_coll
+        .update_one(
+            doc! { "_id": &msg_id },
+            doc! {
+                "$set": {
+                    "content": &msg.content,
+                    "edited_at": &now,
+                }
+            },
+        )
+        .await
+        .map_err(|e| ApiError::internal(e.to_string()))?;
+
+    if let Some(ref mut lm) = conv.last_message {
+        if lm.id == msg.id {
+            lm.content = if msg.is_confidential {
+                format!("🔒 [ข้อความลับส่วนตัวล็อก PIN] {}", trimmed)
+            } else {
+                trimmed
+            };
+            let _ = conv_coll
+                .replace_one(doc! { "_id": &conv.id }, &conv)
+                .await;
+        }
+    }
+
+    let other_member_ids: Vec<String> = conv
+        .member_ids
+        .iter()
+        .filter(|id| *id != &auth.user_id)
+        .cloned()
+        .collect();
+    let excluded_user_ids: Vec<String> = if other_member_ids.is_empty() {
+        Vec::new()
+    } else {
+        state
+            .db
+            .collection::<FriendshipDoc>("friendships")
+            .find(doc! {
+                "friend_id": &auth.user_id,
+                "user_id": { "$in": &other_member_ids },
+                "is_blocked": true,
+            })
+            .await
+            .map_err(|e| ApiError::internal(e.to_string()))?
+            .try_collect::<Vec<FriendshipDoc>>()
+            .await
+            .map_err(|e| ApiError::internal(e.to_string()))?
+            .into_iter()
+            .map(|f| f.user_id)
+            .collect()
+    };
+
+    let dto = MessageDto::from(msg);
+    state.ws_hub.broadcast_event(json!({
+        "event": "message_edited",
+        "conversation_id": dto.conversation_id,
+        "excluded_user_ids": excluded_user_ids,
+        "message": dto,
+    }));
+
+    Ok(Json(dto))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ForwardMessageRequest {
+    pub target_conversation_ids: Vec<String>,
+}
+
+pub async fn forward_message_handler(
+    auth: AuthUser,
+    Path(msg_id): Path<String>,
+    State(state): State<AppState>,
+    Json(payload): Json<ForwardMessageRequest>,
+) -> Result<Json<Value>, ApiError> {
+    let mut target_ids: Vec<String> = Vec::new();
+    for raw in &payload.target_conversation_ids {
+        let t = raw.trim();
+        if !t.is_empty() && !target_ids.iter().any(|existing| existing == t) {
+            target_ids.push(t.to_string());
+        }
+    }
+    if target_ids.is_empty() || target_ids.len() > 10 {
+        return Err(ApiError::bad_request(
+            "กรุณาเลือกห้องปลายทางสำหรับส่งต่อ 1 ถึง 10 ห้อง",
+        ));
+    }
+
+    let users_coll = state.db.collection::<UserDoc>("users");
+    let conv_coll = state.db.collection::<ConversationDoc>("conversations");
+    let msg_coll = state.db.collection::<MessageDoc>("messages");
+    let friends_coll = state.db.collection::<FriendshipDoc>("friendships");
+
+    let sender = users_coll
+        .find_one(doc! { "_id": &auth.user_id })
+        .await
+        .map_err(|e| ApiError::internal(e.to_string()))?
+        .ok_or_else(|| ApiError::not_found("ไม่พบข้อมูลผู้ใช้"))?;
+
+    let orig = msg_coll
+        .find_one(doc! { "_id": &msg_id })
+        .await
+        .map_err(|e| ApiError::internal(e.to_string()))?
+        .ok_or_else(|| ApiError::not_found("ไม่พบข้อความต้นทาง"))?;
+
+    require_member(&state, &orig.conversation_id, &auth.user_id).await?;
+    if orig.is_unsent || orig.deleted_for.contains(&auth.user_id) {
+        return Err(ApiError::bad_request(
+            "ไม่สามารถส่งต่อข้อความที่ถูกลบหรือยกเลิกแล้วได้",
+        ));
+    }
+
+    let mut forwarded_messages: Vec<MessageDto> = Vec::new();
+
+    for target_conv_id in target_ids {
+        let Ok(mut conv) = require_member(&state, &target_conv_id, &auth.user_id).await else {
+            continue;
+        };
+
+        let other_member_ids: Vec<String> = conv
+            .member_ids
+            .iter()
+            .filter(|id| *id != &sender.id)
+            .cloned()
+            .collect();
+
+        if conv.conv_type == "direct" && conv.oa_id.is_none() {
+            if let Some(peer_id) = other_member_ids.first() {
+                let blocked_by_sender = friends_coll
+                    .count_documents(doc! {
+                        "user_id": &sender.id,
+                        "friend_id": peer_id,
+                        "is_blocked": true,
+                    })
+                    .await
+                    .unwrap_or(0)
+                    > 0;
+                if blocked_by_sender {
+                    continue;
+                }
+            }
+        }
+
+        let excluded_user_ids: Vec<String> = if other_member_ids.is_empty() {
+            Vec::new()
+        } else if let Ok(cur) = friends_coll
+            .find(doc! {
+                "friend_id": &sender.id,
+                "user_id": { "$in": &other_member_ids },
+                "is_blocked": true,
+            })
+            .await
+        {
+            cur.try_collect::<Vec<FriendshipDoc>>()
+                .await
+                .unwrap_or_default()
+                .into_iter()
+                .map(|f| f.user_id)
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+        let is_direct_silently_blocked = conv.conv_type == "direct"
+            && conv.oa_id.is_none()
+            && other_member_ids
+                .first()
+                .is_some_and(|pid| excluded_user_ids.contains(pid));
+
+        let now = Utc::now().to_rfc3339();
+        let new_id = Uuid::new_v4().to_string();
+
+        let fwd_doc = MessageDoc {
+            id: new_id.clone(),
+            conversation_id: conv.id.clone(),
+            sender_id: sender.id.clone(),
+            sender_name: sender.display_name.clone(),
+            sender_avatar: sender.avatar_url.clone(),
+            msg_type: orig.msg_type.clone(),
+            content: orig.content.clone(),
+            sticker_code: orig.sticker_code.clone(),
+            attachment: orig.attachment.clone(),
+            card_payload: orig.card_payload.clone(),
+            flex_payload: orig.flex_payload.clone(),
+            reply_to: None,
+            read_by: vec![sender.id.clone()],
+            is_unsent: false,
+            is_confidential: false,
+            confidential_pin: None,
+            expire_at: None,
+            priority: "normal".to_string(),
+            task_status: None,
+            accepted_by: None,
+            accepted_at: None,
+            reactions: HashMap::new(),
+            mentions: Vec::new(),
+            audio_duration_sec: orig.audio_duration_sec,
+            poll: orig.poll.clone(),
+            event_data: orig.event_data.clone(),
+            location_data: orig.location_data.clone(),
+            contact_data: orig.contact_data.clone(),
+            ladder_data: orig.ladder_data.clone(),
+            edited_at: None,
+            forwarded_from: Some(orig.sender_name.clone()),
+            deleted_for: if is_direct_silently_blocked {
+                excluded_user_ids.clone()
+            } else {
+                Vec::new()
+            },
+            created_at: now.clone(),
+        };
+
+        if msg_coll.insert_one(&fwd_doc).await.is_err() {
+            continue;
+        }
+
+        let dto = MessageDto::from(fwd_doc);
+
+        if is_direct_silently_blocked {
+            state.ws_hub.broadcast_event(json!({
+                "event": "new_message",
+                "conversation_id": conv.id,
+                "target_user_ids": [&sender.id],
+                "excluded_user_ids": &excluded_user_ids,
+                "message": dto,
+            }));
+        } else {
+            conv.last_message = Some(LastMessageSummary {
+                id: new_id,
+                sender_id: sender.id.clone(),
+                sender_name: sender.display_name.clone(),
+                msg_type: dto.msg_type.clone(),
+                content: dto.content.clone(),
+                created_at: now.clone(),
+                read_count: 0,
+            });
+            conv.updated_at = now;
+            let _ = conv_coll
+                .replace_one(doc! { "_id": &conv.id }, &conv)
+                .await;
+
+            state.ws_hub.broadcast_event(json!({
+                "event": "new_message",
+                "conversation_id": conv.id,
+                "excluded_user_ids": &excluded_user_ids,
+                "message": dto,
+            }));
+            crate::push::notify_new_message(&state, &conv, &dto);
+        }
+
+        forwarded_messages.push(dto);
+    }
+
+    Ok(Json(json!({
+        "forwarded_count": forwarded_messages.len(),
+        "messages": forwarded_messages,
+    })))
+}
+
+pub async fn ensure_keep_conversation_handler(
+    auth: AuthUser,
+    State(state): State<AppState>,
+) -> Result<Json<ConversationDto>, ApiError> {
+    let users_coll = state.db.collection::<UserDoc>("users");
+    let me = users_coll
+        .find_one(doc! { "_id": &auth.user_id })
+        .await
+        .map_err(|e| ApiError::internal(e.to_string()))?
+        .ok_or_else(|| ApiError::not_found("ไม่พบข้อมูลผู้ใช้"))?;
+
+    let conv = ensure_keep_conversation_for_user(&state, &me)
+        .await
+        .map_err(ApiError::internal)?;
+    let dto = build_conversation_dto(&state, conv, &auth.user_id)
+        .await
+        .map_err(ApiError::internal)?;
+
+    Ok(Json(dto))
+}
+
+pub async fn save_message_to_keep_handler(
+    auth: AuthUser,
+    Path(msg_id): Path<String>,
+    State(state): State<AppState>,
+) -> Result<Json<MessageDto>, ApiError> {
+    let users_coll = state.db.collection::<UserDoc>("users");
+    let conv_coll = state.db.collection::<ConversationDoc>("conversations");
+    let msg_coll = state.db.collection::<MessageDoc>("messages");
+
+    let me = users_coll
+        .find_one(doc! { "_id": &auth.user_id })
+        .await
+        .map_err(|e| ApiError::internal(e.to_string()))?
+        .ok_or_else(|| ApiError::not_found("ไม่พบข้อมูลผู้ใช้"))?;
+
+    let orig = msg_coll
+        .find_one(doc! { "_id": &msg_id })
+        .await
+        .map_err(|e| ApiError::internal(e.to_string()))?
+        .ok_or_else(|| ApiError::not_found("ไม่พบข้อความต้นทาง"))?;
+
+    require_member(&state, &orig.conversation_id, &auth.user_id).await?;
+    if orig.is_unsent || orig.deleted_for.contains(&auth.user_id) {
+        return Err(ApiError::bad_request(
+            "ไม่สามารถบันทึกข้อความที่ถูกลบหรือยกเลิกแล้วเข้า Keep ได้",
+        ));
+    }
+
+    let mut keep_conv = ensure_keep_conversation_for_user(&state, &me)
+        .await
+        .map_err(ApiError::internal)?;
+
+    let now = Utc::now().to_rfc3339();
+    let new_id = Uuid::new_v4().to_string();
+
+    let saved_doc = MessageDoc {
+        id: new_id.clone(),
+        conversation_id: keep_conv.id.clone(),
+        sender_id: me.id.clone(),
+        sender_name: me.display_name.clone(),
+        sender_avatar: me.avatar_url.clone(),
+        msg_type: orig.msg_type.clone(),
+        content: orig.content.clone(),
+        sticker_code: orig.sticker_code,
+        attachment: orig.attachment,
+        card_payload: orig.card_payload,
+        flex_payload: orig.flex_payload,
+        reply_to: None,
+        read_by: vec![me.id.clone()],
+        is_unsent: false,
+        is_confidential: false,
+        confidential_pin: None,
+        expire_at: None,
+        priority: "silent".to_string(),
+        task_status: None,
+        accepted_by: None,
+        accepted_at: None,
+        reactions: HashMap::new(),
+        mentions: Vec::new(),
+        audio_duration_sec: orig.audio_duration_sec,
+        poll: orig.poll,
+        event_data: orig.event_data,
+        location_data: orig.location_data,
+        contact_data: orig.contact_data,
+        ladder_data: orig.ladder_data,
+        edited_at: None,
+        forwarded_from: Some(orig.sender_name),
+        deleted_for: Vec::new(),
+        created_at: now.clone(),
+    };
+
+    msg_coll
+        .insert_one(&saved_doc)
+        .await
+        .map_err(|e| ApiError::internal(e.to_string()))?;
+
+    let dto = MessageDto::from(saved_doc);
+
+    keep_conv.last_message = Some(LastMessageSummary {
+        id: new_id,
+        sender_id: me.id.clone(),
+        sender_name: me.display_name,
+        msg_type: dto.msg_type.clone(),
+        content: dto.content.clone(),
+        created_at: now.clone(),
+        read_count: 0,
+    });
+    keep_conv.updated_at = now;
+    let _ = conv_coll
+        .replace_one(doc! { "_id": &keep_conv.id }, &keep_conv)
+        .await;
+
+    state.ws_hub.broadcast_event(json!({
+        "event": "new_message",
+        "conversation_id": keep_conv.id,
+        "target_user_ids": [&me.id],
         "message": dto,
     }));
 

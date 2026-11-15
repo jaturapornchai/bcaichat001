@@ -4,13 +4,18 @@ import { useEffect, useState } from "react";
 import {
   Archive,
   ArrowLeft,
+  Ban,
   BarChart3,
+  Bell,
   BellOff,
   Bot,
   Calendar,
   Check,
+  Clock,
   Copy,
   Download,
+  Eye,
+  EyeOff,
   FileText,
   FolderOpen,
   Heart,
@@ -18,22 +23,33 @@ import {
   Link2,
   LogOut,
   MessageCircle,
+  Palette,
   Pin,
   Plus,
   Send,
   Settings,
+  Shield,
   StickyNote,
   Trash2,
   UserPlus,
   Users,
 } from "lucide-react";
-import { api, formatFileSize, formatThaiTime, resolveMediaUrl } from "@/lib/api";
+import {
+  api,
+  formatFileSize,
+  formatThaiTime,
+  formatThaiUntil,
+  isConversationMutedNow,
+  resolveMediaUrl,
+} from "@/lib/api";
+import { ROOM_TONES } from "@/lib/themes";
 import type {
   AlbumItem,
   ChatMessage,
   Conversation,
   FriendItem,
   NoteItem,
+  RoomToneId,
   UserProfile,
   VaultResponse,
 } from "@/lib/types";
@@ -49,6 +65,10 @@ interface RoomSideModalProps {
   messages: ChatMessage[];
   currentUser: UserProfile;
   friends: FriendItem[];
+  roomTone?: RoomToneId;
+  onChangeRoomTone?: (tone: RoomToneId) => void;
+  showWatermark?: boolean;
+  onToggleWatermark?: () => void;
   onConversationUpdated: () => Promise<void>;
   onRefreshMessages: () => Promise<void>;
   onVotePoll: (msgId: string, optionIds: string[]) => Promise<void>;
@@ -65,6 +85,10 @@ export function RoomSideModal({
   messages,
   currentUser,
   friends,
+  roomTone = "ban_chiang_cream",
+  onChangeRoomTone,
+  showWatermark = false,
+  onToggleWatermark,
   onConversationUpdated,
   onRefreshMessages,
   onVotePoll,
@@ -287,7 +311,7 @@ export function RoomSideModal({
             onClick={onClose}
             aria-label="ปิดหน้าต่างเครื่องมือ"
             data-testid="close-room-side-panel"
-            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2 text-xs font-bold text-[var(--bc-primary)] hover:bg-[var(--bc-soft)]"
+            className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2.5 text-xs font-bold text-[var(--bc-primary)] hover:bg-[var(--bc-soft)]"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             <span>กลับไปแชท</span>
@@ -304,7 +328,7 @@ export function RoomSideModal({
       </div>
 
       {/* Horizontally Scrollable Sub Tabs */}
-      <div className="flex shrink-0 items-center gap-1 overflow-x-auto whitespace-nowrap border-b border-[var(--bc-border)] bg-[var(--bc-panel)] px-2 py-1">
+      <div className="flex shrink-0 items-center gap-1 overflow-x-auto whitespace-nowrap border-b border-[var(--bc-border)] bg-[var(--bc-panel)] px-2 py-1.5">
         {tabs.map((t) => {
           const active = t.id === openTab;
           return (
@@ -313,7 +337,7 @@ export function RoomSideModal({
               type="button"
               data-testid={`side-tab-${t.id}`}
               onClick={() => onSwitchTab(t.id)}
-              className={`inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold transition ${
+              className={`inline-flex h-8 shrink-0 items-center gap-1 rounded-lg px-2.5 text-[11px] font-semibold transition ${
                 active
                   ? "bg-[var(--bc-primary)] text-white shadow-xs"
                   : "border border-[var(--bc-border)] bg-[var(--bc-card)] text-[var(--bc-text)] hover:bg-[var(--bc-soft)]"
@@ -415,8 +439,12 @@ export function RoomSideModal({
                       <button
                         type="button"
                         onClick={async () => {
-                          await api.deleteAlbum(alb.id);
-                          await loadTabData("albums");
+                          try {
+                            await api.deleteAlbum(alb.id);
+                            await loadTabData("albums");
+                          } catch (err) {
+                            onNotify(err instanceof Error ? err.message : "ลบอัลบั้มไม่สำเร็จ");
+                          }
                         }}
                         className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
                         title="ลบอัลบั้ม"
@@ -508,8 +536,12 @@ export function RoomSideModal({
                       <button
                         type="button"
                         onClick={async () => {
-                          await api.updateNote(n.id, { is_pinned: !n.is_pinned });
-                          await loadTabData("notes");
+                          try {
+                            await api.updateNote(n.id, { is_pinned: !n.is_pinned });
+                            await loadTabData("notes");
+                          } catch (err) {
+                            onNotify(err instanceof Error ? err.message : "ปักหมุดโน้ตไม่สำเร็จ");
+                          }
                         }}
                         className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--bc-border)] text-[var(--bc-muted)] hover:bg-[var(--bc-soft)]"
                         title="ปักหมุดโน้ต"
@@ -519,8 +551,12 @@ export function RoomSideModal({
                       <button
                         type="button"
                         onClick={async () => {
-                          await api.deleteNote(n.id);
-                          await loadTabData("notes");
+                          try {
+                            await api.deleteNote(n.id);
+                            await loadTabData("notes");
+                          } catch (err) {
+                            onNotify(err instanceof Error ? err.message : "ลบโน้ตไม่สำเร็จ");
+                          }
                         }}
                         className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
                         title="ลบโน้ต"
@@ -730,7 +766,7 @@ export function RoomSideModal({
             >
               <div className="flex items-center gap-2 text-xs font-bold text-[var(--bc-primary)]">
                 <Calendar className="h-4 w-4" />
-                <span>สร้างนัดหมาย &amp; RSVP</span>
+                <span>สร้างนัดหมาย</span>
               </div>
               <input
                 type="text"
@@ -892,25 +928,33 @@ export function RoomSideModal({
         {/* MEMBERS & ROOM SETTINGS */}
         {openTab === "members" && (
           <div className="mx-auto max-w-2xl space-y-2.5">
-            {/* Invite Token & Quick AI Invite */}
+            {/* Group Invite Controls */}
             {conversation.type === "group" && (
               <div className="space-y-2 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-2.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs font-bold text-[var(--bc-primary)]">
-                    รหัสเชิญเข้ากลุ่ม (Invite Token)
-                  </span>
+                  <div className="min-w-0">
+                    <span className="text-xs font-bold text-[var(--bc-primary)]">
+                      รหัสเชิญ
+                    </span>
+                    {conversation.invite_token && (
+                      <div className="truncate font-mono text-[10px] text-[var(--bc-muted)]">
+                        {conversation.invite_token}
+                      </div>
+                    )}
+                  </div>
                   <button
                     type="button"
+                    data-testid="copy-invite-token-btn"
                     onClick={() => {
                       if (conversation.invite_token) {
                         void navigator.clipboard?.writeText(conversation.invite_token);
-                        onNotify(`คัดลอกรหัสเชิญ ${conversation.invite_token} แล้ว`);
+                        onNotify("คัดลอกรหัสเชิญเข้ากลุ่มแล้ว");
                       }
                     }}
-                    className="inline-flex items-center gap-1 rounded-lg bg-[var(--bc-soft)] px-2.5 py-1 text-xs font-bold text-[var(--bc-primary)]"
+                    className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg bg-[var(--bc-soft)] px-2.5 text-xs font-bold text-[var(--bc-primary)] hover:brightness-95"
                   >
                     <Copy className="h-3.5 w-3.5" />
-                    <span>{conversation.invite_token || "ไม่มีรหัส"}</span>
+                    <span>{conversation.invite_token ? "คัดลอก" : "ไม่มีรหัส"}</span>
                   </button>
                 </div>
 
@@ -919,11 +963,15 @@ export function RoomSideModal({
                     type="button"
                     data-testid="invite-ai-to-group-btn"
                     onClick={async () => {
-                      await api.inviteGroupMembers(conversation.id, ["user_ai"]);
-                      await onConversationUpdated();
-                      onNotify("เชิญ 🤖 BC AI เข้ากลุ่มแล้ว!");
+                      try {
+                        await api.inviteGroupMembers(conversation.id, ["user_ai"]);
+                        await onConversationUpdated();
+                        onNotify("เชิญ 🤖 BC AI เข้ากลุ่มแล้ว!");
+                      } catch (err) {
+                        onNotify(err instanceof Error ? err.message : "เชิญ 🤖 BC AI เข้ากลุ่มไม่สำเร็จ");
+                      }
                     }}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-700"
+                    className="flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-3 text-xs font-bold text-white hover:bg-indigo-700"
                   >
                     <Bot className="h-4 w-4" />
                     <span>เชิญ 🤖 BC AI เข้ากลุ่ม</span>
@@ -941,11 +989,15 @@ export function RoomSideModal({
                           key={f.id}
                           type="button"
                           onClick={async () => {
-                            await api.inviteGroupMembers(conversation.id, [f.id]);
-                            await onConversationUpdated();
-                            onNotify(`เชิญ ${f.display_name} เข้ากลุ่มแล้ว`);
+                            try {
+                              await api.inviteGroupMembers(conversation.id, [f.id]);
+                              await onConversationUpdated();
+                              onNotify(`เชิญ ${f.display_name} เข้ากลุ่มแล้ว`);
+                            } catch (err) {
+                              onNotify(err instanceof Error ? err.message : "เชิญเพื่อนเข้ากลุ่มไม่สำเร็จ");
+                            }
                           }}
-                          className="inline-flex items-center gap-1 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2.5 py-1 text-xs font-medium hover:bg-[var(--bc-soft)]"
+                          className="inline-flex h-8 items-center gap-1 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2.5 text-xs font-medium hover:bg-[var(--bc-soft)]"
                         >
                           <UserPlus className="h-3 w-3 text-[var(--bc-primary)]" />
                           <span>{f.display_name}</span>
@@ -956,106 +1008,6 @@ export function RoomSideModal({
                 )}
               </div>
             )}
-
-            {/* Room Meta Controls */}
-            <div className="space-y-2 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-2.5">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--bc-primary)]">
-                <Settings className="h-4 w-4" />
-                <span>ตั้งค่าห้องแชท</span>
-              </div>
-
-              {conversation.type === "group" && (
-                <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={editRoomName}
-                      onChange={(e) => setEditRoomName(e.target.value)}
-                      placeholder="ชื่อกลุ่ม"
-                      className="min-w-0 flex-1 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-3 py-1.5 text-xs outline-none focus:border-[var(--bc-primary)]"
-                    />
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        await api.updateConversationMeta(conversation.id, {
-                          name: editRoomName.trim(),
-                          avatar_url: editRoomAvatar.trim() || undefined,
-                        });
-                        await onConversationUpdated();
-                        onNotify("บันทึกชื่อกลุ่มแล้ว");
-                      }}
-                      className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-[var(--bc-primary)] px-3 py-1.5 text-xs font-bold text-white"
-                    >
-                      <Check className="h-3.5 w-3.5" />
-                      <span>บันทึก</span>
-                    </button>
-                  </div>
-                  <input
-                    type="text"
-                    value={editRoomAvatar}
-                    onChange={(e) => setEditRoomAvatar(e.target.value)}
-                    placeholder="URL รูปกลุ่ม (ไม่บังคับ)"
-                    className="w-full rounded-lg border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1 text-xs outline-none focus:border-[var(--bc-primary)]"
-                  />
-                </div>
-              )}
-
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await api.updateConversationMeta(conversation.id, {
-                      is_pinned: !conversation.is_pinned,
-                    });
-                    await onConversationUpdated();
-                  }}
-                  className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold ${
-                    conversation.is_pinned
-                      ? "border-[var(--bc-primary)] bg-[var(--bc-soft)] text-[var(--bc-primary)]"
-                      : "border-[var(--bc-border)] bg-[var(--bc-panel)]"
-                  }`}
-                >
-                  <Pin className="h-3.5 w-3.5" />
-                  <span>{conversation.is_pinned ? "เลิกปักหมุดห้อง" : "ปักหมุดห้อง"}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await api.updateConversationMeta(conversation.id, {
-                      is_muted: !conversation.is_muted,
-                    });
-                    await onConversationUpdated();
-                  }}
-                  className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold ${
-                    conversation.is_muted
-                      ? "border-[var(--bc-primary)] bg-[var(--bc-soft)] text-[var(--bc-primary)]"
-                      : "border-[var(--bc-border)] bg-[var(--bc-panel)]"
-                  }`}
-                >
-                  <BellOff className="h-3.5 w-3.5" />
-                  <span>{conversation.is_muted ? "เปิดเสียงแจ้งเตือน" : "ปิดเสียงห้อง"}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await api.updateConversationMeta(conversation.id, {
-                      is_archived: !conversation.is_archived,
-                    });
-                    await onConversationUpdated();
-                  }}
-                  className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold ${
-                    conversation.is_archived
-                      ? "border-[var(--bc-primary)] bg-[var(--bc-soft)] text-[var(--bc-primary)]"
-                      : "border-[var(--bc-border)] bg-[var(--bc-panel)]"
-                  }`}
-                >
-                  <Archive className="h-3.5 w-3.5" />
-                  <span>{conversation.is_archived ? "นำออกจากเก็บถาวร" : "เก็บถาวร"}</span>
-                </button>
-              </div>
-            </div>
 
             {/* Member List */}
             <div className="space-y-1.5 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-2.5">
@@ -1079,7 +1031,7 @@ export function RoomSideModal({
                         {m.display_name}
                       </div>
                       <div className="truncate text-[11px] text-[var(--bc-muted)]">
-                        {m.department} • {m.bc_id}
+                        {m.bc_id ? (m.bc_id.startsWith("@") ? m.bc_id : `@${m.bc_id}`) : ""}
                       </div>
                     </div>
                   </div>
@@ -1090,11 +1042,15 @@ export function RoomSideModal({
                       <button
                         type="button"
                         onClick={async () => {
-                          await api.removeGroupMember(conversation.id, m.id);
-                          await onConversationUpdated();
-                          if (m.id === currentUser.id) onClose();
+                          try {
+                            await api.removeGroupMember(conversation.id, m.id);
+                            await onConversationUpdated();
+                            if (m.id === currentUser.id) onClose();
+                          } catch (err) {
+                            onNotify(err instanceof Error ? err.message : "ดำเนินการกับสมาชิกไม่สำเร็จ");
+                          }
                         }}
-                        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-red-200 bg-white px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-50"
+                        className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-red-200 bg-white px-2 text-[11px] font-semibold text-red-600 hover:bg-red-50"
                       >
                         <LogOut className="h-3 w-3" />
                         <span>{m.id === currentUser.id ? "ออกจากกลุ่ม" : "ลบออก"}</span>
@@ -1103,6 +1059,320 @@ export function RoomSideModal({
                 </div>
               ))}
             </div>
+
+            {/* Room Meta Controls: Pin / Archive / Timed Mute / Room Tone */}
+            <div className="space-y-2 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-2.5">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--bc-primary)]">
+                <Settings className="h-4 w-4" />
+                <span>ตั้งค่าห้องแชท</span>
+              </div>
+
+              {conversation.type === "group" && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={editRoomName}
+                      onChange={(e) => setEditRoomName(e.target.value)}
+                      placeholder="ชื่อกลุ่ม"
+                      className="h-9 min-w-0 flex-1 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-3 text-xs outline-none focus:border-[var(--bc-primary)]"
+                    />
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await api.updateConversationMeta(conversation.id, {
+                            name: editRoomName.trim(),
+                            avatar_url: editRoomAvatar.trim() || undefined,
+                          });
+                          await onConversationUpdated();
+                          onNotify("บันทึกชื่อกลุ่มแล้ว");
+                        } catch (err) {
+                          onNotify(err instanceof Error ? err.message : "บันทึกชื่อกลุ่มไม่สำเร็จ");
+                        }
+                      }}
+                      className="inline-flex h-9 shrink-0 items-center gap-1 rounded-xl bg-[var(--bc-primary)] px-3 text-xs font-bold text-white"
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                      <span>บันทึก</span>
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    value={editRoomAvatar}
+                    onChange={(e) => setEditRoomAvatar(e.target.value)}
+                    placeholder="ลิงก์รูปกลุ่ม (ไม่บังคับ)"
+                    className="h-8 w-full rounded-lg border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 text-xs outline-none focus:border-[var(--bc-primary)]"
+                  />
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await api.updateConversationMeta(conversation.id, {
+                        is_pinned: !conversation.is_pinned,
+                      });
+                      await onConversationUpdated();
+                    } catch (err) {
+                      onNotify(err instanceof Error ? err.message : "อัปเดตสถานะปักหมุดไม่สำเร็จ");
+                    }
+                  }}
+                  className={`inline-flex h-8 items-center gap-1 rounded-lg border px-2.5 text-xs font-semibold ${
+                    conversation.is_pinned
+                      ? "border-[var(--bc-primary)] bg-[var(--bc-soft)] text-[var(--bc-primary)]"
+                      : "border-[var(--bc-border)] bg-[var(--bc-panel)]"
+                  }`}
+                >
+                  <Pin className="h-3.5 w-3.5" />
+                  <span>{conversation.is_pinned ? "เลิกปักหมุดห้อง" : "ปักหมุดห้อง"}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await api.updateConversationMeta(conversation.id, {
+                        is_archived: !conversation.is_archived,
+                      });
+                      await onConversationUpdated();
+                    } catch (err) {
+                      onNotify(err instanceof Error ? err.message : "อัปเดตสถานะเก็บถาวรไม่สำเร็จ");
+                    }
+                  }}
+                  className={`inline-flex h-8 items-center gap-1 rounded-lg border px-2.5 text-xs font-semibold ${
+                    conversation.is_archived
+                      ? "border-[var(--bc-primary)] bg-[var(--bc-soft)] text-[var(--bc-primary)]"
+                      : "border-[var(--bc-border)] bg-[var(--bc-panel)]"
+                  }`}
+                >
+                  <Archive className="h-3.5 w-3.5" />
+                  <span>{conversation.is_archived ? "นำออกจากเก็บถาวร" : "เก็บถาวร"}</span>
+                </button>
+              </div>
+
+              {/* Timed Mute Duration Inline Selector */}
+              <div className="space-y-1.5 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2">
+                <div className="flex flex-wrap items-center justify-between gap-1 text-[11px]">
+                  <span className="inline-flex items-center gap-1 font-bold text-[var(--bc-text)]">
+                    {isConversationMutedNow(conversation) ? (
+                      <BellOff className="h-3.5 w-3.5 text-[var(--bc-primary)]" />
+                    ) : (
+                      <Bell className="h-3.5 w-3.5 text-[var(--bc-primary)]" />
+                    )}
+                    <span>แจ้งเตือนห้องนี้</span>
+                  </span>
+                  <span
+                    data-testid="room-mute-status"
+                    className="inline-flex items-center gap-1 font-semibold text-[var(--bc-primary)]"
+                  >
+                    {isConversationMutedNow(conversation) ? (
+                      <>
+                        <Clock className="h-3 w-3" />
+                        <span>
+                          {conversation.muted_until
+                            ? `ปิดเสียง (${formatThaiUntil(conversation.muted_until)})`
+                            : "ปิดเสียงถาวร"}
+                        </span>
+                      </>
+                    ) : (
+                      "เปิดแจ้งเตือน"
+                    )}
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-1">
+                  {(
+                    [
+                      ["off", "เปิดแจ้งเตือน"],
+                      ["1h", "ปิด 1 ชม."],
+                      ["8h", "ปิด 8 ชม."],
+                      ["until_8am", "ปิดถึง 08:00 น."],
+                      ["forever", "ปิดถาวร"],
+                    ] as const
+                  ).map(([dur, label]) => {
+                    const mutedNow = isConversationMutedNow(conversation);
+                    const active = dur === "off" && !mutedNow;
+                    return (
+                      <button
+                        key={dur}
+                        type="button"
+                        data-testid={`room-mute-${dur}`}
+                        onClick={async () => {
+                          try {
+                            await api.updateConversationMeta(conversation.id, {
+                              mute_duration: dur,
+                            });
+                            await onConversationUpdated();
+                            onNotify(
+                              dur === "off"
+                                ? "เปิดแจ้งเตือนห้องนี้แล้ว"
+                                : `ตั้งค่าปิดแจ้งเตือน: ${label}`
+                            );
+                          } catch (err) {
+                            onNotify(
+                              err instanceof Error ? err.message : "ตั้งค่าปิดเสียงไม่สำเร็จ"
+                            );
+                          }
+                        }}
+                        className={`inline-flex h-8 items-center gap-1 rounded-lg border px-2.5 text-[11px] font-semibold transition ${
+                          active
+                            ? "border-[var(--bc-primary)] bg-[var(--bc-soft)] text-[var(--bc-primary)]"
+                            : "border-[var(--bc-border)] bg-[var(--bc-card)] text-[var(--bc-text)] hover:border-[var(--bc-primary)]"
+                        }`}
+                      >
+                        <span>{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Room Tone & Watermark Selector */}
+              {onChangeRoomTone && (
+                <div className="space-y-1.5 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2">
+                  <div className="flex items-center justify-between gap-2 text-[11px]">
+                    <span className="inline-flex items-center gap-1 font-bold text-[var(--bc-text)]">
+                      <Palette className="h-3.5 w-3.5 text-[var(--bc-primary)]" />
+                      <span>โทนสีห้องแชท</span>
+                    </span>
+                    {onToggleWatermark && (
+                      <button
+                        type="button"
+                        data-testid="room-side-watermark-toggle"
+                        onClick={onToggleWatermark}
+                        className={`inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-[11px] font-semibold ${
+                          showWatermark
+                            ? "border-[var(--bc-primary)] bg-[var(--bc-soft)] text-[var(--bc-primary)]"
+                            : "border-[var(--bc-border)] bg-[var(--bc-card)] text-[var(--bc-muted)]"
+                        }`}
+                      >
+                        <Shield className="h-3 w-3" />
+                        <span>ลายน้ำ: {showWatermark ? "เปิด" : "ปิด"}</span>
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {Object.values(ROOM_TONES).map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        data-testid={`room-side-tone-${t.id}`}
+                        onClick={() => onChangeRoomTone(t.id)}
+                        className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-semibold ${
+                          roomTone === t.id
+                            ? "border-[var(--bc-primary)] bg-[var(--bc-soft)] text-[var(--bc-primary)]"
+                            : "border-[var(--bc-border)] bg-[var(--bc-card)] text-[var(--bc-text)]"
+                        }`}
+                      >
+                        <span
+                          style={{ backgroundColor: t.swatch }}
+                          className="h-3 w-3 rounded-full border border-[var(--bc-border)]"
+                        />
+                        <span>{t.label}</span>
+                        {roomTone === t.id && <Check className="h-3 w-3" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Direct 1-1 Friend Danger Zone (Bottom Red Section) */}
+            {(() => {
+              if (conversation.type !== "direct") return null;
+              const peer = conversation.members.find((m) => m.id !== currentUser.id);
+              if (!peer || peer.id === "user_ai") return null;
+              const peerFriend = friends.find((f) => f.id === peer.id);
+              const isHidden = Boolean(peerFriend?.is_hidden);
+              const isBlocked = Boolean(
+                conversation.is_blocked_by_me || peerFriend?.is_blocked
+              );
+              return (
+                <div className="space-y-1.5 rounded-2xl border border-red-200 bg-red-50/50 p-2.5">
+                  <div className="flex items-center justify-between gap-2 text-[11px]">
+                    <span className="font-bold text-red-800">
+                      จัดการเพื่อน: {peer.display_name}
+                    </span>
+                    {isBlocked && (
+                      <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">
+                        บล็อกอยู่
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      data-testid="room-hide-friend-btn"
+                      onClick={async () => {
+                        try {
+                          await api.updateFriendStatus(peer.id, {
+                            is_hidden: !isHidden,
+                          });
+                          await onConversationUpdated();
+                          onNotify(isHidden ? "เลิกซ่อนเพื่อนแล้ว" : "ซ่อนรายชื่อเพื่อนแล้ว");
+                        } catch (err) {
+                          onNotify(err instanceof Error ? err.message : "อัปเดตไม่สำเร็จ");
+                        }
+                      }}
+                      className="inline-flex h-8 items-center gap-1 rounded-lg border border-[var(--bc-border)] bg-white px-2.5 text-[11px] font-semibold text-[var(--bc-text)] hover:border-[var(--bc-primary)]"
+                    >
+                      {isHidden ? (
+                        <Eye className="h-3.5 w-3.5 text-[var(--bc-primary)]" />
+                      ) : (
+                        <EyeOff className="h-3.5 w-3.5 text-[var(--bc-muted)]" />
+                      )}
+                      <span>{isHidden ? "เลิกซ่อน" : "ซ่อน"}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      data-testid="room-block-friend-btn"
+                      onClick={async () => {
+                        try {
+                          await api.updateFriendStatus(peer.id, {
+                            is_blocked: !isBlocked,
+                          });
+                          await onConversationUpdated();
+                          onNotify(
+                            isBlocked ? "ปลดบล็อกผู้ใช้นี้แล้ว" : "บล็อกผู้ใช้นี้เรียบร้อย"
+                          );
+                        } catch (err) {
+                          onNotify(err instanceof Error ? err.message : "อัปเดตไม่สำเร็จ");
+                        }
+                      }}
+                      className={`inline-flex h-8 items-center gap-1 rounded-lg border px-2.5 text-[11px] font-semibold ${
+                        isBlocked
+                          ? "border-[var(--bc-primary)] bg-[var(--bc-soft)] text-[var(--bc-primary)]"
+                          : "border-red-300 bg-white text-red-700 hover:bg-red-50"
+                      }`}
+                    >
+                      <Ban className="h-3.5 w-3.5" />
+                      <span>{isBlocked ? "ปลดบล็อก" : "บล็อก"}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      data-testid="room-delete-friend-btn"
+                      onClick={async () => {
+                        try {
+                          await api.deleteFriend(peer.id);
+                          await onConversationUpdated();
+                          onNotify("ลบเพื่อนออกจากรายชื่อแล้ว");
+                        } catch (err) {
+                          onNotify(err instanceof Error ? err.message : "ลบเพื่อนไม่สำเร็จ");
+                        }
+                      }}
+                      className="inline-flex h-8 items-center gap-1 rounded-lg border border-red-300 bg-white px-2.5 text-[11px] font-semibold text-red-700 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span>ลบเพื่อน</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>

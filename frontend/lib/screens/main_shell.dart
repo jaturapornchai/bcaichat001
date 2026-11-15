@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,19 +11,27 @@ import '../services/api_service.dart';
 import '../services/notification_service.dart';
 import '../services/push_service.dart';
 import '../theme/app_theme.dart';
+import 'call_inline_panel.dart';
 import 'chat_room_screen.dart';
+import 'login_screen.dart' show cleanErrorMessage;
 import 'mini_app_runner_screen.dart';
+import 'oa_workspace_panel.dart';
+import 'qr_friend_screen.dart';
 
 class MainShell extends StatefulWidget {
   final AppUser currentUser;
   final VoidCallback onLoggedOut;
   final ValueChanged<AppUser> onUserChanged;
+  final ValueChanged<AppUser>? onSwitchUser;
+  final AuthConfig? initialAuthConfig;
 
   const MainShell({
     super.key,
     required this.currentUser,
     required this.onLoggedOut,
     required this.onUserChanged,
+    this.onSwitchUser,
+    this.initialAuthConfig,
   });
 
   @override
@@ -43,11 +52,30 @@ class _MainShellState extends State<MainShell> {
   bool _showHiddenFriends = false;
 
   // Inline collapsible panels (avoid modal popups)
-  String? _homeInlinePanel; // 'qr' | 'profile' | 'add_friend' | 'join_group' | 'create_group'
-  String? _chatInlinePanel; // 'notif' | 'join_group' | 'create_group'
+  String? _homeInlinePanel; // 'qr' | 'profile' | 'add_friend' | 'join_group' | 'create_group' | 'oa'
+  String? _chatInlinePanel; // 'notif' | 'join_group' | 'create_group' | 'oa'
   bool _showCreateNoteInline = false;
   bool _showMiniAppFormInline = false;
   MiniAppItem? _editingMiniApp;
+  AuthConfig _authConfig = const AuthConfig();
+  AuthSettingsDto? _authSettings;
+  bool _showSwitchUserBar = false;
+  bool _switchingTestUser = false;
+
+  // Progressive disclosure state
+  String? _expandedFriendActionId;
+  String? _pendingDeleteFriendId;
+  bool _showSecondaryChatFolders = false;
+  String? _openSettingsSection; // 'notifications' | 'privacy' | 'security' | 'theme_tools' | 'admin'
+
+  // Unified smart search + add friend in Home tab
+  final TextEditingController _homeSmartSearchCtrl = TextEditingController();
+  String _homeSmartQuery = '';
+  String _homeSmartMode = 'id';
+  bool _homeSmartSearching = false;
+  bool _homeSmartHasSearched = false;
+  List<AppUser> _homeSmartResults = const [];
+  String? _homeSmartError;
 
   AiAdminSettings _aiSettings = const AiAdminSettings(
     model: 'deepseek-chat',
@@ -59,6 +87,15 @@ class _MainShellState extends State<MainShell> {
   );
 
   Conversation? _activeConversation;
+
+  /// จอกว้างตั้งแต่ค่านี้ขึ้นไป (Windows/แท็บเล็ตแนวนอน) ใช้ layout สองฝั่ง
+  static const double _wideBreakpoint = 840;
+  static const double _listPaneWidth = 380;
+  bool _isWideLayout = false;
+
+  /// ห้องฝั่งขวาเปิดเมื่อผู้ใช้เลือกเองเท่านั้น — _activeConversation ถูกตั้งค่าเริ่มต้น
+  /// ตอนโหลดข้อมูล ถ้าเปิดห้องตามนั้นเลยจะทำให้ข้อความถูกนับว่าอ่านแล้วโดยไม่ได้เปิดดู
+  bool _roomPaneOpened = false;
   bool _isLoadingInitial = true;
 
   // Global search in Chats tab
@@ -73,16 +110,28 @@ class _MainShellState extends State<MainShell> {
   void initState() {
     super.initState();
     _user = widget.currentUser;
+    if (widget.initialAuthConfig != null) {
+      _authConfig = widget.initialAuthConfig!;
+    }
     _loadAllData().then(
       (_) => PushService.instance.listenForOpens(_openConversationById),
     );
     _wsSub = ApiService.instance.wsEvents.listen((event) {
+      final evType = (event['type'] ?? event['event'] ?? '').toString();
+      if (evType.startsWith('call_')) {
+        CallInlineManager.instance.handleWsEvent(evType, event);
+        if (evType == 'call_ended' || evType == 'call_declined') {
+          _refreshConversationsAndFriends();
+        }
+        return;
+      }
       _refreshConversationsAndFriends();
       final convId = event['conversation_id']?.toString();
       NotificationService.instance.handleWsEvent(
         event,
         myUserId: _user.id,
         room: _conversations.where((c) => c.id == convId).firstOrNull,
+        currentUser: _user,
       );
     });
     NotificationService.instance.onOpenConversation = _openConversationById;
@@ -97,9 +146,8 @@ class _MainShellState extends State<MainShell> {
         .where((c) => c.id == conversationId)
         .firstOrNull;
     if (conv == null) return;
-    final isWide = MediaQuery.sizeOf(context).width >= 900;
-    if (!isWide) Navigator.of(context).popUntil((route) => route.isFirst);
-    _selectConversation(conv, isWide: isWide);
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    _selectConversation(conv, isWide: _isWideLayout);
   }
 
   @override
@@ -111,6 +159,10 @@ class _MainShellState extends State<MainShell> {
       _loadAllData();
       PushService.instance.start();
     }
+    if (oldWidget.initialAuthConfig != widget.initialAuthConfig &&
+        widget.initialAuthConfig != null) {
+      _authConfig = widget.initialAuthConfig!;
+    }
   }
 
   @override
@@ -121,7 +173,72 @@ class _MainShellState extends State<MainShell> {
       NotificationService.instance.onOpenConversation = null;
     }
     _chatSearchCtrl.dispose();
+    _homeSmartSearchCtrl.dispose();
     super.dispose();
+  }
+
+  String _friendlyUiError(Object e, String fallback) {
+    final msg = e.toString().replaceFirst('Exception: ', '').trim();
+    if (msg.isEmpty ||
+        msg.contains('Exception') ||
+        msg.contains('Socket') ||
+        msg.contains('ClientException') ||
+        msg.contains('http://') ||
+        msg.contains('https://')) {
+      return '$fallback ลองใหม่อีกครั้ง';
+    }
+    return msg;
+  }
+
+  String _detectSmartSearchMode(String raw) {
+    final t = raw.trim();
+    if (t.startsWith('BCQR_') || t.startsWith('bcaichat://')) {
+      return 'qr';
+    }
+    if (t.contains('@') && t.contains('.')) {
+      return 'email';
+    }
+    if (RegExp(r'^[\d๐-๙\s\-+().]{3,}$').hasMatch(t)) {
+      return 'phone';
+    }
+    return 'id';
+  }
+
+  Future<void> _runHomeSmartSearch() async {
+    final raw = _homeSmartSearchCtrl.text.trim();
+    if (raw.isEmpty) {
+      setState(() {
+        _homeSmartQuery = '';
+        _homeSmartHasSearched = false;
+        _homeSmartResults = const [];
+        _homeSmartError = null;
+      });
+      return;
+    }
+    final mode = _detectSmartSearchMode(raw);
+    final normalized = normalizeFriendSearchQuery(raw, mode: mode);
+    setState(() {
+      _homeSmartQuery = raw;
+      _homeSmartMode = mode;
+      _homeSmartSearching = true;
+      _homeSmartHasSearched = true;
+      _homeSmartError = null;
+    });
+    try {
+      final found = await ApiService.instance.searchUsers(normalized, by: mode);
+      if (!mounted) return;
+      setState(() {
+        _homeSmartResults = found;
+        _homeSmartSearching = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _homeSmartSearching = false;
+        _homeSmartResults = const [];
+        _homeSmartError = _friendlyUiError(e, 'ค้นหาไม่สำเร็จ');
+      });
+    }
   }
 
   Future<void> _loadAllData() async {
@@ -159,6 +276,7 @@ class _MainShellState extends State<MainShell> {
       });
 
       _loadAdminDataQuietly();
+      _loadAuthAndCallsQuietly();
     } catch (_) {
       if (mounted) setState(() => _isLoadingInitial = false);
     }
@@ -207,7 +325,46 @@ class _MainShellState extends State<MainShell> {
         }
         _aiSettings = results[3] as AiAdminSettings;
       });
+      if (_user.isAdmin) {
+        try {
+          final authSet = await ApiService.instance.getAuthSettings();
+          if (mounted) setState(() => _authSettings = authSet);
+        } catch (_) {}
+      }
     } catch (_) {}
+  }
+
+  Future<void> _loadAuthAndCallsQuietly() async {
+    try {
+      final cfg = await ApiService.instance.fetchAuthConfig();
+      if (mounted) setState(() => _authConfig = cfg);
+    } catch (_) {}
+    await CallInlineManager.instance.refreshActiveCalls();
+  }
+
+  bool _isOpeningKeep = false;
+
+  Future<void> _openKeepConversation({required bool isWide}) async {
+    if (_isOpeningKeep) return;
+    setState(() => _isOpeningKeep = true);
+    try {
+      final keepConv = await ApiService.instance.ensureKeepConversation();
+      await _refreshConversationsAndFriends();
+      if (!mounted) return;
+      final refreshed =
+          _conversations.where((c) => c.id == keepConv.id).firstOrNull ??
+          keepConv;
+      _selectConversation(refreshed, isWide: isWide);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_friendlyUiError(e, 'เปิด Keep ส่วนตัวไม่สำเร็จ')),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isOpeningKeep = false);
+    }
   }
 
   Future<void> _performGlobalSearch(String query) async {
@@ -254,6 +411,9 @@ class _MainShellState extends State<MainShell> {
       if (_selectedChatFolder == 'group' && !c.isGroup) {
         return false;
       }
+      if (_selectedChatFolder == 'oa' && !c.isOa) {
+        return false;
+      }
       if (_selectedChatFolder == 'pinned' && !c.isPinned) {
         return false;
       }
@@ -273,6 +433,7 @@ class _MainShellState extends State<MainShell> {
   void _selectConversation(Conversation conv, {required bool isWide}) {
     setState(() {
       _activeConversation = conv;
+      _roomPaneOpened = true;
       if (isWide && _selectedIndex != 0 && _selectedIndex != 1) {
         _selectedIndex = 1;
       }
@@ -310,9 +471,11 @@ class _MainShellState extends State<MainShell> {
       _selectConversation(conv, isWide: isWide);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('ไม่สามารถเปิดห้องสนทนาได้: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_friendlyUiError(e, 'ไม่สามารถเปิดห้องสนทนาได้')),
+        ),
+      );
     }
   }
 
@@ -376,7 +539,7 @@ class _MainShellState extends State<MainShell> {
             children: [
               const Expanded(
                 child: Text(
-                  'QR Code เพิ่มเพื่อนของฉัน',
+                  'QR ของฉัน',
                   style: TextStyle(
                     fontSize: 15.5,
                     fontWeight: FontWeight.w800,
@@ -386,68 +549,98 @@ class _MainShellState extends State<MainShell> {
               ),
               IconButton(
                 onPressed: () => setState(() => _homeInlinePanel = null),
+                tooltip: 'ปิด',
                 icon: const Icon(Icons.close_rounded, size: 20),
                 visualDensity: VisualDensity.compact,
               ),
             ],
           ),
           const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: AppTheme.brandPrimary.withValues(alpha: 0.35),
-                width: 1.5,
-              ),
-            ),
-            child: QrImageView(
-              data: qrData,
-              version: QrVersions.auto,
-              size: 168,
-              eyeStyle: const QrEyeStyle(
-                eyeShape: QrEyeShape.square,
-                color: AppTheme.slateDark,
+          Center(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: BcQrBox(
+                data: qrData,
+                size: 168,
+                quietZonePadding: 8,
+                outerPadding: 12,
+                borderRadius: 16,
+                borderColor: AppTheme.brandPrimary.withValues(alpha: 0.35),
+                borderWidth: 1.5,
               ),
             ),
           ),
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppTheme.surfaceBg,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: Text(
-                    'QR Token: $qrData',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+          const SizedBox(height: 8),
+          Wrap(
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: qrData));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('คัดลอกรหัส QR เรียบร้อยแล้ว'),
                     ),
+                  );
+                },
+                icon: const Icon(Icons.copy_rounded, size: 15),
+                label: const Text(
+                  'คัดลอกรหัส QR',
+                  style: TextStyle(fontSize: 12),
+                ),
+                style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
                   ),
                 ),
-                IconButton(
-                  onPressed: () {
-                    Clipboard.setData(ClipboardData(text: qrData));
-                    ScaffoldMessenger.of(context).showSnackBar(
+              ),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  try {
+                    final updated = await ApiService.instance.resetMyQr();
+                    if (!mounted) return;
+                    setState(() => _user = updated);
+                    widget.onUserChanged(updated);
+                    messenger.showSnackBar(
                       const SnackBar(
-                        content: Text('คัดลอก QR Token เรียบร้อยแล้ว'),
+                        content: Text('สร้าง QR ใหม่เรียบร้อยแล้ว'),
                       ),
                     );
-                  },
-                  icon: const Icon(Icons.copy_rounded, size: 17),
-                  tooltip: 'คัดลอก QR Token',
-                  visualDensity: VisualDensity.compact,
+                  } catch (e) {
+                    if (!mounted) return;
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          _friendlyUiError(e, 'สร้าง QR ใหม่ไม่สำเร็จ'),
+                        ),
+                      ),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.refresh_rounded, size: 15),
+                label: const Text(
+                  'สร้าง QR ใหม่',
+                  style: TextStyle(fontSize: 12),
                 ),
-              ],
-            ),
+                style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () => setState(() => _homeInlinePanel = null),
+                child: const Text('ปิด'),
+              ),
+            ],
           ),
         ],
       ),
@@ -484,8 +677,18 @@ class _MainShellState extends State<MainShell> {
         );
       case 'add_friend':
         return _buildInlinePanelWrapper(
-          child: _InlineAddFriendPanel(
+          child: AddFriendInlinePanel(
+            currentUser: _user,
+            friends: _friends,
+            onUserUpdated: (updated) {
+              setState(() => _user = updated);
+              widget.onUserChanged(updated);
+            },
             onCancel: onClose,
+            onOpenChatWithFriend: (u) async {
+              onClose();
+              await _openChatWithFriend(u, isWide: isWide);
+            },
             onAddedFriend: (u) async {
               onClose();
               await _refreshConversationsAndFriends();
@@ -524,7 +727,24 @@ class _MainShellState extends State<MainShell> {
         );
       case 'notif':
         return _buildInlinePanelWrapper(
-          child: _InlineNotificationPanel(onClose: onClose),
+          child: _InlineNotificationPanel(
+            user: _user,
+            onUserUpdated: (updated) {
+              setState(() => _user = updated);
+              widget.onUserChanged(updated);
+            },
+            onClose: onClose,
+          ),
+        );
+      case 'oa':
+        return OaWorkspacePanel(
+          currentUser: _user,
+          onOpenConversationId: (convId) async {
+            onClose();
+            await _refreshConversationsAndFriends();
+            if (mounted) _openConversationById(convId);
+          },
+          onClose: onClose,
         );
       default:
         return const SizedBox.shrink();
@@ -532,150 +752,402 @@ class _MainShellState extends State<MainShell> {
   }
 
   // ---------------------------------------------------------------------------
-  // Build Responsive Shell
+  // Quick Test Account Switcher (Inline, Zero-Popup)
   // ---------------------------------------------------------------------------
-  @override
-  Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    final isWide = width >= 900;
-
-    if (isWide) {
-      return Scaffold(
-        body: Row(
-          children: [
-            _buildDesktopNavRail(),
-            if (_selectedIndex == 0 || _selectedIndex == 1) ...[
-              SizedBox(
-                width: 390,
-                child: Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    border: Border(
-                      right: BorderSide(color: AppTheme.borderSubtle),
-                    ),
-                    boxShadow: AppTheme.shadowSm,
-                  ),
-                  child: AnimatedSwitcher(
-                    duration: AppTheme.motionMed,
-                    transitionBuilder: AppTheme.fadeSlideTransition,
-                    child: KeyedSubtree(
-                      key: ValueKey('list-$_selectedIndex'),
-                      child: _selectedIndex == 0
-                          ? _buildHomeTab(isWide: true)
-                          : _buildChatsTab(isWide: true),
-                    ),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: AnimatedSwitcher(
-                  duration: AppTheme.motionMed,
-                  transitionBuilder: AppTheme.fadeSlideTransition,
-                  child: _activeConversation != null
-                      ? ChatRoomScreen(
-                          key: ValueKey('room-${_activeConversation!.id}'),
-                          conversation: _activeConversation!,
-                          allConversations: _conversations,
-                          friends: _friends,
-                          miniApps: _miniApps.where((m) => m.enabled).toList(),
-                          isEmbedded: true,
-                          onConversationUpdated:
-                              _refreshConversationsAndFriends,
-                          onConversationLeft: () {
-                            setState(() => _activeConversation = null);
-                            _refreshConversationsAndFriends();
-                          },
-                          onThemeChanged: (_) => setState(() {}),
-                        )
-                      : KeyedSubtree(
-                          key: const ValueKey('room-empty'),
-                          child: _buildEmptyChatPlaceholder(),
-                        ),
-                ),
-              ),
-            ] else
-              Expanded(child: _buildSelectedTabBody(isWide: true)),
-          ],
-        ),
+  Future<void> _switchToTestUser(QuickTestUser u) async {
+    if (_switchingTestUser || u.id == _user.id) return;
+    setState(() => _switchingTestUser = true);
+    try {
+      final res = await ApiService.instance.testQuickLogin(slot: u.slot);
+      if (!mounted) return;
+      setState(() {
+        _switchingTestUser = false;
+        _showSwitchUserBar = false;
+      });
+      if (widget.onSwitchUser != null) {
+        widget.onSwitchUser!(res.user);
+      } else {
+        setState(() {
+          _user = res.user;
+          _activeConversation = null;
+        });
+        widget.onUserChanged(res.user);
+        await _loadAllData();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _switchingTestUser = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(cleanErrorMessage(e))),
       );
     }
+  }
 
-    // Mobile / Narrow Layout
-    return Scaffold(
-      body: SafeArea(
-        child: AnimatedSwitcher(
-          duration: AppTheme.motionMed,
-          transitionBuilder: AppTheme.fadeSlideTransition,
-          child: KeyedSubtree(
-            key: ValueKey('tab-$_selectedIndex'),
-            child: _buildSelectedTabBody(isWide: false),
+  Widget _buildQuickTestSwitchBar() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: const BoxDecoration(
+        color: Color(0xFFFBF7F5),
+        border: Border(bottom: BorderSide(color: AppTheme.borderSubtle)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.swap_horiz_rounded,
+                size: 16,
+                color: AppTheme.brandPrimary,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'บัญชีทดสอบ: ${_user.displayName}${_user.bcId.isNotEmpty ? " (@${_user.bcId})" : ""}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.slateDark,
+                  ),
+                ),
+              ),
+              if (_switchingTestUser) ...[
+                const SizedBox(width: 8),
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ],
+              const SizedBox(width: 8),
+              InkWell(
+                key: const Key('toggle-quick-switch-bar'),
+                borderRadius: BorderRadius.circular(999),
+                onTap: _switchingTestUser
+                    ? null
+                    : () => setState(
+                        () => _showSwitchUserBar = !_showSwitchUserBar,
+                      ),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color:
+                        _showSwitchUserBar ? AppTheme.brandSoft : Colors.white,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: _showSwitchUserBar
+                          ? AppTheme.brandPrimary
+                          : AppTheme.borderSubtle,
+                    ),
+                  ),
+                  child: Text(
+                    _showSwitchUserBar ? 'สลับบัญชี ▴' : 'สลับบัญชี ▾',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.brandDeep,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (_showSwitchUserBar) ...[
+            const SizedBox(height: 6),
+            Wrap(
+              key: const Key('quick-switch-users-panel'),
+              spacing: 6,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: _authConfig.testUsers.map((u) {
+                final isCurrent =
+                    u.id == _user.id ||
+                    (u.bcId.isNotEmpty && u.bcId == _user.bcId);
+                return _buildQuickSwitchChip(u, isCurrent: isCurrent);
+              }).toList(),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickSwitchChip(QuickTestUser u, {required bool isCurrent}) {
+    final label = u.badge.isNotEmpty
+        ? '${u.displayName} (${u.badge})'
+        : u.displayName;
+    return Material(
+      color: isCurrent ? AppTheme.brandSoft : Colors.white,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        key: Key('quick-switch-user-${u.slot}'),
+        borderRadius: BorderRadius.circular(999),
+        onTap: (isCurrent || _switchingTestUser)
+            ? null
+            : () => _switchToTestUser(u),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color:
+                  isCurrent ? AppTheme.brandPrimary : AppTheme.borderSubtle,
+            ),
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 210),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                UserAvatar(
+                  name: u.displayName,
+                  radius: 10,
+                  isOfficial: u.role == 'admin',
+                ),
+                const SizedBox(width: 5),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w600,
+                      color:
+                          isCurrent ? AppTheme.brandDeep : AppTheme.slateDark,
+                    ),
+                  ),
+                ),
+                if (isCurrent) ...[
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.check_circle_rounded,
+                    size: 13,
+                    color: AppTheme.brandPrimary,
+                  ),
+                ],
+              ],
+            ),
           ),
         ),
       ),
-      bottomNavigationBar: DecoratedBox(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: AppTheme.borderSubtle)),
-          boxShadow: [
-            BoxShadow(
-              color: Color(0x140F172A),
-              blurRadius: 18,
-              offset: Offset(0, -4),
-            ),
-          ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Build Adaptive Shell — จอแคบ: แท็บล่างแบบมือถือ · จอกว้าง: แถบเมนูซ้าย + สองฝั่ง
+  // ---------------------------------------------------------------------------
+  static const _navItems = <({IconData icon, IconData selected, String label})>[
+    (
+      icon: Icons.home_outlined,
+      selected: Icons.home_rounded,
+      label: 'หน้าหลัก',
+    ),
+    (
+      icon: Icons.chat_bubble_outline_rounded,
+      selected: Icons.chat_bubble_rounded,
+      label: 'แชท',
+    ),
+    (
+      icon: Icons.bookmark_border_rounded,
+      selected: Icons.bookmark_rounded,
+      label: 'สมุดบันทึก',
+    ),
+    (
+      icon: Icons.settings_outlined,
+      selected: Icons.settings_rounded,
+      label: 'ตั้งค่า',
+    ),
+  ];
+
+  /// ลำดับปุ่มที่แสดง (ค่า = เลขแท็บ): แชทอยู่อันแรก — เลขแท็บภายในคงเดิม
+  static const _navOrder = <int>[1, 0, 2, 3];
+
+  void _onNavSelected(int idx) {
+    setState(() => _selectedIndex = idx);
+    if (idx == 2) _reloadNotebookNotes();
+    if (idx == 3 && _user.isAdmin) _loadAdminDataQuietly();
+  }
+
+  Widget _navIcon(int idx, {required bool selected}) {
+    final item = _navItems[idx];
+    final icon = Icon(
+      selected ? item.selected : item.icon,
+      color: selected ? AppTheme.brandDeep : null,
+    );
+    if (idx != 1) return icon;
+    return Badge(
+      isLabelVisible: _totalUnreadCount > 0,
+      backgroundColor: AppTheme.brandPrimary,
+      label: Text('$_totalUnreadCount'),
+      child: icon,
+    );
+  }
+
+  /// ให้ลูกเห็นความกว้างของ "ช่องตัวเอง" แทนความกว้างทั้งหน้าต่าง
+  /// (จอย่อยที่เช็ก MediaQuery < 600 จะจัดแบบกะทัดรัดได้ถูกต้อง)
+  Widget _paneScope(Widget child) {
+    return LayoutBuilder(
+      builder: (context, box) {
+        final mq = MediaQuery.of(context);
+        return MediaQuery(
+          data: mq.copyWith(size: Size(box.maxWidth, mq.size.height)),
+          child: child,
+        );
+      },
+    );
+  }
+
+  Widget _buildWideRoomPane() {
+    final conv = _roomPaneOpened ? _activeConversation : null;
+    if (conv == null) {
+      return ColoredBox(
+        color: AppTheme.surfaceBg,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.chat_bubble_outline_rounded,
+                size: 44,
+                color: AppTheme.slateMuted,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'เลือกห้องแชทเพื่อเริ่มสนทนา',
+                style: TextStyle(color: AppTheme.slateMuted),
+              ),
+            ],
+          ),
         ),
-        child: NavigationBar(
-          selectedIndex: _selectedIndex.clamp(0, 3),
-          onDestinationSelected: (idx) {
-            setState(() => _selectedIndex = idx);
-            if (idx == 2) _reloadNotebookNotes();
-            if (idx == 3 && _user.isAdmin) _loadAdminDataQuietly();
-          },
-          backgroundColor: Colors.white,
-          indicatorColor: AppTheme.brandSoft,
-          destinations: [
-            NavigationDestination(
-              icon: const Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home_rounded, color: AppTheme.brandDeep),
-              label: 'หน้าหลัก',
-            ),
-            NavigationDestination(
-              icon: Badge(
-                isLabelVisible: _totalUnreadCount > 0,
-                backgroundColor: AppTheme.brandPrimary,
-                label: Text('$_totalUnreadCount'),
-                child: const Icon(Icons.chat_bubble_outline_rounded),
-              ),
-              selectedIcon: Badge(
-                isLabelVisible: _totalUnreadCount > 0,
-                backgroundColor: AppTheme.brandPrimary,
-                label: Text('$_totalUnreadCount'),
-                child: Icon(
-                  Icons.chat_bubble_rounded,
-                  color: AppTheme.brandDeep,
+      );
+    }
+    return _paneScope(
+      ChatRoomScreen(
+        key: ValueKey('embedded-room-${conv.id}'),
+        conversation: conv,
+        allConversations: _conversations,
+        friends: _friends,
+        miniApps: _miniApps.where((m) => m.enabled).toList(),
+        isEmbedded: true,
+        onConversationUpdated: _refreshConversationsAndFriends,
+        onConversationLeft: () {
+          if (mounted && _activeConversation?.id == conv.id) {
+            setState(() => _activeConversation = null);
+          }
+          _refreshConversationsAndFriends();
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isWide = MediaQuery.sizeOf(context).width >= _wideBreakpoint;
+    _isWideLayout = isWide;
+    final selected = _selectedIndex.clamp(0, 3);
+    // หน้าหลัก/แชท บนจอกว้าง = รายการซ้าย + ห้องแชทขวา; แท็บอื่นใช้เต็มความกว้าง
+    final splitRoom = isWide && selected <= 1;
+
+    final tabBody = AnimatedSwitcher(
+      duration: AppTheme.motionMed,
+      transitionBuilder: AppTheme.fadeSlideTransition,
+      child: KeyedSubtree(
+        key: ValueKey('tab-$_selectedIndex'),
+        child: _buildSelectedTabBody(isWide: isWide),
+      ),
+    );
+
+    Widget content = splitRoom
+        ? Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(width: _listPaneWidth, child: _paneScope(tabBody)),
+              const VerticalDivider(width: 1, color: AppTheme.borderSubtle),
+              Expanded(child: _buildWideRoomPane()),
+            ],
+          )
+        : tabBody;
+
+    if (isWide) {
+      content = Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          NavigationRail(
+            selectedIndex: _navOrder.indexOf(selected),
+            onDestinationSelected: (pos) => _onNavSelected(_navOrder[pos]),
+            backgroundColor: Colors.white,
+            indicatorColor: AppTheme.brandSoft,
+            labelType: NavigationRailLabelType.all,
+            minWidth: 72,
+            destinations: [
+              for (final i in _navOrder)
+                NavigationRailDestination(
+                  icon: _navIcon(i, selected: false),
+                  selectedIcon: _navIcon(i, selected: true),
+                  label: Text(_navItems[i].label),
                 ),
-              ),
-              label: 'แชท',
+            ],
+          ),
+          const VerticalDivider(width: 1, color: AppTheme.borderSubtle),
+          Expanded(child: content),
+        ],
+      );
+    }
+
+    return Scaffold(
+      body: SafeArea(
+        child: Column(
+          children: [
+            CallInlinePanel(
+              conversationId: _activeConversation?.id,
+              onOpenConversation: _openConversationById,
             ),
-            NavigationDestination(
-              icon: const Icon(Icons.bookmark_border_rounded),
-              selectedIcon: Icon(
-                Icons.bookmark_rounded,
-                color: AppTheme.brandDeep,
-              ),
-              label: 'สมุดบันทึก',
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.settings_outlined),
-              selectedIcon: Icon(
-                Icons.settings_rounded,
-                color: AppTheme.brandDeep,
-              ),
-              label: 'ตั้งค่า',
-            ),
+            if (_authConfig.testUsersEnabled &&
+                _authConfig.testUsers.isNotEmpty)
+              _buildQuickTestSwitchBar(),
+            Expanded(child: content),
           ],
         ),
       ),
+      bottomNavigationBar: isWide
+          ? null
+          : DecoratedBox(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(top: BorderSide(color: AppTheme.borderSubtle)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x140F172A),
+                    blurRadius: 18,
+                    offset: Offset(0, -4),
+                  ),
+                ],
+              ),
+              child: NavigationBar(
+                selectedIndex: _navOrder.indexOf(selected),
+                onDestinationSelected: (pos) => _onNavSelected(_navOrder[pos]),
+                backgroundColor: Colors.white,
+                indicatorColor: AppTheme.brandSoft,
+                destinations: [
+                  for (final i in _navOrder)
+                    NavigationDestination(
+                      icon: _navIcon(i, selected: false),
+                      selectedIcon: _navIcon(i, selected: true),
+                      label: _navItems[i].label,
+                    ),
+                ],
+              ),
+            ),
     );
   }
 
@@ -692,207 +1164,6 @@ class _MainShellState extends State<MainShell> {
       default:
         return _buildChatsTab(isWide: isWide);
     }
-  }
-
-  Widget _buildDesktopNavRail() {
-    final navItems = [
-      (0, Icons.home_rounded, 'หน้าหลัก', 0),
-      (1, Icons.chat_bubble_rounded, 'แชท', _totalUnreadCount),
-      (2, Icons.bookmark_rounded, 'สมุดบันทึก', 0),
-      (3, Icons.settings_rounded, 'ตั้งค่า', 0),
-    ];
-    const idleColor = Color(0xFF94A3B8);
-
-    return Container(
-      width: 70,
-      decoration: const BoxDecoration(gradient: AppTheme.navyGradient),
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          InkWell(
-            onTap: () => setState(() {
-              _selectedIndex = 0;
-              _homeInlinePanel = 'profile';
-            }),
-            borderRadius: BorderRadius.circular(999),
-            child: UserAvatar(
-              name: _user.displayName,
-              avatarUrl: _user.avatarUrl,
-              radius: 18,
-              showOnline: true,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: AppTheme.brandPrimary.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: const Text(
-              'BC Ai Chat',
-              maxLines: 1,
-              style: TextStyle(
-                color: AppTheme.goldClay,
-                fontSize: 9.5,
-                height: 1.35,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: Column(
-              children: navItems.map((item) {
-                final idx = item.$1;
-                final icon = item.$2;
-                final label = item.$3;
-                final badgeCount = item.$4;
-                final selected = _selectedIndex == idx;
-                final fg = selected ? Colors.white : idleColor;
-
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                      hoverColor: Colors.white.withValues(alpha: 0.08),
-                      onTap: () {
-                        setState(() => _selectedIndex = idx);
-                        if (idx == 2) _reloadNotebookNotes();
-                        if (idx == 3 && _user.isAdmin) _loadAdminDataQuietly();
-                      },
-                      child: AnimatedContainer(
-                        duration: AppTheme.motionMed,
-                        curve: AppTheme.motionCurve,
-                        width: 58,
-                        padding: const EdgeInsets.symmetric(vertical: 7),
-                        decoration: BoxDecoration(
-                          gradient: selected ? AppTheme.brandGradient : null,
-                          borderRadius: BorderRadius.circular(
-                            AppTheme.radiusMd,
-                          ),
-                          boxShadow: selected
-                              ? AppTheme.glow(AppTheme.brandPrimary)
-                              : const [],
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Badge(
-                              isLabelVisible: badgeCount > 0,
-                              backgroundColor: AppTheme.dangerRed,
-                              label: Text('$badgeCount'),
-                              child: Icon(icon, color: fg, size: 22),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: fg,
-                                fontSize: 10.5,
-                                height: 1.35,
-                                fontWeight: selected
-                                    ? FontWeight.w700
-                                    : FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-          IconButton(
-            onPressed: () => setState(() {
-              _selectedIndex = 0;
-              _homeInlinePanel = 'qr';
-            }),
-            tooltip: 'QR Code ของฉัน',
-            icon: const Icon(Icons.qr_code_2_rounded, color: Color(0xFFCBD5E1)),
-          ),
-          IconButton(
-            onPressed: widget.onLoggedOut,
-            tooltip: 'สลับบัญชี Gmail / ออกจากระบบ',
-            icon: const Icon(Icons.logout_rounded, color: Color(0xFFF87171)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyChatPlaceholder() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppTheme.surfaceBg, AppTheme.brandSoft],
-        ),
-      ),
-      alignment: Alignment.center,
-      padding: const EdgeInsets.all(24),
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 420),
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 36),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(AppTheme.radiusXl),
-          boxShadow: AppTheme.shadowLg,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Container(
-              width: 72,
-              height: 72,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                gradient: AppTheme.brandGradient,
-                shape: BoxShape.circle,
-                boxShadow: AppTheme.glow(AppTheme.brandPrimary),
-              ),
-              child: const Icon(
-                Icons.chat_bubble_outline_rounded,
-                size: 34,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'เลือกห้องแชทหรือเพื่อนด้านซ้ายเพื่อเริ่มสนทนา',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 16,
-                height: 1.4,
-                fontWeight: FontWeight.w700,
-                color: AppTheme.slateDark,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'ซิงค์แชทข้ามเครื่องด้วย Gmail · ไฟล์และรูปภาพเก็บถาวรบน MinIO ไม่หมดอายุ',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12.5,
-                height: 1.45,
-                color: AppTheme.slateMuted,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   // ---------------------------------------------------------------------------
@@ -946,69 +1217,15 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
-  /// ปุ่มลัด: ไอคอนในกรอบมนสีอ่อน + ป้ายชื่อ อยู่กึ่งกลาง
-  Widget _quickActionTile({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        onTap: onTap,
-        child: Ink(
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-            border: Border.all(color: AppTheme.borderSubtle),
-            boxShadow: AppTheme.shadowSm,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-                ),
-                child: Icon(icon, size: 20, color: color),
-              ),
-              const SizedBox(width: 10),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 13.5,
-                    height: 1.35,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.slateDark,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildHomeTab({required bool isWide}) {
     final groups = _conversations.where((c) => c.isGroup).toList();
     final officials = _conversations.where((c) => c.isOfficial).toList();
-    final enabledMiniApps = _miniApps.where((m) => m.enabled).toList();
+    final smartQ = normalizeThaiDigits(_homeSmartCtrlQuery()).trim().toLowerCase();
+    final smartDigits = smartQ.replaceAll(RegExp(r'[\s\-+().]'), '');
 
     return Column(
       children: [
-        // Top Header
+        // Clean Top Header (zero corporate / cloud badges)
         Container(
           height: 48,
           padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -1019,30 +1236,31 @@ class _MainShellState extends State<MainShell> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const Text(
-                'หน้าหลัก',
-                style: TextStyle(
-                  fontSize: 17,
-                  height: 1.35,
-                  fontWeight: FontWeight.w800,
-                  color: AppTheme.slateDark,
+              ClipOval(
+                child: Image.asset(
+                  'assets/images/bc_logo.png',
+                  width: 30,
+                  height: 30,
+                  fit: BoxFit.cover,
                 ),
               ),
               const SizedBox(width: 8),
-              Expanded(
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: PillBadge(
-                    text: 'Gmail Cloud Sync',
-                    backgroundColor: AppTheme.brandSoft,
-                    textColor: AppTheme.brandDeep,
-                    icon: Icons.cloud_done_rounded,
+              const Expanded(
+                child: Text(
+                  'BC Ai Chat',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 17,
+                    height: 1.3,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.slateDark,
                   ),
                 ),
               ),
               IconButton(
                 onPressed: () => _toggleHomePanel('add_friend'),
-                tooltip: 'เพิ่มเพื่อนด้วย BC ID / Gmail / QR',
+                tooltip: 'เพิ่มเพื่อน 4 ช่องทาง',
                 icon: Icon(
                   Icons.person_add_alt_1_rounded,
                   color: _homeInlinePanel == 'add_friend'
@@ -1068,7 +1286,7 @@ class _MainShellState extends State<MainShell> {
           child: ListView(
             padding: const EdgeInsets.all(10),
             children: [
-              // My Profile Card (hero)
+              // Clean My Profile Card (BCQR hidden until user taps QR ของฉัน)
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -1092,33 +1310,22 @@ class _MainShellState extends State<MainShell> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      _user.displayName,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                        height: 1.35,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  PillBadge(
-                                    text: _user.department,
-                                    backgroundColor: AppTheme.brandPrimary
-                                        .withValues(alpha: 0.25),
-                                    textColor: AppTheme.goldClay,
-                                  ),
-                                ],
+                              Text(
+                                _user.displayName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  height: 1.35,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                'BC ID: @${_user.bcId} · ${_user.email}',
+                                _user.bcId.isNotEmpty
+                                    ? '@${_user.bcId}'
+                                    : _user.email,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
@@ -1128,28 +1335,29 @@ class _MainShellState extends State<MainShell> {
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              Text(
-                                _user.statusMessage,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Color(0xFFCBD5E1),
-                                  fontSize: 12,
-                                  height: 1.4,
+                              if (_user.statusMessage.isNotEmpty)
+                                Text(
+                                  _user.statusMessage,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Color(0xFFCBD5E1),
+                                    fontSize: 12,
+                                    height: 1.4,
+                                  ),
                                 ),
-                              ),
                             ],
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Expanded(
                           child: SizedBox(
-                            height: 40,
+                            height: 38,
                             child: ElevatedButton.icon(
                               onPressed: () => _toggleHomePanel('qr'),
                               style: ElevatedButton.styleFrom(
@@ -1169,13 +1377,13 @@ class _MainShellState extends State<MainShell> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: SizedBox(
-                            height: 40,
+                            height: 38,
                             child: OutlinedButton.icon(
                               onPressed: () => _toggleHomePanel('profile'),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: Colors.white,
                                 side: BorderSide(
-                                  color: Colors.white.withValues(alpha: 0.25),
+                                  color: Colors.white.withValues(alpha: 0.28),
                                 ),
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 10,
@@ -1183,7 +1391,7 @@ class _MainShellState extends State<MainShell> {
                               ),
                               icon: const Icon(Icons.edit_rounded, size: 15),
                               label: const Text(
-                                'ตั้งค่า BC ID',
+                                'แก้ไขโปรไฟล์',
                                 style: TextStyle(fontSize: 12.5),
                               ),
                             ),
@@ -1194,32 +1402,118 @@ class _MainShellState extends State<MainShell> {
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 10),
 
-              // Quick Action Buttons (Add Friend, Join Token, Create Group) — inline, no popup
+              // Unified Smart Search & Add Friend Bar
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
-                    child: _quickActionTile(
-                      icon: Icons.person_add_alt_1_rounded,
-                      label: 'เพิ่มเพื่อน',
-                      color: AppTheme.brandDeep,
-                      onTap: () => _toggleHomePanel('add_friend'),
+                    child: TextField(
+                      controller: _homeSmartSearchCtrl,
+                      textInputAction: TextInputAction.search,
+                      onChanged: (_) => setState(() {
+                        if (_homeSmartSearchCtrl.text.trim().isEmpty) {
+                          _homeSmartQuery = '';
+                          _homeSmartHasSearched = false;
+                          _homeSmartResults = const [];
+                          _homeSmartError = null;
+                        }
+                      }),
+                      onSubmitted: (_) => _runHomeSmartSearch(),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        hintText: 'เบอร์ / @ID / อีเมล / รหัส QR',
+                        prefixIcon: const Icon(Icons.search_rounded, size: 19),
+                        suffixIcon: _homeSmartSearchCtrl.text.isNotEmpty
+                            ? IconButton(
+                                tooltip: 'ล้างคำค้นหา',
+                                onPressed: () => setState(() {
+                                  _homeSmartSearchCtrl.clear();
+                                  _homeSmartQuery = '';
+                                  _homeSmartHasSearched = false;
+                                  _homeSmartResults = const [];
+                                  _homeSmartError = null;
+                                }),
+                                icon: const Icon(Icons.close_rounded, size: 18),
+                              )
+                            : null,
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _quickActionTile(
-                      icon: Icons.group_add_rounded,
-                      label: 'สร้างกลุ่ม',
-                      color: AppTheme.workBlue,
-                      onTap: () => _toggleHomePanel('create_group'),
+                  const SizedBox(width: 6),
+                  SizedBox(
+                    height: 40,
+                    child: ElevatedButton(
+                      onPressed: _homeSmartSearching ? null : _runHomeSmartSearch,
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                      ),
+                      child: const Text('ค้นหา'),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  IconButton(
+                    onPressed: () => _toggleHomePanel('add_friend'),
+                    tooltip: 'เพิ่มเพื่อน 4 ช่องทาง / QR',
+                    style: IconButton.styleFrom(
+                      backgroundColor: _homeInlinePanel == 'add_friend'
+                          ? AppTheme.brandSoft
+                          : Colors.white,
+                      side: const BorderSide(color: AppTheme.borderSubtle),
+                      minimumSize: const Size(38, 38),
+                    ),
+                    icon: Icon(
+                      Icons.qr_code_scanner_rounded,
+                      size: 19,
+                      color: AppTheme.brandDeep,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
+
+              if (_homeSmartHasSearched) ...[
+                const SizedBox(height: 8),
+                _buildHomeSmartSearchResults(isWide: isWide),
+              ],
+
+              const SizedBox(height: 8),
+              // Compact Group Actions Row (collapsed forms behind 2 clean buttons)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 38,
+                      child: OutlinedButton.icon(
+                        onPressed: () => _toggleHomePanel('create_group'),
+                        icon: const Icon(Icons.group_add_rounded, size: 16),
+                        label: const Text(
+                          '+ สร้างกลุ่ม',
+                          style: TextStyle(fontSize: 12.5),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: SizedBox(
+                      height: 38,
+                      child: OutlinedButton.icon(
+                        onPressed: () => _toggleHomePanel('join_group'),
+                        icon: const Icon(Icons.vpn_key_outlined, size: 16),
+                        label: const Text(
+                          'เข้ากลุ่มด้วยรหัสเชิญ',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 12.5),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
               AnimatedSize(
                 duration: AppTheme.motionMed,
                 curve: AppTheme.motionCurve,
@@ -1229,91 +1523,11 @@ class _MainShellState extends State<MainShell> {
                   onClose: () => setState(() => _homeInlinePanel = null),
                 ),
               ),
-              const SizedBox(height: 10),
-
-              // Quick Mini-Apps Strip
-              _sectionHeader(
-                'เครื่องมือเสริมในแชท',
-                subtitle: 'หารค่าข้าว จัดทริป นัดเจอ และผู้ช่วย AI ส่วนตัว',
-                padding: const EdgeInsets.only(bottom: 8),
-                trailing: TextButton(
-                  onPressed: () => setState(() {
-                    _selectedIndex = 3;
-                    if (_user.isAdmin) _loadAdminDataQuietly();
-                  }),
-                  child: const Text(
-                    'ตั้งค่า & ทั้งหมด',
-                    style: TextStyle(fontSize: 12.5),
-                  ),
-                ),
-              ),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisExtent: 64,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                ),
-                itemCount: enabledMiniApps.length,
-                itemBuilder: (ctx, i) {
-                  final app = enabledMiniApps[i];
-                  final color = AppTheme.parseHexColor(app.color);
-                  return InkWell(
-                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                    onTap: () => _openMiniApp(app),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                        border: Border.all(color: AppTheme.borderSubtle),
-                        boxShadow: AppTheme.shadowSm,
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Container(
-                            width: 34,
-                            height: 34,
-                            decoration: BoxDecoration(
-                              color: color,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Icon(
-                              AppTheme.resolveMiniAppIcon(app.icon),
-                              color: Colors.white,
-                              size: 18,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              app.title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                height: 1.35,
-                                fontWeight: FontWeight.w700,
-                                color: AppTheme.slateDark,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 24),
 
               // App News Section
               if (officials.isNotEmpty) ...[
                 _sectionHeader(
                   'ข่าวสารแอป (${officials.length})',
-                  subtitle: 'อัปเดตฟีเจอร์และข่าวสารส่วนตัว',
                   padding: const EdgeInsets.only(bottom: 4),
                 ),
                 ...officials.map(
@@ -1341,65 +1555,84 @@ class _MainShellState extends State<MainShell> {
                     onTap: () => _selectConversation(c, isWide: isWide),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
               ],
 
               // Groups Section
-              _sectionHeader(
-                'กลุ่มสนทนา (${groups.length})',
-                padding: const EdgeInsets.only(bottom: 4),
-              ),
-              ...groups.map(
-                (g) => ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 6),
-                  leading: UserAvatar(
-                    name: g.name,
-                    avatarUrl: g.avatarUrl,
-                    radius: 17,
-                    isGroup: true,
-                  ),
-                  title: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          '${g.name} (${g.memberCount})',
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w700,
+              if (groups.isNotEmpty) ...[
+                _sectionHeader(
+                  'กลุ่มสนทนา (${groups.length})',
+                  padding: const EdgeInsets.only(bottom: 4),
+                ),
+                ...groups.map(
+                  (g) => ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 6),
+                    leading: UserAvatar(
+                      name: g.name,
+                      avatarUrl: g.avatarUrl,
+                      radius: 17,
+                      isGroup: true,
+                    ),
+                    title: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            '${g.name} (${g.memberCount})',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 6),
-                      PillBadge(
-                        text: g.folderLabel,
-                        backgroundColor: g.isFamily
-                            ? const Color(0xFFDBEAFE)
-                            : AppTheme.brandSoft,
-                        textColor: g.isFamily
-                            ? AppTheme.workBlue
-                            : AppTheme.brandDeep,
-                      ),
-                    ],
+                        const SizedBox(width: 6),
+                        PillBadge(
+                          text: g.folderLabel,
+                          backgroundColor: g.isFamily
+                              ? const Color(0xFFDBEAFE)
+                              : AppTheme.brandSoft,
+                          textColor: g.isFamily
+                              ? AppTheme.workBlue
+                              : AppTheme.brandDeep,
+                        ),
+                      ],
+                    ),
+                    subtitle: Text(
+                      g.lastMessage?.previewText ?? 'แตะเพื่อเปิดห้องสนทนากลุ่ม',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    onTap: () => _selectConversation(g, isWide: isWide),
                   ),
-                  subtitle: Text(
-                    g.lastMessage?.previewText ?? 'แตะเพื่อเปิดห้องสนทนากลุ่ม',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                  onTap: () => _selectConversation(g, isWide: isWide),
                 ),
-              ),
-              const SizedBox(height: 12),
+                const SizedBox(height: 10),
+              ],
 
-              // Friends Section (favorites sorted first, hidden toggle + actions)
+              // Friends Section (favorites sorted first, inline ⋯ actions)
               Builder(
                 builder: (_) {
-                  final hiddenCount = _friends.where((f) => f.isHidden).length;
+                  final hiddenCount = _friends
+                      .where((f) => f.isHidden && !f.isBlocked)
+                      .length;
+                  final blockedCount =
+                      _friends.where((f) => f.isBlocked).length;
                   final visibleFriends = _friends
-                      .where((f) => _showHiddenFriends || !f.isHidden)
+                      .where((f) {
+                        if (f.isBlocked) return false;
+                        if (!_showHiddenFriends && f.isHidden) return false;
+                        if (smartQ.isEmpty) return true;
+                        final nameHit = f.displayName.toLowerCase().contains(smartQ);
+                        final idHit = f.bcId.toLowerCase().contains(smartQ);
+                        final emailHit = f.email.toLowerCase().contains(smartQ);
+                        final normPhone = normalizeThaiDigits(
+                          f.phone,
+                        ).replaceAll(RegExp(r'[\s\-+().]'), '');
+                        final phoneHit = smartDigits.isNotEmpty &&
+                            normPhone.contains(smartDigits);
+                        return nameHit || idHit || emailHit || phoneHit;
+                      })
                       .toList()
                     ..sort((a, b) {
                       if (a.isFavorite != b.isFavorite) {
@@ -1413,149 +1646,337 @@ class _MainShellState extends State<MainShell> {
                       _sectionHeader(
                         'เพื่อนและครอบครัว (${visibleFriends.length})',
                         padding: const EdgeInsets.only(bottom: 4),
-                        trailing: hiddenCount > 0
-                            ? TextButton(
-                                onPressed: () => setState(
-                                  () => _showHiddenFriends = !_showHiddenFriends,
-                                ),
-                                child: Text(
-                                  _showHiddenFriends
-                                      ? 'ซ่อนรายชื่อที่พัก ($hiddenCount)'
-                                      : 'แสดงที่ซ่อน ($hiddenCount)',
-                                  style: const TextStyle(fontSize: 12),
-                                ),
+                        trailing: (hiddenCount > 0 || blockedCount > 0)
+                            ? Wrap(
+                                spacing: 4,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  if (hiddenCount > 0)
+                                    TextButton(
+                                      onPressed: () => setState(
+                                        () => _showHiddenFriends =
+                                            !_showHiddenFriends,
+                                      ),
+                                      style: TextButton.styleFrom(
+                                        visualDensity: VisualDensity.compact,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
+                                        minimumSize: Size.zero,
+                                      ),
+                                      child: Text(
+                                        _showHiddenFriends
+                                            ? 'ซ่อนที่พัก ($hiddenCount)'
+                                            : 'ที่ซ่อน ($hiddenCount)',
+                                        style: const TextStyle(fontSize: 11.5),
+                                      ),
+                                    ),
+                                  if (blockedCount > 0)
+                                    TextButton(
+                                      onPressed: () => setState(() {
+                                        _selectedIndex = 3;
+                                        _openSettingsSection = 'privacy';
+                                      }),
+                                      style: TextButton.styleFrom(
+                                        visualDensity: VisualDensity.compact,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
+                                        minimumSize: Size.zero,
+                                      ),
+                                      child: Text(
+                                        'บล็อก ($blockedCount)',
+                                        style: const TextStyle(
+                                          fontSize: 11.5,
+                                          color: AppTheme.dangerRed,
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               )
                             : null,
                       ),
-                      ...visibleFriends.map(
-                        (f) => ListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                          ),
-                          leading: UserAvatar(
-                            name: f.displayName,
-                            avatarUrl: f.avatarUrl,
-                            radius: 17,
-                            showOnline: f.isOnline && !f.isBlocked,
-                            isOfficial: f.isOfficial,
-                          ),
-                          title: Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              if (f.isFavorite) ...[
-                                const Icon(
-                                  Icons.star_rounded,
-                                  size: 16,
-                                  color: AppTheme.goldPin,
-                                ),
-                                const SizedBox(width: 4),
-                              ],
-                              Flexible(
-                                child: Text(
-                                  f.displayName,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 13.5,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              PillBadge(
-                                text: f.isBlocked ? 'บล็อกแล้ว' : f.department,
-                                backgroundColor: f.isBlocked
-                                    ? const Color(0xFFFEE2E2)
-                                    : const Color(0xFFE0E7FF),
-                                textColor: f.isBlocked
-                                    ? AppTheme.dangerRed
-                                    : AppTheme.workBlue,
-                              ),
-                            ],
-                          ),
-                          subtitle: Text(
-                            f.statusMessage.isNotEmpty
+                      ...visibleFriends.map((f) {
+                        final isMenuOpen = _expandedFriendActionId == f.id;
+                        final isConfirmingDelete = _pendingDeleteFriendId == f.id;
+                        final friendSub = f.bcId.isNotEmpty
+                            ? '@${f.bcId}${f.statusMessage.isNotEmpty ? ' · ${f.statusMessage}' : ''}'
+                            : (f.statusMessage.isNotEmpty
                                 ? f.statusMessage
-                                : f.email,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                icon: Icon(
-                                  Icons.chat_bubble_outline_rounded,
-                                  size: 18,
-                                  color: AppTheme.brandDeep,
-                                ),
-                                onPressed: () =>
-                                    _openChatWithFriend(f, isWide: isWide),
+                                : f.email);
+                        return Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 6,
                               ),
-                              PopupMenuButton<String>(
-                                tooltip: 'จัดการเพื่อน',
-                                icon: const Icon(
-                                  Icons.more_vert_rounded,
-                                  size: 18,
-                                ),
-                                onSelected: (action) async {
-                                  if (action == 'chat') {
-                                    await _openChatWithFriend(
-                                      f,
-                                      isWide: isWide,
-                                    );
-                                    return;
-                                  }
-                                  if (action == 'favorite') {
-                                    await ApiService.instance.updateFriendMeta(
-                                      f.id,
-                                      isFavorite: !f.isFavorite,
-                                    );
-                                  } else if (action == 'hide') {
-                                    await ApiService.instance.updateFriendMeta(
-                                      f.id,
-                                      isHidden: !f.isHidden,
-                                    );
-                                  } else if (action == 'block') {
-                                    await ApiService.instance.updateFriendMeta(
-                                      f.id,
-                                      isBlocked: !f.isBlocked,
-                                    );
-                                  }
-                                  await _refreshConversationsAndFriends();
-                                },
-                                itemBuilder: (_) => [
-                                  PopupMenuItem(
-                                    value: 'favorite',
+                              leading: UserAvatar(
+                                name: f.displayName,
+                                avatarUrl: f.avatarUrl,
+                                radius: 17,
+                                showOnline: f.isOnline && !f.isBlocked,
+                                isOfficial: f.isOfficial,
+                              ),
+                              title: Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Flexible(
                                     child: Text(
+                                      f.displayName,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 13.5,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                  if (f.isBlocked) ...[
+                                    const SizedBox(width: 6),
+                                    const PillBadge(
+                                      text: 'บล็อกแล้ว',
+                                      backgroundColor: Color(0xFFFEE2E2),
+                                      textColor: AppTheme.dangerRed,
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              subtitle: Text(
+                                friendSub,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  IconButton(
+                                    tooltip: f.isFavorite
+                                        ? 'เอาออกจากรายการโปรด'
+                                        : 'เพิ่มในรายการโปรด',
+                                    constraints: const BoxConstraints(
+                                      minWidth: 32,
+                                      minHeight: 32,
+                                    ),
+                                    padding: EdgeInsets.zero,
+                                    icon: Icon(
                                       f.isFavorite
-                                          ? 'เอาออกจากรายการโปรด'
-                                          : 'เพิ่มในรายการโปรด ⭐',
+                                          ? Icons.star_rounded
+                                          : Icons.star_border_rounded,
+                                      size: 20,
+                                      color: f.isFavorite
+                                          ? AppTheme.goldPin
+                                          : AppTheme.slateMuted,
                                     ),
+                                    onPressed: () async {
+                                      await ApiService.instance.updateFriendMeta(
+                                        f.id,
+                                        isFavorite: !f.isFavorite,
+                                      );
+                                      await _refreshConversationsAndFriends();
+                                    },
                                   ),
-                                  PopupMenuItem(
-                                    value: 'hide',
-                                    child: Text(
-                                      f.isHidden
-                                          ? 'ยกเลิกซ่อนเพื่อน'
-                                          : 'ซ่อนจากรายชื่อ',
+                                  IconButton(
+                                    tooltip: 'แชท',
+                                    constraints: const BoxConstraints(
+                                      minWidth: 32,
+                                      minHeight: 32,
                                     ),
+                                    padding: EdgeInsets.zero,
+                                    icon: Icon(
+                                      Icons.chat_bubble_outline_rounded,
+                                      size: 18,
+                                      color: AppTheme.brandDeep,
+                                    ),
+                                    onPressed: () =>
+                                        _openChatWithFriend(f, isWide: isWide),
                                   ),
-                                  PopupMenuItem(
-                                    value: 'block',
-                                    child: Text(
-                                      f.isBlocked
-                                          ? 'ปลดบล็อกเพื่อน'
-                                          : 'บล็อกการติดต่อ',
+                                  IconButton(
+                                    tooltip: 'จัดการเพื่อน',
+                                    constraints: const BoxConstraints(
+                                      minWidth: 32,
+                                      minHeight: 32,
                                     ),
+                                    padding: EdgeInsets.zero,
+                                    icon: Icon(
+                                      Icons.more_horiz_rounded,
+                                      size: 19,
+                                      color: isMenuOpen
+                                          ? AppTheme.brandPrimary
+                                          : AppTheme.slateBody,
+                                    ),
+                                    onPressed: () => setState(() {
+                                      _expandedFriendActionId =
+                                          isMenuOpen ? null : f.id;
+                                      _pendingDeleteFriendId = null;
+                                    }),
                                   ),
                                 ],
                               ),
-                            ],
-                          ),
-                          onTap: () => _openChatWithFriend(f, isWide: isWide),
-                        ),
-                      ),
+                              onTap: () => _openChatWithFriend(f, isWide: isWide),
+                            ),
+                            if (isMenuOpen)
+                              Container(
+                                margin: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.surfaceBg,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: AppTheme.borderSubtle,
+                                  ),
+                                ),
+                                child: Wrap(
+                                  spacing: 6,
+                                  runSpacing: 6,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    OutlinedButton.icon(
+                                      onPressed: () async {
+                                        setState(() {
+                                          _expandedFriendActionId = null;
+                                        });
+                                        await ApiService.instance
+                                            .updateFriendMeta(
+                                          f.id,
+                                          isHidden: !f.isHidden,
+                                        );
+                                        await _refreshConversationsAndFriends();
+                                      },
+                                      icon: Icon(
+                                        f.isHidden
+                                            ? Icons.visibility_outlined
+                                            : Icons.visibility_off_outlined,
+                                        size: 15,
+                                      ),
+                                      label: Text(
+                                        f.isHidden ? 'เลิกซ่อน' : 'ซ่อน',
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                      style: OutlinedButton.styleFrom(
+                                        visualDensity: VisualDensity.compact,
+                                        minimumSize: const Size(0, 32),
+                                      ),
+                                    ),
+                                    OutlinedButton.icon(
+                                      onPressed: () async {
+                                        setState(() {
+                                          _expandedFriendActionId = null;
+                                        });
+                                        await ApiService.instance
+                                            .updateFriendMeta(
+                                          f.id,
+                                          isBlocked: !f.isBlocked,
+                                        );
+                                        await _refreshConversationsAndFriends();
+                                      },
+                                      icon: const Icon(
+                                        Icons.block_rounded,
+                                        size: 15,
+                                      ),
+                                      label: Text(
+                                        f.isBlocked ? 'ปลดบล็อก' : 'บล็อก',
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                      style: OutlinedButton.styleFrom(
+                                        visualDensity: VisualDensity.compact,
+                                        minimumSize: const Size(0, 32),
+                                      ),
+                                    ),
+                                    if (!isConfirmingDelete)
+                                      OutlinedButton.icon(
+                                        onPressed: () => setState(
+                                          () => _pendingDeleteFriendId = f.id,
+                                        ),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: AppTheme.dangerRed,
+                                          side: BorderSide(
+                                            color: AppTheme.dangerRed
+                                                .withValues(alpha: 0.45),
+                                          ),
+                                          visualDensity: VisualDensity.compact,
+                                          minimumSize: const Size(0, 32),
+                                        ),
+                                        icon: const Icon(
+                                          Icons.person_remove_outlined,
+                                          size: 15,
+                                        ),
+                                        label: const Text(
+                                          'ลบเพื่อน',
+                                          style: TextStyle(fontSize: 12),
+                                        ),
+                                      )
+                                    else ...[
+                                      FilledButton(
+                                        onPressed: () async {
+                                          final messenger =
+                                              ScaffoldMessenger.of(context);
+                                          setState(() {
+                                            _expandedFriendActionId = null;
+                                            _pendingDeleteFriendId = null;
+                                          });
+                                          try {
+                                            await ApiService.instance
+                                                .deleteFriend(f.id);
+                                            if (mounted) {
+                                              messenger.showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                    'ลบ ${f.displayName} ออกจากรายชื่อเพื่อนแล้ว',
+                                                  ),
+                                                ),
+                                              );
+                                            }
+                                          } catch (e) {
+                                            if (mounted) {
+                                              messenger.showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                    _friendlyUiError(
+                                                      e,
+                                                      'ลบเพื่อนไม่สำเร็จ',
+                                                    ),
+                                                  ),
+                                                ),
+                                              );
+                                            }
+                                          }
+                                          await _refreshConversationsAndFriends();
+                                        },
+                                        style: FilledButton.styleFrom(
+                                          backgroundColor: AppTheme.dangerRed,
+                                          minimumSize: const Size(0, 32),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                          ),
+                                        ),
+                                        child: const Text(
+                                          'ยืนยันลบ',
+                                          style: TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                      TextButton(
+                                        onPressed: () => setState(
+                                          () => _pendingDeleteFriendId = null,
+                                        ),
+                                        child: const Text(
+                                          'ยกเลิก',
+                                          style: TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                          ],
+                        );
+                      }),
                     ],
                   );
                 },
@@ -1567,19 +1988,211 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
+  String _homeSmartCtrlQuery() => _homeSmartSearchCtrl.text;
+
+  Widget _buildHomeSmartSearchResults({required bool isWide}) {
+    final myId = _user.id;
+    return _buildInlinePanelWrapper(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const Expanded(
+                child: Text(
+                  'ผลการค้นหาผู้ใช้',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                ),
+              ),
+              TextButton(
+                onPressed: () => setState(() {
+                  _homeSmartHasSearched = false;
+                  _homeSmartResults = const [];
+                  _homeSmartError = null;
+                }),
+                child: const Text('ปิด', style: TextStyle(fontSize: 12)),
+              ),
+            ],
+          ),
+          if (_homeSmartSearching)
+            const Padding(
+              padding: EdgeInsets.all(10),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_homeSmartError != null)
+            Text(
+              _homeSmartError!,
+              style: const TextStyle(fontSize: 12, color: AppTheme.dangerRed),
+            )
+          else if (_homeSmartResults.isEmpty)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'ไม่พบผู้ใช้จาก "$_homeSmartQuery" (${_homeSmartMode == 'phone' ? 'เบอร์โทร' : _homeSmartMode == 'email' ? 'อีเมล' : _homeSmartMode == 'qr' ? 'รหัส QR' : '@BC ID'})',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.slateMuted,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                OutlinedButton.icon(
+                  onPressed: () => _toggleHomePanel('add_friend'),
+                  icon: const Icon(Icons.person_add_alt_1_rounded, size: 15),
+                  label: const Text(
+                    'ลองค้นหาแบบ 4 ช่องทาง',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ),
+              ],
+            )
+          else
+            for (final u in _homeSmartResults)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    UserAvatar(
+                      name: u.displayName,
+                      avatarUrl: u.avatarUrl,
+                      radius: 16,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            u.displayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          Text(
+                            u.bcId.isNotEmpty ? '@${u.bcId}' : u.email,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              color: AppTheme.slateMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    if (u.id == myId)
+                      PillBadge(
+                        text: 'บัญชีของคุณเอง',
+                        backgroundColor: AppTheme.brandSoft,
+                        textColor: AppTheme.brandDeep,
+                      )
+                    else if (_friends.any((f) => f.id == u.id))
+                      OutlinedButton(
+                        onPressed: () => _openChatWithFriend(u, isWide: isWide),
+                        child: const Text(
+                          'เป็นเพื่อนแล้ว · แชท',
+                          style: TextStyle(fontSize: 11.5),
+                        ),
+                      )
+                    else
+                      ElevatedButton(
+                        onPressed: () async {
+                          final messenger = ScaffoldMessenger.of(context);
+                          try {
+                            await ApiService.instance.addFriend(targetId: u.id);
+                            await _refreshConversationsAndFriends();
+                            if (mounted) {
+                              setState(() => _homeSmartHasSearched = false);
+                              await _openChatWithFriend(u, isWide: isWide);
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              messenger.showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    _friendlyUiError(e, 'เพิ่มเพื่อนไม่สำเร็จ'),
+                                  ),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        child: const Text(
+                          'เพิ่ม & แชท',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+        ],
+      ),
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // TAB 1: แชท (CHATS — แยกหมวดโฟลเดอร์ + ค้นหาข้ามห้อง + รายการแชท)
   // ---------------------------------------------------------------------------
+  Widget _buildChatFolderChip(String code, String label) {
+    final active = _selectedChatFolder == code;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: () => setState(() => _selectedChatFolder = code),
+        child: AnimatedContainer(
+          duration: AppTheme.motionFast,
+          curve: AppTheme.motionCurve,
+          height: 28,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: active ? AppTheme.slateDark : AppTheme.surfaceBg,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: active ? AppTheme.slateDark : AppTheme.borderSubtle,
+            ),
+            boxShadow: active ? AppTheme.shadowSm : const [],
+          ),
+          child: AnimatedDefaultTextStyle(
+            duration: AppTheme.motionFast,
+            style: TextStyle(
+              fontSize: 12.5,
+              height: 1.35,
+              fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+              color: active ? Colors.white : AppTheme.slateBody,
+            ),
+            child: Text(label, maxLines: 1),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildChatsTab({required bool isWide}) {
-    final folders = [
+    const primaryFolders = [
       ('all', 'ทั้งหมด'),
+      ('unread', 'ยังไม่อ่าน'),
+      ('group', 'กลุ่ม'),
+      ('oa', 'ร้านค้า'),
+    ];
+    const secondaryFolders = [
       ('personal', 'ส่วนตัว'),
       ('family', 'ครอบครัว'),
-      ('group', 'กลุ่ม'),
       ('pinned', 'ปักหมุด'),
-      ('unread', 'ยังไม่อ่าน'),
       ('archived', 'เก็บถาวร'),
     ];
+    final isSecondarySelected = secondaryFolders.any(
+      (f) => f.$1 == _selectedChatFolder,
+    );
+    final showSecondary = _showSecondaryChatFolders || isSecondarySelected;
     final items = _filteredConversations;
 
     return Column(
@@ -1597,6 +2210,7 @@ class _MainShellState extends State<MainShell> {
             children: [
               const Text(
                 'แชท',
+                maxLines: 1,
                 style: TextStyle(
                   fontSize: 17,
                   height: 1.35,
@@ -1604,7 +2218,7 @@ class _MainShellState extends State<MainShell> {
                   color: AppTheme.slateDark,
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
               if (_totalUnreadCount > 0)
                 PillBadge(
                   text: 'ยังไม่อ่าน $_totalUnreadCount',
@@ -1612,9 +2226,55 @@ class _MainShellState extends State<MainShell> {
                   textColor: Colors.white,
                 ),
               const Spacer(),
+              OutlinedButton.icon(
+                onPressed: _isOpeningKeep
+                    ? null
+                    : () => _openKeepConversation(isWide: isWide),
+                icon: _isOpeningKeep
+                    ? const SizedBox(
+                        width: 13,
+                        height: 13,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.bookmark_rounded, size: 15),
+                label: const Text(
+                  'Keep',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppTheme.brandDeep,
+                  backgroundColor: AppTheme.brandSoft.withValues(alpha: 0.45),
+                  side: BorderSide(
+                    color: AppTheme.brandPrimary.withValues(alpha: 0.3),
+                  ),
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 4,
+                  ),
+                  minimumSize: const Size(0, 30),
+                ),
+              ),
+              const SizedBox(width: 2),
+              IconButton(
+                onPressed: () => _toggleChatPanel('oa'),
+                tooltip: 'ศูนย์รวมร้านค้า',
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 30, minHeight: 32),
+                iconSize: 19,
+                icon: Icon(
+                  Icons.storefront_rounded,
+                  color: _chatInlinePanel == 'oa' ? AppTheme.brandPrimary : null,
+                ),
+              ),
               IconButton(
                 onPressed: () => _toggleChatPanel('notif'),
                 tooltip: 'เสียงและการแจ้งเตือน',
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 30, minHeight: 32),
+                iconSize: 19,
                 icon: Icon(
                   Icons.notifications_rounded,
                   color: _chatInlinePanel == 'notif'
@@ -1625,6 +2285,10 @@ class _MainShellState extends State<MainShell> {
               IconButton(
                 onPressed: () => _toggleChatPanel('join_group'),
                 tooltip: 'เข้ากลุ่มด้วยรหัสเชิญ',
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 30, minHeight: 32),
+                iconSize: 19,
                 icon: Icon(
                   Icons.vpn_key_outlined,
                   color: _chatInlinePanel == 'join_group'
@@ -1635,6 +2299,10 @@ class _MainShellState extends State<MainShell> {
               IconButton(
                 onPressed: () => _toggleChatPanel('create_group'),
                 tooltip: 'สร้างกลุ่มแชทใหม่',
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 30, minHeight: 32),
+                iconSize: 19,
                 icon: Icon(
                   Icons.group_add_rounded,
                   color: _chatInlinePanel == 'create_group'
@@ -1645,6 +2313,10 @@ class _MainShellState extends State<MainShell> {
               IconButton(
                 onPressed: _refreshConversationsAndFriends,
                 tooltip: 'รีเฟรชรายการแชท',
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 30, minHeight: 32),
+                iconSize: 19,
                 icon: const Icon(Icons.refresh_rounded),
               ),
             ],
@@ -1653,7 +2325,9 @@ class _MainShellState extends State<MainShell> {
 
         if (_chatInlinePanel != null)
           ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 340),
+            constraints: BoxConstraints(
+              maxHeight: _chatInlinePanel == 'oa' ? 480 : 340,
+            ),
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(10, 6, 10, 0),
               child: _buildActiveInlinePanel(
@@ -1671,10 +2345,11 @@ class _MainShellState extends State<MainShell> {
             controller: _chatSearchCtrl,
             onChanged: _performGlobalSearch,
             decoration: InputDecoration(
-              hintText: 'ค้นหาห้องแชท ข้อความ หรือชื่อไฟล์ถาวร...',
+              hintText: 'ค้นหาห้องแชท ข้อความ หรือชื่อไฟล์...',
               prefixIcon: const Icon(Icons.search_rounded, size: 19),
               suffixIcon: _chatSearchQuery.isNotEmpty
                   ? IconButton(
+                      tooltip: 'ล้างคำค้นหา',
                       onPressed: () {
                         _chatSearchCtrl.clear();
                         _performGlobalSearch('');
@@ -1686,58 +2361,83 @@ class _MainShellState extends State<MainShell> {
           ),
         ),
 
-        // Folder Filter Bar (Solves Work vs Personal Chat Clutter!)
-        SizedBox(
-          height: 34,
-          child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            scrollDirection: Axis.horizontal,
-            itemCount: folders.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 8),
-            itemBuilder: (ctx, i) {
-              final code = folders[i].$1;
-              final label = folders[i].$2;
-              final active = _selectedChatFolder == code;
-
-              return Center(
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(999),
-                    onTap: () => setState(() => _selectedChatFolder = code),
-                    child: AnimatedContainer(
-                      duration: AppTheme.motionFast,
-                      curve: AppTheme.motionCurve,
-                      height: 26,
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: active ? AppTheme.slateDark : AppTheme.surfaceBg,
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(
-                          color: active
-                              ? AppTheme.slateDark
-                              : AppTheme.borderSubtle,
+        // Folder Filter Bar (4 primary + pinned inline "ตัวกรอง ▾" for secondary)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                height: 34,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            for (final f in primaryFolders) ...[
+                              _buildChatFolderChip(f.$1, f.$2),
+                              const SizedBox(width: 6),
+                            ],
+                          ],
                         ),
-                        boxShadow: active ? AppTheme.shadowSm : const [],
-                      ),
-                      child: AnimatedDefaultTextStyle(
-                        duration: AppTheme.motionFast,
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          height: 1.35,
-                          fontWeight: active
-                              ? FontWeight.w700
-                              : FontWeight.w500,
-                          color: active ? Colors.white : AppTheme.slateBody,
-                        ),
-                        child: Text(label, maxLines: 1),
                       ),
                     ),
-                  ),
+                    const SizedBox(width: 4),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(999),
+                      onTap: () => setState(
+                        () => _showSecondaryChatFolders =
+                            !_showSecondaryChatFolders,
+                      ),
+                      child: AnimatedContainer(
+                        duration: AppTheme.motionFast,
+                        curve: AppTheme.motionCurve,
+                        height: 28,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: showSecondary
+                              ? AppTheme.brandSoft
+                              : AppTheme.surfaceBg,
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: showSecondary
+                                ? AppTheme.brandPrimary.withValues(alpha: 0.45)
+                                : AppTheme.borderSubtle,
+                          ),
+                        ),
+                        child: Text(
+                          showSecondary ? 'ตัวกรอง ▴' : 'ตัวกรอง ▾',
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: showSecondary
+                                ? AppTheme.brandDeep
+                                : AppTheme.slateBody,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              );
-            },
+              ),
+              if (showSecondary) ...[
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final f in secondaryFolders)
+                      _buildChatFolderChip(f.$1, f.$2),
+                  ],
+                ),
+              ],
+            ],
           ),
         ),
         const SizedBox(height: 8),
@@ -1831,7 +2531,7 @@ class _MainShellState extends State<MainShell> {
                                     name: conv.name,
                                     avatarUrl: conv.avatarUrl,
                                     radius: 18,
-                                    showOnline: !conv.isGroup,
+                                    showOnline: !conv.isGroup && !conv.isKeep,
                                     isOfficial: conv.isOfficial,
                                     isGroup: conv.isGroup,
                                   ),
@@ -1857,7 +2557,7 @@ class _MainShellState extends State<MainShell> {
                                                 ),
                                                 const SizedBox(width: 4),
                                               ],
-                                              if (conv.isMuted) ...[
+                                              if (conv.isEffectivelyMuted) ...[
                                                 const Icon(
                                                   Icons.notifications_off_outlined,
                                                   size: 14,
@@ -1884,10 +2584,14 @@ class _MainShellState extends State<MainShell> {
                                               const SizedBox(width: 6),
                                               PillBadge(
                                                 text: conv.folderLabel,
-                                                backgroundColor: conv.isFamily
+                                                backgroundColor: conv.isKeep
+                                                    ? const Color(0xFFFEF3C7)
+                                                    : conv.isFamily
                                                     ? const Color(0xFFDBEAFE)
                                                     : AppTheme.brandSoft,
-                                                textColor: conv.isFamily
+                                                textColor: conv.isKeep
+                                                    ? AppTheme.brandDeep
+                                                    : conv.isFamily
                                                     ? AppTheme.workBlue
                                                     : AppTheme.brandDeep,
                                               ),
@@ -2022,7 +2726,7 @@ class _MainShellState extends State<MainShell> {
       backgroundColor: AppTheme.surfaceBg,
       appBar: AppBar(
         title: const Text(
-          'สมุดบันทึก BC — คลังบันทึกถาวร',
+          'สมุดบันทึก BC',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -2035,18 +2739,16 @@ class _MainShellState extends State<MainShell> {
                   () => _showCreateNoteInline = !_showCreateNoteInline,
                 ),
                 style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(0, 34),
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  minimumSize: const Size(0, 36),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
                 ),
                 icon: Icon(
                   _showCreateNoteInline ? Icons.close_rounded : Icons.add_rounded,
                   size: 16,
                 ),
                 label: Text(
-                  _showCreateNoteInline
-                      ? 'ปิดฟอร์ม'
-                      : (isCompact ? 'สร้างโน้ต' : 'สร้างบันทึกใหม่'),
-                  style: const TextStyle(fontSize: 12),
+                  _showCreateNoteInline ? 'ปิด' : '+ จดบันทึกใหม่',
+                  style: const TextStyle(fontSize: 12.5),
                 ),
               ),
             ),
@@ -2054,48 +2756,23 @@ class _MainShellState extends State<MainShell> {
         ],
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.all(isCompact ? 10 : 16),
+        padding: EdgeInsets.all(isCompact ? 10 : 14),
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 1020),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppTheme.brandSoft,
-                    borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-                    border: Border.all(
-                      color: AppTheme.brandPrimary.withValues(alpha: 0.35),
-                    ),
-                    boxShadow: AppTheme.shadowSm,
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Icon(Icons.cloud_done_rounded, color: AppTheme.brandDeep),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'สมุดบันทึก BC ซิงค์อัตโนมัติตามบัญชี Gmail (${_user.email}) เก็บข้อความ ลิงก์ รูปและไฟล์สำคัญถาวร ไม่มีวันหมดอายุ',
-                          style: TextStyle(
-                            fontSize: 13,
-                            height: 1.45,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.brandDeep,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                const Text(
+                  'เก็บข้อความ ลิงก์ รูปและไฟล์สำคัญไว้ดูย้อนหลังได้ตลอดเวลา',
+                  style: TextStyle(fontSize: 12.5, color: AppTheme.slateMuted),
                 ),
                 AnimatedSize(
                   duration: AppTheme.motionMed,
                   curve: AppTheme.motionCurve,
                   child: _showCreateNoteInline
                       ? Padding(
-                          padding: const EdgeInsets.only(top: 16),
+                          padding: const EdgeInsets.only(top: 12),
                           child: _buildInlinePanelWrapper(
                             child: _InlineCreateNotePanel(
                               onCancel: () =>
@@ -2109,11 +2786,11 @@ class _MainShellState extends State<MainShell> {
                         )
                       : const SizedBox.shrink(),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 12),
                 if (_notebookNotes.isEmpty)
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(36),
+                    padding: const EdgeInsets.all(28),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: Colors.white,
@@ -2121,7 +2798,7 @@ class _MainShellState extends State<MainShell> {
                       boxShadow: AppTheme.shadowSm,
                     ),
                     child: const Text(
-                      'ยังไม่มีรายการในสมุดบันทึก BC กดปุ่ม "สร้างบันทึกใหม่" หรือกดบันทึกจากข้อความในห้องแชทได้เลย',
+                      'ยังไม่มีบันทึก กด "+ จดบันทึกใหม่"',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: AppTheme.slateMuted, height: 1.5),
                     ),
@@ -2277,6 +2954,107 @@ class _MainShellState extends State<MainShell> {
   // ---------------------------------------------------------------------------
   // TAB 3: ตั้งค่า & เครื่องมือส่วนตัว (รวมเสียงแจ้งเตือน ธีม เครื่องมือเสริม และตั้งค่าระบบ)
   // ---------------------------------------------------------------------------
+  Widget _buildSettingsAccordion({
+    required String id,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Widget child,
+  }) {
+    final expanded = _openSettingsSection == id;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        border: Border.all(
+          color: expanded
+              ? AppTheme.brandPrimary.withValues(alpha: 0.45)
+              : AppTheme.borderSubtle,
+        ),
+        boxShadow: AppTheme.shadowSm,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+            onTap: () => setState(() {
+              _openSettingsSection = expanded ? null : id;
+            }),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: expanded ? AppTheme.brandSoft : AppTheme.surfaceBg,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      icon,
+                      size: 18,
+                      color: expanded
+                          ? AppTheme.brandPrimary
+                          : AppTheme.slateDark,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.slateDark,
+                          ),
+                        ),
+                        const SizedBox(height: 1),
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            color: AppTheme.slateMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    expanded ? '▴' : '▾',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: expanded
+                          ? AppTheme.brandPrimary
+                          : AppTheme.slateMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (expanded) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: child,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildSettingsAndToolsTab() {
     final ov = _adminOverview;
     final isCompact = MediaQuery.of(context).size.width < 600;
@@ -2305,12 +3083,12 @@ class _MainShellState extends State<MainShell> {
         ],
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.all(isCompact ? 10 : 16),
+        padding: EdgeInsets.all(isCompact ? 10 : 14),
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 1120),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // Personal Profile Quick Card
                 Container(
@@ -2323,7 +3101,7 @@ class _MainShellState extends State<MainShell> {
                   ),
                   child: Wrap(
                     spacing: 12,
-                    runSpacing: 12,
+                    runSpacing: 10,
                     alignment: WrapAlignment.spaceBetween,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
@@ -2350,9 +3128,9 @@ class _MainShellState extends State<MainShell> {
                                 ),
                               ),
                               Text(
-                                'BC ID: @${_user.bcId} · ${_user.department}',
+                                '@${_user.bcId}${_user.email.isNotEmpty ? ' · ${_user.email}' : ''}',
                                 style: const TextStyle(
-                                  fontSize: 12.5,
+                                  fontSize: 12,
                                   color: AppTheme.slateMuted,
                                 ),
                               ),
@@ -2385,168 +3163,213 @@ class _MainShellState extends State<MainShell> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 12),
 
-                // Inline Notification & Sound Settings (for everyone, zero popup)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-                    border: Border.all(color: AppTheme.borderSubtle),
-                    boxShadow: AppTheme.shadowSm,
+                // 1. Notifications & DND
+                _buildSettingsAccordion(
+                  id: 'notifications',
+                  icon: Icons.notifications_active_outlined,
+                  title: 'การแจ้งเตือน & ห้ามรบกวน',
+                  subtitle: 'เสียงแจ้งเตือน ตัวอย่างข้อความ และช่วงเวลาห้ามรบกวน',
+                  child: _InlineNotificationPanel(
+                    showCloseButton: false,
+                    user: _user,
+                    onUserUpdated: (updated) {
+                      setState(() => _user = updated);
+                      widget.onUserChanged(updated);
+                    },
                   ),
-                  child: const _InlineNotificationPanel(showCloseButton: false),
                 ),
-                const SizedBox(height: 18),
 
-                // Personal Theme Card (7 Ban Chiang + Thai Heritage themes)
-                _buildPersonalThemeCard(),
-                const SizedBox(height: 18),
-
-                // Personal Mini-Apps Hub (plus Admin editor if admin)
-                Container(
-                  padding: EdgeInsets.all(isCompact ? 12 : 14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-                    border: Border.all(color: AppTheme.borderSubtle),
-                    boxShadow: AppTheme.shadowSm,
+                // 2. Privacy & Hidden/Blocked
+                _buildSettingsAccordion(
+                  id: 'privacy',
+                  icon: Icons.lock_outline_rounded,
+                  title: 'ความเป็นส่วนตัว',
+                  subtitle: 'วิธีเพิ่มเพื่อน รายชื่อที่ซ่อน และรายชื่อที่บล็อก',
+                  child: _InlinePrivacyAndBlockedCard(
+                    user: _user,
+                    friends: _friends,
+                    onUserUpdated: (updated) {
+                      setState(() => _user = updated);
+                      widget.onUserChanged(updated);
+                    },
+                    onFriendsChanged: _refreshConversationsAndFriends,
                   ),
+                ),
+
+                // 3. Account Linking, PIN Recovery & Shop Entry
+                _buildSettingsAccordion(
+                  id: 'security',
+                  icon: Icons.shield_outlined,
+                  title: 'ผูกบัญชี & กู้คืน',
+                  subtitle: 'เบอร์มือถือ Google รหัส PIN กู้คืน และเปิดร้านค้า',
+                  child: _InlineAccountLinkCard(
+                    user: _user,
+                    authConfig: _authConfig,
+                    onUserUpdated: (updated) {
+                      setState(() => _user = updated);
+                      widget.onUserChanged(updated);
+                    },
+                    onOpenOaWorkspace: () => setState(() {
+                      _selectedIndex = 1;
+                      _chatInlinePanel = 'oa';
+                    }),
+                  ),
+                ),
+
+                // 4. Themes & Chat Mini-Apps
+                _buildSettingsAccordion(
+                  id: 'theme_tools',
+                  icon: Icons.palette_outlined,
+                  title: 'โทนสีห้องแชท & เครื่องมือเสริม',
+                  subtitle: 'ธีมบ้านเชียง 7 สีไทยร่วมสมัย และเครื่องมือในแชท',
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        alignment: WrapAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.widgets_rounded,
-                                color: AppTheme.brandPrimary,
-                              ),
-                              const SizedBox(width: 8),
-                              const Flexible(
-                                child: Text(
-                                  'เครื่องมือเสริมในแชท (Personal Mini-Apps)',
-                                  style: TextStyle(
-                                    fontSize: 15.5,
-                                    height: 1.35,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (_user.isAdmin)
-                            ElevatedButton.icon(
-                              onPressed: () => setState(() {
-                                _editingMiniApp = null;
-                                _showMiniAppFormInline =
-                                    !_showMiniAppFormInline;
-                              }),
-                              icon: Icon(
-                                _showMiniAppFormInline
-                                    ? Icons.close_rounded
-                                    : Icons.add_rounded,
-                                size: 17,
-                              ),
-                              label: Text(
-                                _showMiniAppFormInline
-                                    ? 'ปิดฟอร์ม'
-                                    : 'เพิ่มเครื่องมือใหม่',
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'เปิดใช้หารค่าข้าว จัดทริปเที่ยว ลิสต์ของฝาก การ์ดชวนนัดเจอ หรือผู้ช่วย AI แล้วส่งเป็นการ์ดเข้าห้องแชทได้ทันที',
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          color: AppTheme.slateMuted,
+                      _buildPersonalThemeCard(),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: EdgeInsets.all(isCompact ? 10 : 12),
+                        decoration: BoxDecoration(
+                          color: AppTheme.surfaceBg,
+                          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                          border: Border.all(color: AppTheme.borderSubtle),
                         ),
-                      ),
-                      if (_user.isAdmin)
-                        AnimatedSize(
-                          duration: AppTheme.motionMed,
-                          curve: AppTheme.motionCurve,
-                          child: _showMiniAppFormInline
-                              ? Padding(
-                                  padding: const EdgeInsets.only(top: 14),
-                                  child: _buildInlinePanelWrapper(
-                                    child: _InlineMiniAppFormPanel(
-                                      key: ValueKey(
-                                        _editingMiniApp?.id ?? 'new',
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 10,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              alignment: WrapAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.widgets_rounded,
+                                      color: AppTheme.brandPrimary,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Flexible(
+                                      child: Text(
+                                        'เครื่องมือเสริมในแชท',
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          height: 1.35,
+                                          fontWeight: FontWeight.w800,
+                                        ),
                                       ),
-                                      existing: _editingMiniApp,
-                                      onCancel: () => setState(() {
-                                        _showMiniAppFormInline = false;
-                                        _editingMiniApp = null;
-                                      }),
-                                      onSaved: () async {
-                                        setState(() {
-                                          _showMiniAppFormInline = false;
-                                          _editingMiniApp = null;
-                                        });
-                                        await _loadAdminDataQuietly();
-                                        if (!mounted) return;
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          SnackBar(
-                                            backgroundColor: AppTheme.brandDeep,
-                                            content: const Text(
-                                              'อัปเดตเครื่องมือเสริมเรียบร้อย! ทุกห้องใช้งานได้ทันที',
-                                            ),
-                                          ),
-                                        );
-                                      },
+                                    ),
+                                  ],
+                                ),
+                                if (_user.isAdmin)
+                                  ElevatedButton.icon(
+                                    onPressed: () => setState(() {
+                                      _editingMiniApp = null;
+                                      _showMiniAppFormInline =
+                                          !_showMiniAppFormInline;
+                                    }),
+                                    icon: Icon(
+                                      _showMiniAppFormInline
+                                          ? Icons.close_rounded
+                                          : Icons.add_rounded,
+                                      size: 17,
+                                    ),
+                                    label: Text(
+                                      _showMiniAppFormInline
+                                          ? 'ปิดฟอร์ม'
+                                          : 'เพิ่มเครื่องมือใหม่',
                                     ),
                                   ),
-                                )
-                              : const SizedBox.shrink(),
-                        ),
-                      const SizedBox(height: 14),
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
-                        children: (_user.isAdmin ? _miniApps : enabledApps).map(
-                          (app) {
-                            final color = AppTheme.parseHexColor(app.color);
-                            return Container(
-                              width: isCompact ? double.infinity : 320,
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: AppTheme.surfaceBg,
-                                borderRadius: BorderRadius.circular(
-                                  AppTheme.radiusMd,
-                                ),
-                                border: Border.all(
-                                  color: AppTheme.borderSubtle,
-                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            const Text(
+                              'เปิดใช้หารค่าข้าว จัดทริปเที่ยว ลิสต์ของฝาก การ์ดชวนนัดเจอ หรือผู้ช่วย AI แล้วส่งเป็นการ์ดเข้าห้องแชทได้ทันที',
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                color: AppTheme.slateMuted,
                               ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.center,
-                                    children: [
-                                      Container(
-                                        width: 38,
-                                        height: 38,
-                                        decoration: BoxDecoration(
-                                          color: color,
-                                          borderRadius: BorderRadius.circular(
-                                            10,
+                            ),
+                            if (_user.isAdmin)
+                              AnimatedSize(
+                                duration: AppTheme.motionMed,
+                                curve: AppTheme.motionCurve,
+                                child: _showMiniAppFormInline
+                                    ? Padding(
+                                        padding: const EdgeInsets.only(top: 12),
+                                        child: _buildInlinePanelWrapper(
+                                          child: _InlineMiniAppFormPanel(
+                                            key: ValueKey(
+                                              _editingMiniApp?.id ?? 'new',
+                                            ),
+                                            existing: _editingMiniApp,
+                                            onCancel: () => setState(() {
+                                              _showMiniAppFormInline = false;
+                                              _editingMiniApp = null;
+                                            }),
+                                            onSaved: () async {
+                                              setState(() {
+                                                _showMiniAppFormInline = false;
+                                                _editingMiniApp = null;
+                                              });
+                                              await _loadAdminDataQuietly();
+                                              if (!mounted) return;
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                SnackBar(
+                                                  backgroundColor:
+                                                      AppTheme.brandDeep,
+                                                  content: const Text(
+                                                    'อัปเดตเครื่องมือเสริมเรียบร้อย!',
+                                                  ),
+                                                ),
+                                              );
+                                            },
                                           ),
                                         ),
+                                      )
+                                    : const SizedBox.shrink(),
+                              ),
+                            const SizedBox(height: 12),
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 10,
+                              children: (_user.isAdmin ? _miniApps : enabledApps).map((app) {
+                                final color = AppTheme.parseHexColor(app.color);
+                                return Container(
+                                  width: isCompact ? double.infinity : 320,
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(
+                                      AppTheme.radiusMd,
+                                    ),
+                                    border: Border.all(
+                                      color: AppTheme.borderSubtle,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
+                                        children: [
+                                          Container(
+                                            width: 36,
+                                            height: 36,
+                                            decoration: BoxDecoration(
+                                              color: color,
+                                              borderRadius: BorderRadius.circular(
+                                                10,
+                                              ),
+                                            ),
                                         child: Icon(
                                           AppTheme.resolveMiniAppIcon(app.icon),
                                           color: Colors.white,
@@ -2659,73 +3482,88 @@ class _MainShellState extends State<MainShell> {
                                 ],
                               ),
                             );
-                          },
-                        ).toList(),
+                          }).toList(),
+                        ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
 
-                if (_user.isAdmin) ...[
-                  const SizedBox(height: 24),
-                  _sectionHeader(
-                    'ระบบจัดการสำหรับเจ้าของระบบ',
-                    subtitle: 'สถิติพื้นที่เก็บไฟล์ ความจำ AI และข่าวสารแอป',
+                // 5. Admin Tools (shown only for Admin)
+                if (_user.isAdmin)
+                  _buildSettingsAccordion(
+                    id: 'admin',
+                    icon: Icons.admin_panel_settings_outlined,
+                    title: 'ผู้ดูแลระบบ',
+                    subtitle: 'สถิติพื้นที่ไฟล์ ตั้งค่า AI SMS และส่งข่าวสารแอป',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        LayoutBuilder(
+                          builder: (context, box) {
+                            final compact = box.maxWidth < 600;
+                            final tileWidth = compact
+                                ? (box.maxWidth - 12) / 2
+                                : 255.0;
+                            return Wrap(
+                              spacing: compact ? 10 : 12,
+                              runSpacing: compact ? 10 : 12,
+                              children: [
+                                _buildMetricCard(
+                                  'สมาชิกทั้งหมด',
+                                  '${ov?.totalUsers ?? _adminUsers.length} บัญชี',
+                                  Icons.people_alt_rounded,
+                                  AppTheme.brandPrimary,
+                                  width: tileWidth,
+                                  compact: compact,
+                                ),
+                                _buildMetricCard(
+                                  'ห้องสนทนาทั้งหมด',
+                                  '${ov?.totalConversations ?? _conversations.length} ห้อง',
+                                  Icons.forum_rounded,
+                                  AppTheme.workBlue,
+                                  width: tileWidth,
+                                  compact: compact,
+                                ),
+                                _buildMetricCard(
+                                  'ข้อความทั้งหมด',
+                                  '${ov?.totalMessages ?? 0} ข้อความ',
+                                  Icons.mark_chat_read_rounded,
+                                  AppTheme.personalPurple,
+                                  width: tileWidth,
+                                  compact: compact,
+                                ),
+                                _buildMetricCard(
+                                  'ไฟล์เก็บถาวร',
+                                  '${ov?.totalFiles ?? 0} ไฟล์ (${formatFileSize(ov?.totalStorageBytes ?? 0)})',
+                                  Icons.cloud_done_rounded,
+                                  AppTheme.warningAmber,
+                                  width: tileWidth,
+                                  compact: compact,
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 14),
+                        _buildAiBrainSettingsCard(),
+                        const SizedBox(height: 14),
+                        _InlineAdminAuthSettingsCard(
+                          initialSettings: _authSettings,
+                          onUpdated: (settings) async {
+                            setState(() => _authSettings = settings);
+                            await _loadAuthAndCallsQuietly();
+                          },
+                        ),
+                        const SizedBox(height: 14),
+                        _buildBroadcastCard(),
+                        const SizedBox(height: 14),
+                        _buildUserManagementCard(),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 12),
-                  LayoutBuilder(
-                    builder: (context, box) {
-                      final compact = box.maxWidth < 600;
-                      final tileWidth = compact
-                          ? (box.maxWidth - 12) / 2
-                          : 255.0;
-                      return Wrap(
-                        spacing: compact ? 12 : 14,
-                        runSpacing: compact ? 12 : 14,
-                        children: [
-                          _buildMetricCard(
-                            'สมาชิกทั้งหมด (Gmail)',
-                            '${ov?.totalUsers ?? _adminUsers.length} บัญชี',
-                            Icons.people_alt_rounded,
-                            AppTheme.brandPrimary,
-                            width: tileWidth,
-                            compact: compact,
-                          ),
-                          _buildMetricCard(
-                            'ห้องสนทนาทั้งหมด',
-                            '${ov?.totalConversations ?? _conversations.length} ห้อง',
-                            Icons.forum_rounded,
-                            AppTheme.workBlue,
-                            width: tileWidth,
-                            compact: compact,
-                          ),
-                          _buildMetricCard(
-                            'ข้อความทั้งหมดบน MongoDB',
-                            '${ov?.totalMessages ?? 0} ข้อความ',
-                            Icons.mark_chat_read_rounded,
-                            AppTheme.personalPurple,
-                            width: tileWidth,
-                            compact: compact,
-                          ),
-                          _buildMetricCard(
-                            'คลังรูป & ไฟล์ถาวร MinIO',
-                            '${ov?.totalFiles ?? 0} ไฟล์ (${formatFileSize(ov?.totalStorageBytes ?? 0)})',
-                            Icons.cloud_done_rounded,
-                            AppTheme.warningAmber,
-                            width: tileWidth,
-                            compact: compact,
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 18),
-                  _buildAiBrainSettingsCard(),
-                  const SizedBox(height: 18),
-                  _buildBroadcastCard(),
-                  const SizedBox(height: 18),
-                  _buildUserManagementCard(),
-                ],
               ],
             ),
           ),
@@ -2914,7 +3752,7 @@ class _MainShellState extends State<MainShell> {
       );
     } catch (e) {
       snack.showSnackBar(
-        SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
+        SnackBar(content: Text(_friendlyUiError(e, 'เปลี่ยนธีมไม่สำเร็จ'))),
       );
     }
   }
@@ -3074,7 +3912,11 @@ class _MainShellState extends State<MainShell> {
                     } catch (e) {
                       if (!mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('บันทึกไม่สำเร็จ: $e')),
+                        SnackBar(
+                          content: Text(
+                            _friendlyUiError(e, 'บันทึกไม่สำเร็จ'),
+                          ),
+                        ),
                       );
                     }
                   },
@@ -3145,20 +3987,32 @@ class _MainShellState extends State<MainShell> {
             alignment: Alignment.centerRight,
             child: ElevatedButton.icon(
               onPressed: () async {
-                await ApiService.instance.sendAdminBroadcast(
-                  title: titleCtrl.text,
-                  content: contentCtrl.text,
-                );
-                await _refreshConversationsAndFriends();
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    backgroundColor: AppTheme.brandDeep,
-                    content: Text(
-                      'ส่งข่าวสารเข้าห้องข่าวสาร BC Ai Chat เรียบร้อยแล้ว!',
+                try {
+                  await ApiService.instance.sendAdminBroadcast(
+                    title: titleCtrl.text,
+                    content: contentCtrl.text,
+                  );
+                  await _refreshConversationsAndFriends();
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      backgroundColor: AppTheme.brandDeep,
+                      content: Text(
+                        'ส่งข่าวสารเข้าห้องข่าวสาร BC Ai Chat เรียบร้อยแล้ว!',
+                      ),
                     ),
-                  ),
-                );
+                  );
+                } catch (e) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      backgroundColor: AppTheme.dangerRed,
+                      content: Text(
+                        _friendlyUiError(e, 'ส่งข่าวสารไม่สำเร็จ'),
+                      ),
+                    ),
+                  );
+                }
               },
               icon: const Icon(Icons.send_rounded, size: 17),
               label: const Text('ส่งข่าวสารทันที'),
@@ -3213,27 +4067,17 @@ class _MainShellState extends State<MainShell> {
                   avatarUrl: u.avatarUrl,
                   radius: 19,
                 ),
-                title: Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Text(
-                      u.displayName,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13.5,
-                      ),
-                    ),
-                    PillBadge(
-                      text: u.department,
-                      backgroundColor: const Color(0xFFE0E7FF),
-                      textColor: AppTheme.workBlue,
-                    ),
-                  ],
+                title: Text(
+                  u.displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13.5,
+                  ),
                 ),
                 subtitle: Text(
-                  '${u.email} · BC ID: @${u.bcId}',
+                  '@${u.bcId}${u.email.isNotEmpty ? ' · ${u.email}' : ''}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 12),
@@ -3360,7 +4204,11 @@ class _InlineEditProfilePanelState extends State<_InlineEditProfilePanel> {
   late final TextEditingController _nameCtrl;
   late final TextEditingController _bcIdCtrl;
   late final TextEditingController _statusCtrl;
+  Timer? _bcIdTimer;
   bool _saving = false;
+  bool _checkingBcId = false;
+  bool? _bcIdOk;
+  String _bcIdMsg = 'เช่น @jead (a-z, 0-9, ., _, - ยาว 3–30 ตัว ห้ามซ้ำ)';
 
   @override
   void initState() {
@@ -3370,8 +4218,39 @@ class _InlineEditProfilePanelState extends State<_InlineEditProfilePanel> {
     _statusCtrl = TextEditingController(text: widget.user.statusMessage);
   }
 
+  void _onBcIdChanged(String raw) {
+    _bcIdTimer?.cancel();
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) {
+      setState(() {
+        _checkingBcId = false;
+        _bcIdOk = false;
+        _bcIdMsg = 'กรุณากรอก BC ID อย่างน้อย 3 ตัวอักษร';
+      });
+      return;
+    }
+    setState(() => _checkingBcId = true);
+    _bcIdTimer = Timer(const Duration(milliseconds: 280), () async {
+      try {
+        final res = await ApiService.instance.checkBcId(trimmed);
+        if (!mounted || _bcIdCtrl.text.trim() != trimmed) return;
+        final valid = res['valid'] == true;
+        final available = res['available'] == true;
+        setState(() {
+          _checkingBcId = false;
+          _bcIdOk = valid && available;
+          _bcIdMsg = (res['message'] ?? '').toString();
+        });
+      } catch (_) {
+        if (!mounted) return;
+        setState(() => _checkingBcId = false);
+      }
+    });
+  }
+
   @override
   void dispose() {
+    _bcIdTimer?.cancel();
     _nameCtrl.dispose();
     _bcIdCtrl.dispose();
     _statusCtrl.dispose();
@@ -3380,6 +4259,7 @@ class _InlineEditProfilePanelState extends State<_InlineEditProfilePanel> {
 
   @override
   Widget build(BuildContext context) {
+    final canSave = !_saving && _bcIdOk != false;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3400,7 +4280,7 @@ class _InlineEditProfilePanelState extends State<_InlineEditProfilePanel> {
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         TextField(
           controller: _nameCtrl,
           decoration: const InputDecoration(
@@ -3408,15 +4288,54 @@ class _InlineEditProfilePanelState extends State<_InlineEditProfilePanel> {
             prefixIcon: Icon(Icons.person_outline_rounded),
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         TextField(
           controller: _bcIdCtrl,
+          onChanged: _onBcIdChanged,
           decoration: const InputDecoration(
-            labelText: 'BC ID (ให้เพื่อนใช้ค้นหาคุณ)',
+            labelText: 'BC ID (เช่น @jead ให้เพื่อนใช้ค้นหา)',
             prefixIcon: Icon(Icons.alternate_email_rounded),
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 4),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(
+              _checkingBcId
+                  ? Icons.sync_rounded
+                  : _bcIdOk == true
+                  ? Icons.check_circle_outline_rounded
+                  : _bcIdOk == false
+                  ? Icons.error_outline_rounded
+                  : Icons.info_outline_rounded,
+              size: 14,
+              color: _bcIdOk == true
+                  ? Colors.green.shade700
+                  : _bcIdOk == false
+                  ? Colors.red.shade700
+                  : AppTheme.slateMuted,
+            ),
+            const SizedBox(width: 5),
+            Expanded(
+              child: Text(
+                _checkingBcId ? 'กำลังตรวจสอบ BC ID...' : _bcIdMsg,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: _bcIdOk == null
+                      ? FontWeight.w500
+                      : FontWeight.w700,
+                  color: _bcIdOk == true
+                      ? Colors.green.shade700
+                      : _bcIdOk == false
+                      ? Colors.red.shade700
+                      : AppTheme.slateMuted,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
         TextField(
           controller: _statusCtrl,
           decoration: const InputDecoration(
@@ -3424,30 +4343,48 @@ class _InlineEditProfilePanelState extends State<_InlineEditProfilePanel> {
             prefixIcon: Icon(Icons.chat_bubble_outline_rounded),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             TextButton(onPressed: widget.onCancel, child: const Text('ยกเลิก')),
             const SizedBox(width: 8),
             ElevatedButton(
-              onPressed: _saving
+              onPressed: !canSave
                   ? null
                   : () async {
                       final messenger = ScaffoldMessenger.of(context);
+                      final rawBcId = _bcIdCtrl.text.trim();
+                      if (rawBcId.isEmpty) {
+                        messenger.showSnackBar(
+                          const SnackBar(
+                            content: Text('กรุณากรอก BC ID อย่างน้อย 3 ตัวอักษร'),
+                          ),
+                        );
+                        return;
+                      }
                       setState(() => _saving = true);
                       try {
                         final updated = await ApiService.instance.updateProfile(
                           displayName: _nameCtrl.text,
-                          bcId: _bcIdCtrl.text,
+                          bcId: rawBcId,
                           statusMessage: _statusCtrl.text,
                         );
                         if (mounted) widget.onSaved(updated);
                       } catch (e) {
                         if (mounted) {
-                          setState(() => _saving = false);
+                          final msg = e
+                              .toString()
+                              .replaceFirst('Exception: ', '')
+                              .trim();
+                          setState(() {
+                            _saving = false;
+                            _bcIdOk = false;
+                            _bcIdMsg = msg;
+                          });
                           messenger.showSnackBar(
-                            SnackBar(content: Text('อัปเดตไม่สำเร็จ: $e')),
+                            SnackBar(content: Text(msg)),
                           );
                         }
                       }
@@ -3461,23 +4398,152 @@ class _InlineEditProfilePanelState extends State<_InlineEditProfilePanel> {
   }
 }
 
-class _InlineAddFriendPanel extends StatefulWidget {
-  final VoidCallback onCancel;
-  final Future<void> Function(AppUser? friend) onAddedFriend;
+class BcQrBox extends StatelessWidget {
+  final String data;
+  final double size;
+  final double quietZonePadding;
+  final double outerPadding;
+  final double borderRadius;
+  final Color borderColor;
+  final double borderWidth;
 
-  const _InlineAddFriendPanel({
-    required this.onCancel,
-    required this.onAddedFriend,
+  const BcQrBox({
+    super.key,
+    required this.data,
+    required this.size,
+    this.quietZonePadding = 8,
+    this.outerPadding = 10,
+    this.borderRadius = 14,
+    this.borderColor = AppTheme.borderSubtle,
+    this.borderWidth = 1,
   });
 
   @override
-  State<_InlineAddFriendPanel> createState() => _InlineAddFriendPanelState();
+  Widget build(BuildContext context) {
+    final trimmed = data.trim();
+    return Container(
+      padding: EdgeInsets.all(outerPadding),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(borderRadius),
+        border: Border.all(color: borderColor, width: borderWidth),
+      ),
+      child: trimmed.isEmpty
+          ? SizedBox(
+              width: size,
+              height: size,
+              child: const Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.qr_code_2_rounded,
+                      size: 32,
+                      color: AppTheme.slateMuted,
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'ยังไม่มี QR',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppTheme.slateMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : QrImageView(
+              data: trimmed,
+              version: QrVersions.auto,
+              size: size,
+              padding: EdgeInsets.all(quietZonePadding),
+              backgroundColor: Colors.white,
+              gapless: true,
+              errorCorrectionLevel: QrErrorCorrectLevel.M,
+              eyeStyle: const QrEyeStyle(
+                eyeShape: QrEyeShape.square,
+                color: AppTheme.slateDark,
+              ),
+              dataModuleStyle: const QrDataModuleStyle(
+                dataModuleShape: QrDataModuleShape.square,
+                color: AppTheme.slateDark,
+              ),
+            ),
+    );
+  }
 }
 
-class _InlineAddFriendPanelState extends State<_InlineAddFriendPanel> {
+class AddFriendInlinePanel extends StatefulWidget {
+  final AppUser? currentUser;
+  final List<AppUser> friends;
+  final ValueChanged<AppUser>? onUserUpdated;
+  final VoidCallback onCancel;
+  final Future<void> Function(AppUser? friend) onAddedFriend;
+  final Future<void> Function(AppUser friend)? onOpenChatWithFriend;
+  final Future<List<AppUser>> Function(String query, {String? by})?
+  searchUsersFn;
+  final Future<Map<String, dynamic>> Function({
+    String? targetId,
+    String? bcId,
+    String? email,
+    String? phone,
+    String? qrToken,
+    String? query,
+  })?
+  addFriendFn;
+  final Future<AppUser> Function()? resetQrFn;
+
+  const AddFriendInlinePanel({
+    super.key,
+    this.currentUser,
+    this.friends = const [],
+    this.onUserUpdated,
+    required this.onCancel,
+    required this.onAddedFriend,
+    this.onOpenChatWithFriend,
+    this.searchUsersFn,
+    this.addFriendFn,
+    this.resetQrFn,
+  });
+
+  @override
+  State<AddFriendInlinePanel> createState() => _AddFriendInlinePanelState();
+}
+
+class _AddFriendInlinePanelState extends State<AddFriendInlinePanel> {
   final TextEditingController _searchCtrl = TextEditingController();
   List<AppUser> _results = const [];
   bool _searching = false;
+  bool _busyAction = false;
+  bool _hasSearched = false;
+  String _lastSearchedQuery = '';
+  String _mode = 'phone'; // 'phone' | 'qr' | 'email' | 'id'
+  String? _statusMsg;
+  bool _isError = false;
+  late String _myQrToken;
+
+  @override
+  void initState() {
+    super.initState();
+    _myQrToken = _resolveQr(widget.currentUser);
+  }
+
+  @override
+  void didUpdateWidget(covariant AddFriendInlinePanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final nextQr = _resolveQr(widget.currentUser);
+    if (nextQr.isNotEmpty && nextQr != _myQrToken) {
+      _myQrToken = nextQr;
+    }
+  }
+
+  String _resolveQr(AppUser? u) {
+    if (u == null) return '';
+    if (u.qrToken.isNotEmpty) return u.qrToken;
+    final id = u.bcId.isNotEmpty ? u.bcId : u.email;
+    return id.isNotEmpty ? 'bcaichat://add/$id' : '';
+  }
 
   @override
   void dispose() {
@@ -3485,47 +4551,457 @@ class _InlineAddFriendPanelState extends State<_InlineAddFriendPanel> {
     super.dispose();
   }
 
-  Future<void> _runSearch() async {
-    final q = _searchCtrl.text.trim();
-    if (q.isEmpty) return;
-    setState(() => _searching = true);
-    final found = await ApiService.instance.searchUsers(q);
-    if (!mounted) return;
+  String _extractErr(Object e) =>
+      e.toString().replaceFirst('Exception: ', '').trim();
+
+  String _modeLabel(String mode) {
+    switch (mode) {
+      case 'phone':
+        return 'เบอร์โทร';
+      case 'qr':
+        return 'รหัส QR';
+      case 'email':
+        return 'อีเมล';
+      case 'id':
+      default:
+        return '@BC ID';
+    }
+  }
+
+  String get _hintForMode {
+    switch (_mode) {
+      case 'phone':
+        return 'พิมพ์เบอร์โทร เช่น 081-234-5678, +66 หรือเลขไทย';
+      case 'qr':
+        return 'วางรหัส QR หรือลิงก์ bcaichat://add/...';
+      case 'email':
+        return 'พิมพ์อีเมล เช่น friend@example.com';
+      case 'id':
+      default:
+        return 'พิมพ์ @BC ID เช่น @kong.bc';
+    }
+  }
+
+  void _switchMode(String nextMode, {bool clearIfPhoneQuery = false}) {
     setState(() {
-      _results = found;
-      _searching = false;
+      _mode = nextMode;
+      _results = const [];
+      _hasSearched = false;
+      _lastSearchedQuery = '';
+      _statusMsg = null;
+      _isError = false;
+      if (clearIfPhoneQuery &&
+          RegExp(r'^[\d๐-๙\s\-+().]+$').hasMatch(_searchCtrl.text.trim())) {
+        _searchCtrl.clear();
+      }
     });
   }
 
-  Future<void> _addDirectByInput() async {
-    final q = _searchCtrl.text.trim();
-    if (q.isEmpty) return;
+  Future<void> _runSearch() async {
+    final raw = _searchCtrl.text.trim();
+    if (raw.isEmpty) {
+      setState(() {
+        _results = const [];
+        _hasSearched = false;
+        _lastSearchedQuery = '';
+        _statusMsg = 'กรุณากรอก${_modeLabel(_mode)}ที่ต้องการค้นหาก่อน';
+        _isError = false;
+      });
+      return;
+    }
+    final normalized = normalizeFriendSearchQuery(raw, mode: _mode);
+    if (normalized.isEmpty) {
+      setState(() {
+        _results = const [];
+        _hasSearched = false;
+        _lastSearchedQuery = '';
+        _statusMsg = 'กรุณากรอก${_modeLabel(_mode)}ให้ถูกต้อง';
+        _isError = false;
+      });
+      return;
+    }
+    setState(() {
+      _searching = true;
+      _hasSearched = true;
+      _lastSearchedQuery = raw;
+      _statusMsg = null;
+      _isError = false;
+    });
     try {
-      await ApiService.instance.addFriend(
-        bcId: q.contains('@') ? null : q,
-        email: q.contains('@') ? q : null,
-        qrToken: q,
+      final searchFn = widget.searchUsersFn ?? ApiService.instance.searchUsers;
+      final found = await searchFn(normalized, by: _mode);
+      if (!mounted) return;
+      setState(() {
+        _results = found;
+        _searching = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _searching = false;
+        _statusMsg = _extractErr(e);
+        _isError = true;
+      });
+    }
+  }
+
+  /// เปิดหน้าสแกน QR เต็มจอ แล้วนำรหัสที่ได้ไปเพิ่มเพื่อนด้วย flow เดิม
+  Future<void> _openQrFullScreen() async {
+    final code = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => QrFriendScreen(
+          myQrData: _myQrToken,
+          displayName: widget.currentUser?.displayName ?? '',
+          bcId: widget.currentUser?.bcId ?? '',
+        ),
+      ),
+    );
+    if (!mounted || code == null || code.isEmpty) return;
+    setState(() => _mode = 'qr');
+    _searchCtrl.text = code;
+    await _addDirectByInput();
+  }
+
+  Future<void> _addDirectByInput() async {
+    final raw = _searchCtrl.text.trim();
+    if (raw.isEmpty) {
+      setState(() {
+        _statusMsg = 'กรุณากรอก${_modeLabel(_mode)}ของเพื่อนก่อนเพิ่มทันที';
+        _isError = false;
+      });
+      return;
+    }
+    final normalized = normalizeFriendSearchQuery(raw, mode: _mode);
+    setState(() {
+      _busyAction = true;
+      _statusMsg = null;
+      _isError = false;
+    });
+    try {
+      final addFn = widget.addFriendFn ?? ApiService.instance.addFriend;
+      await addFn(
+        phone: _mode == 'phone' ? normalized : null,
+        email: _mode == 'email' ? normalized : null,
+        bcId: _mode == 'id' ? normalized : null,
+        qrToken: _mode == 'qr' ? normalized : null,
+        query: normalized,
       );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppTheme.brandDeep,
+          content: Text('เพิ่มเพื่อนและสร้างห้องแชทเรียบร้อยแล้ว!'),
+        ),
+      );
+      await widget.onAddedFriend(null);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _statusMsg = _extractErr(e);
+        _isError = true;
+      });
+    } finally {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: AppTheme.brandDeep,
-            content: const Text('เพิ่มเพื่อนและสร้างห้องแชทเรียบร้อยแล้ว!'),
-          ),
-        );
-        await widget.onAddedFriend(null);
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('ไม่พบผู้ใช้: $q')));
+        setState(() => _busyAction = false);
       }
     }
   }
 
+  Future<void> _handleAddResult(AppUser user) async {
+    if (_busyAction) return;
+    setState(() {
+      _busyAction = true;
+      _statusMsg = null;
+      _isError = false;
+    });
+    try {
+      final addFn = widget.addFriendFn ?? ApiService.instance.addFriend;
+      await addFn(targetId: user.id);
+      if (!mounted) return;
+      await widget.onAddedFriend(user);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _statusMsg = _extractErr(e);
+        _isError = true;
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _busyAction = false);
+      }
+    }
+  }
+
+  Future<void> _resetQr() async {
+    setState(() {
+      _busyAction = true;
+      _statusMsg = null;
+      _isError = false;
+    });
+    try {
+      final updated = await (widget.resetQrFn ?? ApiService.instance.resetMyQr)();
+      if (!mounted) return;
+      setState(() {
+        _busyAction = false;
+        _myQrToken = _resolveQr(updated);
+        _statusMsg = 'สร้างรหัส QR ใหม่เรียบร้อยแล้ว';
+        _isError = false;
+      });
+      widget.onUserUpdated?.call(updated);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busyAction = false;
+        _statusMsg = _extractErr(e);
+        _isError = true;
+      });
+    }
+  }
+
+  Widget _buildEmptySearchFeedback() {
+    final String detail;
+    if (_mode == 'phone') {
+      detail =
+          'หากเพื่อนสมัครด้วย Gmail อาจยังไม่ได้ผูกเบอร์โทรในตั้งค่า หรืออีกฝ่ายปิดการค้นหาด้วยเบอร์โทรไว้\nแนะนำ: ลองค้นหาด้วย @BC ID หรืออีเมลแทน';
+    } else if (_mode == 'email') {
+      detail =
+          'เพื่อนอาจยังไม่ได้ยืนยันอีเมลนี้ สมัครด้วยเบอร์โทร หรือปิดการค้นหาด้วยอีเมลไว้\nแนะนำ: ลองค้นหาด้วย @BC ID หรือเบอร์โทรแทน';
+    } else if (_mode == 'id') {
+      detail =
+          'ตรวจสอบตัวสะกด @BC ID ให้ถูกต้อง (ไม่ต้องเว้นวรรค) หรือลองค้นหาด้วยเบอร์โทร / อีเมลแทน';
+    } else {
+      detail =
+          'รหัส QR นี้อาจหมดอายุหรือถูกรีเซ็ตแล้ว กรุณาขอ QR Code ล่าสุดจากเพื่อน';
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppTheme.brandSoft.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.borderSubtle),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.person_search_rounded,
+                size: 18,
+                color: AppTheme.brandPrimary,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'ไม่พบผู้ใช้จาก${_modeLabel(_mode)} "$_lastSearchedQuery"',
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.slateDark,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            detail,
+            style: const TextStyle(
+              fontSize: 12,
+              height: 1.35,
+              color: AppTheme.slateMuted,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              if (_mode != 'id')
+                OutlinedButton.icon(
+                  onPressed: () => _switchMode(
+                    'id',
+                    clearIfPhoneQuery: _mode == 'phone',
+                  ),
+                  icon: const Icon(Icons.alternate_email_rounded, size: 14),
+                  label: const Text(
+                    'ค้นหาด้วย @BC ID',
+                    style: TextStyle(fontSize: 11.5),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    minimumSize: Size.zero,
+                  ),
+                ),
+              if (_mode != 'email')
+                OutlinedButton.icon(
+                  onPressed: () => _switchMode(
+                    'email',
+                    clearIfPhoneQuery: _mode == 'phone',
+                  ),
+                  icon: const Icon(Icons.email_outlined, size: 14),
+                  label: const Text(
+                    'ค้นหาด้วยอีเมล',
+                    style: TextStyle(fontSize: 11.5),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    minimumSize: Size.zero,
+                  ),
+                ),
+              if (_mode == 'email' || _mode == 'id')
+                OutlinedButton.icon(
+                  onPressed: () => _switchMode('phone'),
+                  icon: const Icon(Icons.phone_rounded, size: 14),
+                  label: const Text(
+                    'ค้นหาด้วยเบอร์โทร',
+                    style: TextStyle(fontSize: 11.5),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    minimumSize: Size.zero,
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResultRow(AppUser u) {
+    final myId =
+        widget.currentUser?.id ?? ApiService.instance.currentUser?.id ?? '';
+    final isSelf = myId.isNotEmpty && u.id == myId;
+    final isExistingFriend =
+        !isSelf && widget.friends.any((f) => f.id == u.id);
+    final subtitle = u.bcId.isNotEmpty
+        ? '@${u.bcId}${u.phone.isNotEmpty ? ' · ${u.phone}' : ''}'
+        : (u.phone.isNotEmpty ? u.phone : u.email);
+
+    Widget trailing;
+    if (isSelf) {
+      trailing = PillBadge(
+        text: 'บัญชีของคุณเอง',
+        backgroundColor: AppTheme.brandSoft,
+        textColor: AppTheme.brandDeep,
+        icon: Icons.person_outline_rounded,
+      );
+    } else if (isExistingFriend) {
+      trailing = widget.onOpenChatWithFriend != null
+          ? OutlinedButton.icon(
+              onPressed: _busyAction
+                  ? null
+                  : () async {
+                      setState(() => _busyAction = true);
+                      try {
+                        await widget.onOpenChatWithFriend!(u);
+                      } finally {
+                        if (mounted) {
+                          setState(() => _busyAction = false);
+                        }
+                      }
+                    },
+              icon: const Icon(Icons.chat_bubble_outline_rounded, size: 14),
+              label: const Text(
+                'เป็นเพื่อนแล้ว · แชท',
+                style: TextStyle(fontSize: 11.5),
+              ),
+              style: OutlinedButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 6,
+                ),
+                minimumSize: Size.zero,
+              ),
+            )
+          : PillBadge(
+              text: 'เป็นเพื่อนแล้ว',
+              backgroundColor: AppTheme.surfaceBg,
+              textColor: AppTheme.slateDark,
+              icon: Icons.check_circle_outline_rounded,
+            );
+    } else {
+      trailing = ElevatedButton(
+        onPressed: _busyAction ? null : () => _handleAddResult(u),
+        style: ElevatedButton.styleFrom(
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        ),
+        child: const Text('เพิ่ม & แชท'),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          UserAvatar(
+            name: u.displayName,
+            avatarUrl: u.avatarUrl,
+            radius: 17,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  u.displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+                if (subtitle.isNotEmpty)
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      color: AppTheme.slateMuted,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          trailing,
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    const channels = [
+      (id: 'phone', label: 'เบอร์โทร', icon: Icons.phone_rounded),
+      (id: 'qr', label: 'QR Code', icon: Icons.qr_code_2_rounded),
+      (id: 'email', label: 'อีเมล', icon: Icons.email_outlined),
+      (id: 'id', label: '@BC ID', icon: Icons.alternate_email_rounded),
+    ];
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3535,7 +5011,7 @@ class _InlineAddFriendPanelState extends State<_InlineAddFriendPanel> {
           children: [
             const Expanded(
               child: Text(
-                'เพิ่มเพื่อนใหม่ (BC ID / Gmail / QR Token)',
+                'เพิ่มเพื่อน 4 ช่องทาง',
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
               ),
             ),
@@ -3546,6 +5022,151 @@ class _InlineAddFriendPanelState extends State<_InlineAddFriendPanel> {
             ),
           ],
         ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: channels.map((c) {
+            final selected = _mode == c.id;
+            return ChoiceChip(
+              avatar: Icon(
+                c.icon,
+                size: 15,
+                color: selected ? Colors.white : AppTheme.brandPrimary,
+              ),
+              label: Text(
+                c.label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: selected ? Colors.white : AppTheme.slateDark,
+                ),
+              ),
+              selected: selected,
+              selectedColor: AppTheme.brandPrimary,
+              backgroundColor: AppTheme.surfaceBg,
+              visualDensity: VisualDensity.compact,
+              showCheckmark: false,
+              onSelected: (_) => _switchMode(c.id),
+            );
+          }).toList(),
+        ),
+        if (_mode == 'qr') ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceBg,
+              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+              border: Border.all(color: AppTheme.borderSubtle),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                BcQrBox(
+                  data: _myQrToken,
+                  size: 92,
+                  quietZonePadding: 6,
+                  outerPadding: 6,
+                  borderRadius: 10,
+                  borderColor: AppTheme.borderSubtle,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'QR Code ของฉัน',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'ให้เพื่อนสแกน หรือกดคัดลอกส่งให้เพื่อน',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppTheme.slateMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          FilledButton.icon(
+                            key: const Key('qr-fullscreen-open-btn'),
+                            onPressed: _busyAction ? null : _openQrFullScreen,
+                            icon: const Icon(
+                              Icons.qr_code_scanner_rounded,
+                              size: 14,
+                            ),
+                            label: const Text(
+                              'สแกน QR เต็มจอ',
+                              style: TextStyle(fontSize: 11.5),
+                            ),
+                            style: FilledButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              minimumSize: Size.zero,
+                            ),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: () {
+                              Clipboard.setData(
+                                ClipboardData(text: _myQrToken),
+                              );
+                              setState(() {
+                                _statusMsg = 'คัดลอกรหัส QR แล้ว';
+                                _isError = false;
+                              });
+                            },
+                            icon: const Icon(Icons.copy_rounded, size: 14),
+                            label: const Text(
+                              'คัดลอก',
+                              style: TextStyle(fontSize: 11.5),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              minimumSize: Size.zero,
+                            ),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: _busyAction ? null : _resetQr,
+                            icon: const Icon(Icons.refresh_rounded, size: 14),
+                            label: const Text(
+                              'รีเซ็ต QR',
+                              style: TextStyle(fontSize: 11.5),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              minimumSize: Size.zero,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 8),
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -3553,75 +5174,74 @@ class _InlineAddFriendPanelState extends State<_InlineAddFriendPanel> {
             Expanded(
               child: TextField(
                 controller: _searchCtrl,
-                onSubmitted: (_) => _runSearch(),
-                decoration: const InputDecoration(
-                  hintText: 'พิมพ์ @kong.bc, demo2@bcaichat.local หรือ QR Token',
-                  prefixIcon: Icon(Icons.search_rounded),
+                keyboardType: TextInputType.text,
+                textInputAction: _mode == 'qr'
+                    ? TextInputAction.done
+                    : TextInputAction.search,
+                onSubmitted: (_) =>
+                    _mode == 'qr' ? _addDirectByInput() : _runSearch(),
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: _hintForMode,
+                  prefixIcon: const Icon(Icons.search_rounded, size: 19),
                 ),
               ),
             ),
             const SizedBox(width: 8),
-            ElevatedButton(onPressed: _runSearch, child: const Text('ค้นหา')),
+            ElevatedButton(
+              onPressed: _searching ? null : _runSearch,
+              child: const Text('ค้นหา'),
+            ),
           ],
         ),
+        if (_statusMsg != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            _statusMsg!,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: _isError ? AppTheme.dangerRed : AppTheme.brandDeep,
+            ),
+          ),
+        ],
         if (_searching)
           const Padding(
-            padding: EdgeInsets.all(14),
+            padding: EdgeInsets.all(12),
             child: Center(child: CircularProgressIndicator()),
           )
         else if (_results.isNotEmpty) ...[
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 180),
+            constraints: const BoxConstraints(maxHeight: 210),
             child: ListView.separated(
               shrinkWrap: true,
               itemCount: _results.length,
               separatorBuilder: (_, _) => const Divider(height: 8),
-              itemBuilder: (_, idx) {
-                final u = _results[idx];
-                return ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  leading: UserAvatar(
-                    name: u.displayName,
-                    avatarUrl: u.avatarUrl,
-                    radius: 17,
-                  ),
-                  title: Text(
-                    u.displayName,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                    ),
-                  ),
-                  subtitle: Text(
-                    'BC ID: @${u.bcId} · ${u.email}',
-                    style: const TextStyle(fontSize: 11.5),
-                  ),
-                  trailing: ElevatedButton(
-                    onPressed: () async {
-                      await ApiService.instance.addFriend(targetId: u.id);
-                      await widget.onAddedFriend(u);
-                    },
-                    child: const Text('เพิ่ม & แชท'),
-                  ),
-                );
-              },
+              itemBuilder: (_, idx) => _buildResultRow(_results[idx]),
             ),
           ),
-        ],
-        const SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            TextButton(onPressed: widget.onCancel, child: const Text('ปิด')),
-            const SizedBox(width: 8),
-            OutlinedButton.icon(
-              onPressed: _addDirectByInput,
-              icon: const Icon(Icons.add_rounded, size: 17),
-              label: const Text('เพิ่มเพื่อนทันที'),
-            ),
-          ],
+        ] else if (_hasSearched && _statusMsg == null)
+          _buildEmptySearchFeedback(),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerRight,
+          child: Wrap(
+            alignment: WrapAlignment.end,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              TextButton(onPressed: widget.onCancel, child: const Text('ปิด')),
+              OutlinedButton.icon(
+                onPressed: _busyAction ? null : _addDirectByInput,
+                icon: const Icon(Icons.add_rounded, size: 17),
+                label: Text(
+                  _mode == 'qr' ? 'เพิ่มเพื่อนจาก QR' : 'เพิ่มเพื่อนทันที',
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -3676,7 +5296,7 @@ class _InlineJoinGroupPanelState extends State<_InlineJoinGroupPanel> {
         TextField(
           controller: _tokenCtrl,
           decoration: const InputDecoration(
-            labelText: 'รหัสเชิญเข้ากลุ่ม (Invite Token)',
+            labelText: 'รหัสเชิญเข้ากลุ่ม',
             hintText: 'วางรหัสเชิญที่ได้รับจากเพื่อนหรือคนในบ้าน',
             prefixIcon: Icon(Icons.vpn_key_rounded),
           ),
@@ -3736,6 +5356,8 @@ class _InlineCreateGroupPanelState extends State<_InlineCreateGroupPanel> {
   String _folder = 'family';
   final Set<String> _selectedMemberIds = {};
   bool _includeAi = true;
+  bool _busy = false;
+  String? _errMsg;
 
   @override
   void dispose() {
@@ -3835,6 +5457,17 @@ class _InlineCreateGroupPanelState extends State<_InlineCreateGroupPanel> {
             ),
           ),
         ],
+        if (_errMsg != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            _errMsg!,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.dangerRed,
+            ),
+          ),
+        ],
         const SizedBox(height: 10),
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
@@ -3842,19 +5475,43 @@ class _InlineCreateGroupPanelState extends State<_InlineCreateGroupPanel> {
             TextButton(onPressed: widget.onCancel, child: const Text('ยกเลิก')),
             const SizedBox(width: 8),
             ElevatedButton.icon(
-              onPressed: () async {
-                if (_nameCtrl.text.trim().isEmpty) return;
-                final members = {
-                  ..._selectedMemberIds,
-                  if (_includeAi) 'user_ai',
-                }.toList();
-                final conv = await ApiService.instance.createGroupConversation(
-                  name: _nameCtrl.text.trim(),
-                  folder: _folder,
-                  memberIds: members,
-                );
-                await widget.onCreated(conv);
-              },
+              onPressed: _busy
+                  ? null
+                  : () async {
+                      final groupName = _nameCtrl.text.trim();
+                      if (groupName.isEmpty) {
+                        setState(() => _errMsg = 'กรุณาตั้งชื่อกลุ่มแชทก่อน');
+                        return;
+                      }
+                      setState(() {
+                        _busy = true;
+                        _errMsg = null;
+                      });
+                      try {
+                        final members = {
+                          ..._selectedMemberIds,
+                          if (_includeAi) 'user_ai',
+                        }.toList();
+                        final conv = await ApiService.instance
+                            .createGroupConversation(
+                              name: groupName,
+                              folder: _folder,
+                              memberIds: members,
+                            );
+                        if (!mounted) return;
+                        await widget.onCreated(conv);
+                      } catch (e) {
+                        if (!mounted) return;
+                        setState(
+                          () => _errMsg = e
+                              .toString()
+                              .replaceFirst('Exception: ', '')
+                              .trim(),
+                        );
+                      } finally {
+                        if (mounted) setState(() => _busy = false);
+                      }
+                    },
               icon: const Icon(Icons.check_rounded, size: 17),
               label: const Text('สร้างกลุ่มแชท'),
             ),
@@ -3868,10 +5525,14 @@ class _InlineCreateGroupPanelState extends State<_InlineCreateGroupPanel> {
 class _InlineNotificationPanel extends StatefulWidget {
   final VoidCallback? onClose;
   final bool showCloseButton;
+  final AppUser? user;
+  final ValueChanged<AppUser>? onUserUpdated;
 
   const _InlineNotificationPanel({
     this.onClose,
     this.showCloseButton = true,
+    this.user,
+    this.onUserUpdated,
   });
 
   @override
@@ -3883,6 +5544,45 @@ class _InlineNotificationPanelState extends State<_InlineNotificationPanel>
     with WidgetsBindingObserver {
   final _n = NotificationService.instance;
   bool? _ignoringBatteryOptimizations;
+  bool _savingRemote = false;
+
+  AppUser? get _effectiveUser =>
+      widget.user ?? ApiService.instance.currentUser;
+
+  Future<void> _updateRemote({
+    String? dndMode,
+    bool? notifyPreview,
+    bool? notifyOnMention,
+  }) async {
+    setState(() => _savingRemote = true);
+    try {
+      final updated = await ApiService.instance.updateMeSettings(
+        dndMode: dndMode,
+        notifyPreview: notifyPreview,
+        notifyOnMention: notifyOnMention,
+      );
+      if (!mounted) return;
+      widget.onUserUpdated?.call(updated);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'อัปเดตการตั้งค่าแจ้งเตือนไม่สำเร็จ: ${cleanErrorMessage(e)}',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _savingRemote = false);
+    }
+  }
+
+  String _formatDndTime(DateTime? dt) {
+    if (dt == null) return '';
+    final hh = dt.hour.toString().padLeft(2, '0');
+    final mm = dt.minute.toString().padLeft(2, '0');
+    return '$hh:$mm น.';
+  }
 
   @override
   void initState() {
@@ -4040,6 +5740,93 @@ class _InlineNotificationPanelState extends State<_InlineNotificationPanel>
           ),
           onChanged: (v) => _update(() => _n.setSoundEnabled(v)),
         ),
+        if (_effectiveUser != null) ...[
+          const Divider(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.bedtime_outlined,
+                size: 16,
+                color: _effectiveUser!.isDndActive
+                    ? AppTheme.brandPrimary
+                    : AppTheme.slateMuted,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  _effectiveUser!.isDndActive
+                      ? 'โหมดห้ามรบกวน (เปิดอยู่ถึง ${_formatDndTime(_effectiveUser!.dndUntilDate)})'
+                      : 'โหมดห้ามรบกวนทั้งแอป',
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final opt in const [
+                (code: 'off', label: 'ปิด'),
+                (code: '1h', label: '1 ชม.'),
+                (code: '8h', label: '8 ชม.'),
+                (code: 'until_8am', label: 'ถึง 08:00 น.'),
+              ])
+                ActionChip(
+                  visualDensity: VisualDensity.compact,
+                  backgroundColor: (opt.code == 'off' &&
+                          !_effectiveUser!.isDndActive)
+                      ? AppTheme.brandSoft
+                      : AppTheme.surfaceBg,
+                  label: Text(
+                    opt.label,
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  onPressed: _savingRemote
+                      ? null
+                      : () => _updateRemote(dndMode: opt.code),
+                ),
+            ],
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            value: _effectiveUser!.notifyPreview,
+            activeThumbColor: AppTheme.brandPrimary,
+            title: const Text(
+              'แสดงตัวอย่างข้อความแจ้งเตือน',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
+            subtitle: const Text(
+              'ปิดเพื่อซ่อนข้อความเป็น "คุณมีข้อความใหม่"',
+              style: TextStyle(fontSize: 11),
+            ),
+            onChanged: _savingRemote
+                ? null
+                : (v) => _updateRemote(notifyPreview: v),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            value: _effectiveUser!.notifyOnMention,
+            activeThumbColor: AppTheme.brandPrimary,
+            title: const Text(
+              'เตือนเมื่อถูก @กล่าวถึง (แม้ปิดเสียงห้อง)',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
+            onChanged: _savingRemote
+                ? null
+                : (v) => _updateRemote(notifyOnMention: v),
+          ),
+        ],
         if (_n.soundEnabled) ...[
           const SizedBox(height: 6),
           for (final kind in AlertKind.values)
@@ -4087,6 +5874,299 @@ class _InlineNotificationPanelState extends State<_InlineNotificationPanel>
   }
 }
 
+class _InlinePrivacyAndBlockedCard extends StatefulWidget {
+  final AppUser user;
+  final List<AppUser> friends;
+  final ValueChanged<AppUser> onUserUpdated;
+  final Future<void> Function() onFriendsChanged;
+
+  const _InlinePrivacyAndBlockedCard({
+    required this.user,
+    required this.friends,
+    required this.onUserUpdated,
+    required this.onFriendsChanged,
+  });
+
+  @override
+  State<_InlinePrivacyAndBlockedCard> createState() =>
+      _InlinePrivacyAndBlockedCardState();
+}
+
+class _InlinePrivacyAndBlockedCardState
+    extends State<_InlinePrivacyAndBlockedCard> {
+  bool _saving = false;
+  bool _showHidden = false;
+  bool _showBlocked = false;
+
+  Future<void> _updatePrivacy({
+    bool? allowPhone,
+    bool? allowId,
+    bool? allowEmail,
+  }) async {
+    setState(() => _saving = true);
+    try {
+      final updated = await ApiService.instance.updateMeSettings(
+        allowAddByPhone: allowPhone,
+        allowAddById: allowId,
+        allowAddByEmail: allowEmail,
+      );
+      if (!mounted) return;
+      widget.onUserUpdated(updated);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'บันทึกตั้งค่าความเป็นส่วนตัวไม่สำเร็จ: ${cleanErrorMessage(e)}',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hiddenFriends = widget.friends
+        .where((f) => f.isHidden && !f.isBlocked)
+        .toList();
+    final blockedFriends = widget.friends.where((f) => f.isBlocked).toList();
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        border: Border.all(color: AppTheme.borderSubtle),
+        boxShadow: AppTheme.shadowSm,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(Icons.shield_outlined, color: AppTheme.brandPrimary),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'ความเป็นส่วนตัว & รายชื่อที่ซ่อน/บล็อก',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            value: widget.user.allowAddByPhone,
+            activeThumbColor: AppTheme.brandPrimary,
+            title: const Text(
+              'อนุญาตเพิ่มเพื่อนด้วยเบอร์โทร',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+            onChanged: _saving ? null : (v) => _updatePrivacy(allowPhone: v),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            value: widget.user.allowAddById,
+            activeThumbColor: AppTheme.brandPrimary,
+            title: const Text(
+              'อนุญาตเพิ่มเพื่อนด้วย @BC ID',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+            onChanged: _saving ? null : (v) => _updatePrivacy(allowId: v),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            value: widget.user.allowAddByEmail,
+            activeThumbColor: AppTheme.brandPrimary,
+            title: const Text(
+              'อนุญาตเพิ่มเพื่อนด้วยอีเมล',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+            onChanged: _saving ? null : (v) => _updatePrivacy(allowEmail: v),
+          ),
+          const Divider(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => setState(() => _showHidden = !_showHidden),
+                icon: Icon(
+                  _showHidden
+                      ? Icons.visibility_off_rounded
+                      : Icons.visibility_outlined,
+                  size: 15,
+                ),
+                label: Text(
+                  'รายชื่อที่ซ่อน (${hiddenFriends.length})',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => setState(() => _showBlocked = !_showBlocked),
+                icon: const Icon(
+                  Icons.block_rounded,
+                  size: 15,
+                  color: AppTheme.dangerRed,
+                ),
+                label: Text(
+                  'รายชื่อที่บล็อก (${blockedFriends.length})',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.dangerRed,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+            ],
+          ),
+          if (_showHidden) ...[
+            const SizedBox(height: 8),
+            if (hiddenFriends.isEmpty)
+              const Text(
+                'ไม่มีเพื่อนที่ซ่อนอยู่',
+                style: TextStyle(fontSize: 12, color: AppTheme.slateMuted),
+              )
+            else
+              for (final f in hiddenFriends)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      UserAvatar(
+                        name: f.displayName,
+                        avatarUrl: f.avatarUrl,
+                        radius: 14,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          f.displayName,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () async {
+                          await ApiService.instance.updateFriendMeta(
+                            f.id,
+                            isHidden: false,
+                          );
+                          await widget.onFriendsChanged();
+                        },
+                        child: const Text(
+                          'เลิกซ่อน',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () async {
+                          await ApiService.instance.deleteFriend(f.id);
+                          await widget.onFriendsChanged();
+                        },
+                        child: const Text(
+                          'ลบ',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppTheme.dangerRed,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+          ],
+          if (_showBlocked) ...[
+            const SizedBox(height: 8),
+            if (blockedFriends.isEmpty)
+              const Text(
+                'ไม่มีรายชื่อที่ถูกบล็อก',
+                style: TextStyle(fontSize: 12, color: AppTheme.slateMuted),
+              )
+            else
+              for (final f in blockedFriends)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      UserAvatar(
+                        name: f.displayName,
+                        avatarUrl: f.avatarUrl,
+                        radius: 14,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          f.displayName,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      OutlinedButton(
+                        onPressed: () async {
+                          await ApiService.instance.updateFriendMeta(
+                            f.id,
+                            isBlocked: false,
+                          );
+                          await widget.onFriendsChanged();
+                        },
+                        style: OutlinedButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          minimumSize: Size.zero,
+                        ),
+                        child: const Text(
+                          'ปลดบล็อก',
+                          style: TextStyle(fontSize: 11.5),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      TextButton(
+                        onPressed: () async {
+                          await ApiService.instance.deleteFriend(f.id);
+                          await widget.onFriendsChanged();
+                        },
+                        child: const Text(
+                          'ลบ',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppTheme.dangerRed,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _InlineCreateNotePanel extends StatefulWidget {
   final VoidCallback onCancel;
   final Future<void> Function() onCreated;
@@ -4104,6 +6184,8 @@ class _InlineCreateNotePanelState extends State<_InlineCreateNotePanel> {
   final _titleCtrl = TextEditingController();
   final _contentCtrl = TextEditingController();
   String _category = 'บันทึกสำคัญ';
+  bool _saving = false;
+  String? _errMsg;
 
   @override
   void dispose() {
@@ -4162,6 +6244,17 @@ class _InlineCreateNotePanelState extends State<_InlineCreateNotePanel> {
             labelText: 'ข้อความ / ลิงก์ / รายละเอียดที่ต้องการเก็บถาวร',
           ),
         ),
+        if (_errMsg != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            _errMsg!,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.dangerRed,
+            ),
+          ),
+        ],
         const SizedBox(height: 10),
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
@@ -4169,15 +6262,38 @@ class _InlineCreateNotePanelState extends State<_InlineCreateNotePanel> {
             TextButton(onPressed: widget.onCancel, child: const Text('ยกเลิก')),
             const SizedBox(width: 8),
             ElevatedButton(
-              onPressed: () async {
-                if (_titleCtrl.text.trim().isEmpty) return;
-                await ApiService.instance.createNote(
-                  title: _titleCtrl.text.trim(),
-                  content: _contentCtrl.text.trim(),
-                  category: _category,
-                );
-                await widget.onCreated();
-              },
+              onPressed: _saving
+                  ? null
+                  : () async {
+                      final title = _titleCtrl.text.trim();
+                      if (title.isEmpty) {
+                        setState(() => _errMsg = 'กรุณากรอกหัวข้อบันทึกก่อน');
+                        return;
+                      }
+                      setState(() {
+                        _saving = true;
+                        _errMsg = null;
+                      });
+                      try {
+                        await ApiService.instance.createNote(
+                          title: title,
+                          content: _contentCtrl.text.trim(),
+                          category: _category,
+                        );
+                        if (!mounted) return;
+                        await widget.onCreated();
+                      } catch (e) {
+                        if (!mounted) return;
+                        setState(
+                          () => _errMsg = e
+                              .toString()
+                              .replaceFirst('Exception: ', '')
+                              .trim(),
+                        );
+                      } finally {
+                        if (mounted) setState(() => _saving = false);
+                      }
+                    },
               child: const Text('บันทึกเข้าสมุดบันทึก BC'),
             ),
           ],
@@ -4211,6 +6327,8 @@ class _InlineMiniAppFormPanelState extends State<_InlineMiniAppFormPanel> {
   late TextEditingController _categoryCtrl;
   late TextEditingController _urlCtrl;
   late TextEditingController _colorCtrl;
+  bool _saving = false;
+  String? _errMsg;
 
   @override
   void initState() {
@@ -4299,6 +6417,17 @@ class _InlineMiniAppFormPanelState extends State<_InlineMiniAppFormPanel> {
           controller: _colorCtrl,
           decoration: const InputDecoration(labelText: 'สีประจำเครื่องมือ (Hex)'),
         ),
+        if (_errMsg != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            _errMsg!,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.dangerRed,
+            ),
+          ),
+        ],
         const SizedBox(height: 10),
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
@@ -4306,32 +6435,975 @@ class _InlineMiniAppFormPanelState extends State<_InlineMiniAppFormPanel> {
             TextButton(onPressed: widget.onCancel, child: const Text('ยกเลิก')),
             const SizedBox(width: 8),
             ElevatedButton(
-              onPressed: () async {
-                final payload = {
-                  'code': _codeCtrl.text.trim(),
-                  'title': _titleCtrl.text.trim(),
-                  'subtitle': _subtitleCtrl.text.trim(),
-                  'category': _categoryCtrl.text.trim(),
-                  'url': _urlCtrl.text.trim(),
-                  'color': _colorCtrl.text.trim(),
-                  'icon': existing?.icon ?? 'celebration',
-                  'enabled': existing?.enabled ?? true,
-                };
-                if (existing == null) {
-                  await ApiService.instance.createAdminMiniApp(payload);
-                } else {
-                  await ApiService.instance.updateAdminMiniApp(
-                    existing.id,
-                    payload,
-                  );
-                }
-                await widget.onSaved();
-              },
+              onPressed: _saving
+                  ? null
+                  : () async {
+                      setState(() {
+                        _saving = true;
+                        _errMsg = null;
+                      });
+                      try {
+                        final payload = {
+                          'code': _codeCtrl.text.trim(),
+                          'title': _titleCtrl.text.trim(),
+                          'subtitle': _subtitleCtrl.text.trim(),
+                          'category': _categoryCtrl.text.trim(),
+                          'url': _urlCtrl.text.trim(),
+                          'color': _colorCtrl.text.trim(),
+                          'icon': existing?.icon ?? 'celebration',
+                          'enabled': existing?.enabled ?? true,
+                        };
+                        if (existing == null) {
+                          await ApiService.instance.createAdminMiniApp(payload);
+                        } else {
+                          await ApiService.instance.updateAdminMiniApp(
+                            existing.id,
+                            payload,
+                          );
+                        }
+                        if (!mounted) return;
+                        await widget.onSaved();
+                      } catch (e) {
+                        if (!mounted) return;
+                        setState(
+                          () => _errMsg = e
+                              .toString()
+                              .replaceFirst('Exception: ', '')
+                              .trim(),
+                        );
+                      } finally {
+                        if (mounted) setState(() => _saving = false);
+                      }
+                    },
               child: const Text('บันทึกเครื่องมือ'),
             ),
           ],
         ),
       ],
+    );
+  }
+}
+
+class _InlineAccountLinkCard extends StatefulWidget {
+  final AppUser user;
+  final AuthConfig authConfig;
+  final ValueChanged<AppUser> onUserUpdated;
+  final VoidCallback onOpenOaWorkspace;
+
+  const _InlineAccountLinkCard({
+    required this.user,
+    required this.authConfig,
+    required this.onUserUpdated,
+    required this.onOpenOaWorkspace,
+  });
+
+  @override
+  State<_InlineAccountLinkCard> createState() => _InlineAccountLinkCardState();
+}
+
+class _InlineAccountLinkCardState extends State<_InlineAccountLinkCard> {
+  final TextEditingController _phoneCtrl = TextEditingController();
+  final TextEditingController _otpCtrl = TextEditingController();
+  final TextEditingController _linkPinCtrl = TextEditingController();
+  final TextEditingController _currentPinCtrl = TextEditingController();
+  final TextEditingController _newPinCtrl = TextEditingController();
+  bool _showPhoneForm = false;
+  bool _showPinSetup = false;
+  bool _showLogs = false;
+  bool _busy = false;
+  OtpRequestResult? _challenge;
+  int _countdown = 0;
+  Timer? _countdownTimer;
+  Timer? _googlePollTimer;
+  bool _pollingGoogle = false;
+  String? _statusMsg;
+  String? _errorMsg;
+  List<String> _generatedBackupCodes = const [];
+  List<RecoveryLogDto> _recoveryLogs = const [];
+  bool _loadingLogs = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _phoneCtrl.text = widget.user.phone;
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    _googlePollTimer?.cancel();
+    _phoneCtrl.dispose();
+    _otpCtrl.dispose();
+    _linkPinCtrl.dispose();
+    _currentPinCtrl.dispose();
+    _newPinCtrl.dispose();
+    super.dispose();
+  }
+
+  String _genState() {
+    final rng = Random.secure();
+    return List<int>.generate(
+      16,
+      (_) => rng.nextInt(256),
+    ).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  }
+
+  Future<void> _requestLinkOtp() async {
+    final phone = _phoneCtrl.text.trim();
+    if (phone.length < 9) {
+      setState(() => _errorMsg = 'กรุณากรอกเบอร์โทรศัพท์มือถือให้ถูกต้อง');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _errorMsg = null;
+      _statusMsg = null;
+    });
+    try {
+      final res = await ApiService.instance.requestOtp(
+        phone: phone,
+        purpose: 'link',
+      );
+      _countdownTimer?.cancel();
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _challenge = res;
+        _countdown = 60;
+        _statusMsg = 'ส่ง OTP แล้ว (Ref: ${res.refCode})';
+      });
+      _countdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+        if (!mounted || _countdown <= 1) {
+          t.cancel();
+          if (mounted) setState(() => _countdown = 0);
+        } else {
+          setState(() => _countdown -= 1);
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _errorMsg = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  Future<void> _verifyLinkPhone() async {
+    final ch = _challenge;
+    final code = _otpCtrl.text.trim();
+    if (ch == null || code.length < 4) {
+      setState(() => _errorMsg = 'กรุณากรอกรหัส OTP ให้ครบ');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _errorMsg = null;
+    });
+    try {
+      final updated = await ApiService.instance.linkPhone(
+        challengeId: ch.challengeId,
+        otpCode: code,
+        refCode: ch.refCode,
+        recoveryPin: _linkPinCtrl.text.trim(),
+      );
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _showPhoneForm = false;
+        _challenge = null;
+        _otpCtrl.clear();
+        _linkPinCtrl.clear();
+        _statusMsg = 'เชื่อมเบอร์โทรเรียบร้อยแล้ว';
+      });
+      widget.onUserUpdated(updated);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _errorMsg = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  Future<void> _startLinkGoogle() async {
+    _googlePollTimer?.cancel();
+    final state = _genState();
+    final url = ApiService.instance.googleStartUrl(mode: 'link', state: state);
+    final uri = Uri.tryParse(url);
+    if (uri == null ||
+        !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (!mounted) return;
+      setState(() => _errorMsg = 'ไม่สามารถเปิดเบราว์เซอร์เพื่อเชื่อม Gmail ได้');
+      return;
+    }
+    setState(() {
+      _pollingGoogle = true;
+      _errorMsg = null;
+      _statusMsg = 'กำลังรอยืนยัน Gmail ในเบราว์เซอร์...';
+    });
+    var ticks = 0;
+    _googlePollTimer = Timer.periodic(const Duration(milliseconds: 1500), (
+      t,
+    ) async {
+      ticks += 1;
+      if (!mounted || !_pollingGoogle || ticks > 80) {
+        t.cancel();
+        if (mounted) setState(() => _pollingGoogle = false);
+        return;
+      }
+      try {
+        final res = await ApiService.instance.pollGoogleOAuth(state);
+        if (!mounted) {
+          t.cancel();
+          return;
+        }
+        if (res.status == 'completed' && res.user != null) {
+          t.cancel();
+          setState(() {
+            _pollingGoogle = false;
+            _statusMsg = 'เชื่อมบัญชี Gmail สำเร็จ';
+          });
+          widget.onUserUpdated(res.user!);
+        } else if (res.status == 'error') {
+          t.cancel();
+          setState(() {
+            _pollingGoogle = false;
+            _errorMsg = res.error.isNotEmpty ? res.error : 'เชื่อม Gmail ไม่สำเร็จ';
+          });
+        }
+      } catch (_) {}
+    });
+  }
+
+  Future<void> _handleUnlinkGoogle() async {
+    setState(() {
+      _busy = true;
+      _errorMsg = null;
+      _statusMsg = null;
+    });
+    try {
+      final updated = await ApiService.instance.unlinkGoogle();
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _statusMsg = 'ยกเลิกการเชื่อม Gmail แล้ว';
+      });
+      widget.onUserUpdated(updated);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _errorMsg = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  Future<void> _handleSetupPin() async {
+    final pin = _newPinCtrl.text.trim();
+    if (!RegExp(r'^\d{6}$').hasMatch(pin)) {
+      setState(() => _errorMsg = 'กรุณากรอก PIN เป็นตัวเลข 6 หลัก');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _errorMsg = null;
+      _statusMsg = null;
+    });
+    try {
+      final res = await ApiService.instance.setupRecoveryPin(
+        recoveryPin: pin,
+        currentPin: widget.user.hasRecoveryPin
+            ? _currentPinCtrl.text.trim()
+            : null,
+        regenerateCodes: true,
+      );
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _currentPinCtrl.clear();
+        _newPinCtrl.clear();
+        _generatedBackupCodes = res.backupCodes;
+        _statusMsg = 'ตั้งค่า PIN กู้คืนและสร้างรหัสสำรองเรียบร้อยแล้ว';
+      });
+      widget.onUserUpdated(res.user);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _errorMsg = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  Future<void> _toggleLogs() async {
+    final nextShow = !_showLogs;
+    setState(() {
+      _showLogs = nextShow;
+      if (nextShow) _loadingLogs = true;
+    });
+    if (!nextShow) return;
+    try {
+      final logs = await ApiService.instance.getRecoveryLogs();
+      if (!mounted) return;
+      setState(() {
+        _recoveryLogs = logs;
+        _loadingLogs = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingLogs = false;
+        _errorMsg = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final u = widget.user;
+    final canUnlinkGoogle =
+        u.phoneVerified &&
+        u.phone.trim().isNotEmpty &&
+        (u.hasGoogleLinked || u.emailVerified);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        border: Border.all(color: AppTheme.borderSubtle),
+        boxShadow: AppTheme.shadowSm,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.verified_user_outlined,
+                size: 18,
+                color: AppTheme.brandPrimary,
+              ),
+              const SizedBox(width: 6),
+              const Expanded(
+                child: Text(
+                  'บัญชี การกู้คืนข้อมูล & ร้านค้า',
+                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800),
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: widget.onOpenOaWorkspace,
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  minimumSize: const Size(0, 32),
+                ),
+                icon: const Icon(Icons.storefront_rounded, size: 16),
+                label: const Text('จัดการ / เปิดร้านค้า', style: TextStyle(fontSize: 12)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (_errorMsg != null) ...[
+            Text(
+              _errorMsg!,
+              style: const TextStyle(fontSize: 12, color: AppTheme.dangerRed),
+            ),
+            const SizedBox(height: 6),
+          ],
+          if (_statusMsg != null) ...[
+            Text(
+              _statusMsg!,
+              style: const TextStyle(fontSize: 12, color: AppTheme.workBlue),
+            ),
+            const SizedBox(height: 6),
+          ],
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const Icon(Icons.phone_android_rounded, size: 17, color: AppTheme.slateMuted),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  u.phone.isNotEmpty
+                      ? 'เบอร์โทร: ${u.phone} ${u.phoneVerified ? "(ยืนยันแล้ว)" : ""}'
+                      : 'ยังไม่ได้เชื่อมเบอร์โทรศัพท์',
+                  style: const TextStyle(fontSize: 12.5),
+                ),
+              ),
+              TextButton(
+                onPressed: () =>
+                    setState(() => _showPhoneForm = !_showPhoneForm),
+                child: Text(u.phoneVerified ? 'เปลี่ยนเบอร์' : 'เชื่อมเบอร์ OTP'),
+              ),
+            ],
+          ),
+          if (_showPhoneForm) ...[
+            const SizedBox(height: 6),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'เบอร์โทรศัพท์ใหม่',
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                FilledButton(
+                  onPressed: (_busy || _countdown > 0) ? null : _requestLinkOtp,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppTheme.brandPrimary,
+                  ),
+                  child: Text(_countdown > 0 ? '${_countdown}s' : 'ขอ OTP'),
+                ),
+              ],
+            ),
+            if (_challenge != null) ...[
+              const SizedBox(height: 6),
+              if (u.hasRecoveryPin) ...[
+                TextField(
+                  controller: _linkPinCtrl,
+                  obscureText: true,
+                  keyboardType: TextInputType.number,
+                  maxLength: 6,
+                  decoration: const InputDecoration(
+                    labelText: 'PIN กู้คืน 6 หลัก (ถ้าเคยตั้ง)',
+                    counterText: '',
+                    isDense: true,
+                  ),
+                ),
+                const SizedBox(height: 6),
+              ],
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _otpCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: 'รหัส OTP (Ref: ${_challenge!.refCode})',
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  FilledButton(
+                    onPressed: _busy ? null : _verifyLinkPhone,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppTheme.brandDeep,
+                    ),
+                    child: const Text('ยืนยัน'),
+                  ),
+                ],
+              ),
+            ],
+          ],
+          const Divider(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const Icon(Icons.mail_outline_rounded, size: 17, color: AppTheme.slateMuted),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  u.hasGoogleLinked || u.emailVerified
+                      ? 'Gmail: ${u.email} (ยืนยันแล้ว)'
+                      : (u.email.isNotEmpty
+                          ? 'อีเมล: ${u.email} (ยังไม่เชื่อม Gmail)'
+                          : 'ยังไม่ได้เชื่อมบัญชี Gmail'),
+                  style: const TextStyle(fontSize: 12.5),
+                ),
+              ),
+              if (_pollingGoogle)
+                TextButton(
+                  onPressed: () {
+                    _googlePollTimer?.cancel();
+                    setState(() => _pollingGoogle = false);
+                  },
+                  child: const Text('ยกเลิก'),
+                )
+              else
+                Wrap(
+                  spacing: 4,
+                  children: [
+                    if (canUnlinkGoogle)
+                      TextButton(
+                        onPressed: _busy ? null : _handleUnlinkGoogle,
+                        child: const Text(
+                          'ยกเลิกเชื่อม',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: AppTheme.dangerRed,
+                          ),
+                        ),
+                      ),
+                    OutlinedButton(
+                      onPressed: widget.authConfig.googleEnabled
+                          ? _startLinkGoogle
+                          : null,
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 30),
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                      ),
+                      child: Text(
+                        u.hasGoogleLinked ? 'เปลี่ยน Gmail' : 'เชื่อม Gmail',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+          const Divider(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const Icon(Icons.pin_outlined, size: 17, color: AppTheme.slateMuted),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  u.hasRecoveryPin
+                      ? 'PIN กู้คืน: ตั้งแล้ว (รหัสสำรองเหลือ ${u.recoveryCodesRemaining} ชุด)'
+                      : 'PIN กู้คืนบัญชี: ยังไม่ตั้งค่า',
+                  style: const TextStyle(fontSize: 12.5),
+                ),
+              ),
+              TextButton(
+                onPressed: () =>
+                    setState(() => _showPinSetup = !_showPinSetup),
+                child: Text(u.hasRecoveryPin ? 'เปลี่ยน PIN' : 'ตั้ง PIN กู้คืน'),
+              ),
+            ],
+          ),
+          if (_showPinSetup) ...[
+            const SizedBox(height: 6),
+            if (u.hasRecoveryPin) ...[
+              TextField(
+                controller: _currentPinCtrl,
+                obscureText: true,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                decoration: const InputDecoration(
+                  labelText: 'PIN ปัจจุบัน (6 หลัก)',
+                  counterText: '',
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 6),
+            ],
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _newPinCtrl,
+                    obscureText: true,
+                    keyboardType: TextInputType.number,
+                    maxLength: 6,
+                    decoration: const InputDecoration(
+                      labelText: 'PIN กู้คืนใหม่ 6 หลัก',
+                      counterText: '',
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                FilledButton(
+                  onPressed: _busy ? null : _handleSetupPin,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppTheme.brandPrimary,
+                  ),
+                  child: const Text('บันทึก PIN'),
+                ),
+              ],
+            ),
+          ],
+          if (_generatedBackupCodes.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceBg,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppTheme.borderSubtle),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'รหัสสำรองใช้ครั้งเดียว (แสดงครั้งเดียว)',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.dangerRed,
+                          ),
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          Clipboard.setData(
+                            ClipboardData(
+                              text: _generatedBackupCodes.join('\n'),
+                            ),
+                          );
+                          setState(
+                            () => _statusMsg = 'คัดลอกรหัสสำรองทั้ง 6 ชุดแล้ว',
+                          );
+                        },
+                        icon: const Icon(Icons.copy_rounded, size: 14),
+                        label: const Text('คัดลอกทั้งหมด', style: TextStyle(fontSize: 11.5)),
+                        style: OutlinedButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: _generatedBackupCodes
+                        .map(
+                          (c) => Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: AppTheme.borderSubtle),
+                            ),
+                            child: Text(
+                              c,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                fontFamily: 'monospace',
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const Divider(height: 12),
+          InkWell(
+            onTap: _toggleLogs,
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const Icon(Icons.history_rounded, size: 17, color: AppTheme.slateMuted),
+                  const SizedBox(width: 6),
+                  const Expanded(
+                    child: Text(
+                      'ประวัติกู้คืนและการเชื่อมบัญชีล่าสุด',
+                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  Icon(
+                    _showLogs
+                        ? Icons.expand_less_rounded
+                        : Icons.expand_more_rounded,
+                    size: 18,
+                    color: AppTheme.slateMuted,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_showLogs) ...[
+            const SizedBox(height: 6),
+            if (_loadingLogs)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(8),
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            else if (_recoveryLogs.isEmpty)
+              const Text(
+                'ยังไม่มีประวัติการเชื่อมหรือกู้คืนบัญชี',
+                style: TextStyle(fontSize: 12, color: AppTheme.slateMuted),
+              )
+            else
+              for (final log in _recoveryLogs.take(6))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${log.actionLabel}${log.detailMasked.isNotEmpty ? ' · ${log.detailMasked}' : ''}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 11.5),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        log.method,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppTheme.slateMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _InlineAdminAuthSettingsCard extends StatefulWidget {
+  final AuthSettingsDto? initialSettings;
+  final Future<void> Function(AuthSettingsDto updated) onUpdated;
+
+  const _InlineAdminAuthSettingsCard({
+    required this.initialSettings,
+    required this.onUpdated,
+  });
+
+  @override
+  State<_InlineAdminAuthSettingsCard> createState() =>
+      _InlineAdminAuthSettingsCardState();
+}
+
+class _InlineAdminAuthSettingsCardState
+    extends State<_InlineAdminAuthSettingsCard> {
+  final TextEditingController _apiKeyCtrl = TextEditingController();
+  final TextEditingController _secretKeyCtrl = TextEditingController();
+  final TextEditingController _projectKeyCtrl = TextEditingController();
+  final TextEditingController _googleClientCtrl = TextEditingController();
+  AuthSettingsDto? _settings;
+  bool _loading = false;
+  String? _statusMsg;
+
+  @override
+  void initState() {
+    super.initState();
+    _applySettings(widget.initialSettings);
+    if (_settings == null) _reload();
+  }
+
+  @override
+  void didUpdateWidget(covariant _InlineAdminAuthSettingsCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialSettings != null &&
+        widget.initialSettings != oldWidget.initialSettings) {
+      _applySettings(widget.initialSettings);
+    }
+  }
+
+  void _applySettings(AuthSettingsDto? s) {
+    if (s == null) return;
+    _settings = s;
+    if (_projectKeyCtrl.text.isEmpty) _projectKeyCtrl.text = s.smsmktProjectKey;
+    if (_googleClientCtrl.text.isEmpty) {
+      _googleClientCtrl.text = s.googleClientId;
+    }
+  }
+
+  @override
+  void dispose() {
+    _apiKeyCtrl.dispose();
+    _secretKeyCtrl.dispose();
+    _projectKeyCtrl.dispose();
+    _googleClientCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _reload() async {
+    setState(() => _loading = true);
+    try {
+      final s = await ApiService.instance.getAuthSettings();
+      if (!mounted) return;
+      setState(() {
+        _applySettings(s);
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _statusMsg = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  Future<void> _save() async {
+    setState(() {
+      _loading = true;
+      _statusMsg = null;
+    });
+    try {
+      final s = await ApiService.instance.updateAuthSettings(
+        smsmktApiKey: _apiKeyCtrl.text.trim().isNotEmpty
+            ? _apiKeyCtrl.text.trim()
+            : null,
+        smsmktSecretKey: _secretKeyCtrl.text.trim().isNotEmpty
+            ? _secretKeyCtrl.text.trim()
+            : null,
+        smsmktProjectKey: _projectKeyCtrl.text.trim(),
+        googleClientId: _googleClientCtrl.text.trim(),
+      );
+      _apiKeyCtrl.clear();
+      _secretKeyCtrl.clear();
+      if (!mounted) return;
+      setState(() {
+        _applySettings(s);
+        _loading = false;
+        _statusMsg = 'บันทึกตั้งค่า SMSMKT & Google Client ID เรียบร้อยแล้ว';
+      });
+      await widget.onUpdated(s);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _statusMsg = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = _settings;
+    final creditText = s?.creditInfo != null
+        ? 'เครดิต SMS คงเหลือ: ${s!.creditInfo!['credit_remain'] ?? s.creditInfo!['credit'] ?? s.creditInfo}'
+        : (s?.creditError != null && s!.creditError!.isNotEmpty
+            ? 'ตรวจเครดิต: ${s.creditError}'
+            : 'ยังไม่มีข้อมูลเครดิต SMSMKT');
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        border: Border.all(color: AppTheme.borderSubtle),
+        boxShadow: AppTheme.shadowSm,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(Icons.sms_outlined, size: 18, color: AppTheme.brandPrimary),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'ตั้งค่าการเข้าสู่ระบบ SMSMKT OTP & Google OAuth',
+                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800),
+                ),
+              ),
+              IconButton(
+                tooltip: 'เช็คเครดิต SMSMKT ล่าสุด',
+                onPressed: _loading ? null : _reload,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              PillBadge(
+                text: (s?.phoneOtpReady ?? false)
+                    ? 'SMS OTP พร้อมส่ง'
+                    : 'ยังไม่ได้ใส่คีย์ SMSMKT',
+                backgroundColor: (s?.phoneOtpReady ?? false)
+                    ? const Color(0xFFE0F2FE)
+                    : const Color(0xFFFEF3C7),
+                textColor: (s?.phoneOtpReady ?? false)
+                    ? AppTheme.workBlue
+                    : AppTheme.warningAmber,
+              ),
+              PillBadge(
+                text: creditText,
+                backgroundColor: AppTheme.brandSoft,
+                textColor: AppTheme.brandDeep,
+              ),
+            ],
+          ),
+          if (_statusMsg != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              _statusMsg!,
+              style: const TextStyle(fontSize: 12, color: AppTheme.workBlue),
+            ),
+          ],
+          const SizedBox(height: 8),
+          TextField(
+            controller: _apiKeyCtrl,
+            obscureText: true,
+            decoration: InputDecoration(
+              labelText:
+                  'SMSMKT API Key (${s?.smsmktHasKeys == true ? s!.smsmktMaskedApiKey : "ยังไม่ตั้งค่า"})',
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _secretKeyCtrl,
+            obscureText: true,
+            decoration: InputDecoration(
+              labelText:
+                  'SMSMKT Secret Key (${s?.smsmktHasKeys == true ? s!.smsmktMaskedSecretKey : "ยังไม่ตั้งค่า"})',
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _projectKeyCtrl,
+            decoration: const InputDecoration(
+              labelText: 'SMSMKT Project Key (OTP)',
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _googleClientCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Google OAuth Client ID (สำหรับการยืนยัน Gmail)',
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: _loading ? null : _save,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppTheme.brandPrimary,
+              ),
+              icon: const Icon(Icons.save_rounded, size: 17),
+              label: const Text('บันทึกตั้งค่า Auth'),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

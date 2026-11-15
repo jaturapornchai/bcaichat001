@@ -19,8 +19,8 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter build ios --release --no-codesign
-      - run: flutter build macos --release
+      - run: flutter build ios --release --no-codesign --dart-define=API_BASE_URL=https://www.bcaichat.com
+      - run: flutter build macos --release --dart-define=API_BASE_URL=https://www.bcaichat.com
       - name: Package builds
         run: |
           ditto -c -k --keepParent build/ios/iphoneos/Runner.app bcaichat-ios-unsigned.zip

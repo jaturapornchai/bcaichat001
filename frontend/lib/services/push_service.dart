@@ -12,15 +12,44 @@ class PushService {
   PushService._();
   static final PushService instance = PushService._();
   static const MethodChannel _android = MethodChannel('bcaichat/push');
-  static const String _prefApiBase = 'bcaichat_api_base';
   static const String _prefEffectiveApiBase = 'bcaichat_effective_api_base';
 
   String? _token;
   bool _backgroundServiceActive = false;
   void Function(String conversationId)? _onOpenConversation;
+  void Function(int slot)? _onSwitchTestUserSlot;
+  Future<void> Function(String url)? _onSwitchApiBaseUrl;
 
   static bool get supported => defaultTargetPlatform == TargetPlatform.android;
   bool get backgroundServiceActive => _backgroundServiceActive;
+
+  void bindSwitchTestUserSlot(void Function(int slot)? handler) {
+    _onSwitchTestUserSlot = handler;
+    _bindAndroidHandler();
+  }
+
+  void bindSwitchApiBaseUrl(Future<void> Function(String url)? handler) {
+    _onSwitchApiBaseUrl = handler;
+    _bindAndroidHandler();
+  }
+
+  Future<int?> takeInitialTestUserSlot() async {
+    if (!supported) return null;
+    try {
+      final slot = await _android.invokeMethod<int>('takeInitialTestUserSlot');
+      if (slot != null && slot >= 1 && slot <= 5) return slot;
+    } catch (_) {}
+    return null;
+  }
+
+  Future<String?> takeInitialApiBaseUrl() async {
+    if (!supported) return null;
+    try {
+      final url = await _android.invokeMethod<String>('takeInitialApiBaseUrl');
+      if (url != null && url.trim().isNotEmpty) return url.trim();
+    } catch (_) {}
+    return null;
+  }
 
   void _bindAndroidHandler() {
     if (defaultTargetPlatform != TargetPlatform.android) return;
@@ -35,6 +64,15 @@ class PushService {
           arg.isNotEmpty) {
         _token = arg;
         await syncSettings();
+      } else if (call.method == 'switchTestUserSlot' &&
+          arg is int &&
+          arg >= 1 &&
+          arg <= 5) {
+        _onSwitchTestUserSlot?.call(arg);
+      } else if (call.method == 'switchApiBaseUrl' &&
+          arg is String &&
+          arg.trim().isNotEmpty) {
+        await _onSwitchApiBaseUrl?.call(arg.trim());
       }
     });
   }
@@ -47,9 +85,6 @@ class PushService {
       _bindAndroidHandler();
       await NotificationService.instance.init();
       final prefs = await SharedPreferences.getInstance();
-      if ((prefs.getString(_prefApiBase) ?? '').isEmpty) {
-        await prefs.setString(_prefApiBase, ApiService.baseUrl);
-      }
       await prefs.setString(_prefEffectiveApiBase, ApiService.baseUrl);
       await ApiService.instance.deviceId();
       await NotificationService.instance.createPushChannels();

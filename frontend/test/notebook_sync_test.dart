@@ -16,13 +16,14 @@ void main() {
     expect(body, contains('[_conversation.id, null]'));
   });
 
-  // Opening the สมุดบันทึก BC tab must reload notes on both nav bars.
+  // Opening the สมุดบันทึก BC tab must reload notes on the unified portrait nav bar.
   test('opening the notebook tab reloads its notes', () {
     final ui = src('lib/screens/main_shell.dart');
     expect(
       'if (idx == 2) _reloadNotebookNotes();'.allMatches(ui).length,
-      2,
-      reason: 'both the bottom bar and the side rail must reload',
+      1,
+      reason: 'portrait bottom NavigationBar must reload notebook notes',
     );
+    expect(ui.contains('_buildDesktopNavRail'), isFalse);
   });
 }
