@@ -371,6 +371,15 @@ async function createTrackedContext(browser, label, viewport = { width: 1280, he
   };
 }
 
+// ถ่ายภาพหน้าจอจริงสำหรับ README เมื่อกำหนด README_SHOTS_DIR (ปกติไม่ทำอะไร)
+const README_SHOTS_DIR = process.env.README_SHOTS_DIR || "";
+async function shot(page, name) {
+  if (!README_SHOTS_DIR) return;
+  fs.mkdirSync(README_SHOTS_DIR, { recursive: true });
+  await page.waitForTimeout(700);
+  await page.screenshot({ path: path.join(README_SHOTS_DIR, name + ".png") });
+}
+
 async function loginViaPhoneOtpUi(page, phone, displayName) {
   await page.goto(WEB_URL, { waitUntil: "domcontentloaded" });
   await page.getByTestId("login-phone-input").fill(phone);
@@ -430,6 +439,7 @@ async function main() {
     const adminSession = await createTrackedContext(browser, "admin");
     contexts.push(adminSession);
     await adminSession.page.goto(WEB_URL, { waitUntil: "domcontentloaded" });
+    await shot(adminSession.page, "web-login");
     await adminSession.page.getByTestId("login-phone-input").waitFor({ state: "visible", timeout: 10000 });
 
     const loginBodyText = await adminSession.page.locator("body").innerText();
@@ -528,6 +538,7 @@ async function main() {
     await u2DmItem.waitFor({ state: "visible", timeout: 10000 });
     await u2DmItem.click();
     await u2.page.locator('[data-testid^="message-item-"]').filter({ hasText: dmText }).first().waitFor({ state: "visible", timeout: 8000 });
+    await shot(u1.page, "web-chat-two-pane");
     console.log("✅ Add Friend by Thai Phone & Real-time 1-1 Chat UI passed");
 
     // 6. Voice / Video Call Inline UI (U1 calls U2 -> U2 accepts -> Hangup -> call_log rendered)
@@ -540,6 +551,8 @@ async function main() {
     await u2.page.getByTestId("accept-call-btn").click();
     await u2.page.getByTestId("active-call-dock").waitFor({ state: "visible", timeout: 10000 });
     await u1.page.waitForTimeout(1100);
+    await shot(u1.page, "web-video-call");
+    await shot(u2.page, "web-video-call-callee");
 
     await u1.page.getByTestId("hangup-call-btn").click();
     await u1.page.getByTestId("active-call-dock").waitFor({ state: "hidden", timeout: 10000 });
@@ -622,6 +635,7 @@ async function main() {
     await u1.page.getByTestId("mobile-back-btn").click();
     await u1.page.locator('[data-testid^="conv-item-"]').filter({ hasText: "แพร PW 2" }).first().click();
     await u1.page.getByTestId("active-room-title").filter({ hasText: "แพร PW 2" }).waitFor({ state: "visible", timeout: 8000 });
+    await shot(u1.page, "web-rich-messages");
     console.log("✅ Wave 4 (#60): Location, Contact, Ladder, Silent/Expire, Edit+WS & Keep Memo UI passed");
 
     // 8. Wave 2 (#52): QR Reset, Privacy Email Toggle, Timed Mute, Silent Block/Unblock
@@ -783,6 +797,7 @@ async function main() {
     assert.ok(oaRoomText.includes("ร้านค้า"), "ChatRoomView OA room must show ร้านค้า");
     assertCleanUiText(oaRoomText, "oa_chat_room_view");
     await assertZeroPopupsAndOverlays(u4.page, "oa_customer_room_and_coupon_tray");
+    await shot(u1.page, "web-oa-console");
     console.log("✅ /oa Multi-Shop Switcher + Team Agent + Follow + Rich Menu + Coupon UI passed");
 
     // 10. Wave 3 (#56) Setup Recovery PIN (U1) & Mobile Viewport (390x844) Audit
@@ -812,6 +827,7 @@ async function main() {
     await mob.page.goto(WEB_URL, { waitUntil: "domcontentloaded" });
     await mob.page.getByTestId("mobile-bottom-nav").waitFor({ state: "visible", timeout: 10000 });
     await mob.page.getByTestId("chat-folder-chips").waitFor({ state: "visible", timeout: 10000 });
+    await shot(mob.page, "mobile-chat-list");
     assert.equal(await mob.page.getByTestId("folder-chip-personal").count(), 0, "Secondary folders folded initially on mobile");
     await mob.page.getByTestId("toggle-more-folders-btn").click();
     await mob.page.getByTestId("folder-chip-personal").waitFor({ state: "visible", timeout: 5000 });
@@ -822,6 +838,17 @@ async function main() {
     assert.equal(mobOverflow, 0, "0px horizontal overflow on 390px mobile room");
     await assertZeroPopupsAndOverlays(mob.page, "mobile_390_immersive_room");
     assertCleanUiText(await mob.page.locator("body").innerText(), "mobile_page_body");
+    await shot(mob.page, "mobile-chat-room");
+    if (README_SHOTS_DIR) {
+      await mob.page.getByTestId("mobile-back-btn").click();
+      await mob.page.getByTestId("nav-tab-home").click();
+      await mob.page.getByTestId("add-friend-mode-qr").click();
+      await mob.page.getByTestId("qr-fullscreen-open-btn").click();
+      await mob.page.getByTestId("qr-fullscreen-tab-mine").click();
+      await mob.page.getByTestId("qr-fullscreen-my-qr").waitFor({ state: "visible", timeout: 8000 });
+      await shot(mob.page, "mobile-qr-fullscreen");
+      await mob.page.getByTestId("qr-fullscreen-close-btn").click();
+    }
     console.log("✅ Mobile 390x844 Immersive Room + Zero Overlay + Banned Word Audit passed");
 
     // Close U1 & Mobile contexts before Recovery revokes U1's sessions (prevents noisy 401 console errors)

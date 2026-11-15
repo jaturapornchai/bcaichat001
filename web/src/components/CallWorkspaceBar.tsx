@@ -24,12 +24,14 @@ import {
   PhoneCall,
   PhoneOff,
   SlidersHorizontal,
+  LayoutDashboard,
   SwitchCamera,
   Video,
   VideoOff,
   Volume2,
 } from "lucide-react";
 import { formatCallDuration, resolveLiveKitUrl } from "@/lib/api";
+import { computeMosaicLayout, promoteSpeakers } from "@/lib/callMosaic";
 import type { CallJoinResponse, CallSession, UserProfile } from "@/lib/types";
 import { UserAvatar } from "./StickerArt";
 
@@ -169,6 +171,42 @@ export function CallWorkspaceBar({
   const [elapsedSec, setElapsedSec] = useState(0);
   const [netQuality, setNetQuality] = useState<ConnectionQuality>(ConnectionQuality.Unknown);
   const [tiles, setTiles] = useState<ParticipantTileData[]>([]);
+  const [autoArrange, setAutoArrange] = useState(true);
+  const [speakerOrder, setSpeakerOrder] = useState<string[]>([]);
+  const [mosaicEl, setMosaicEl] = useState<HTMLDivElement | null>(null);
+  const [mosaicWidth, setMosaicWidth] = useState(0);
+  const lastPromoteAtRef = useRef(0);
+
+  // วิดีโอคอลกลุ่ม: คนที่กำลังพูด (ไม่นับตัวเอง) เลื่อนขึ้นเป็นไทล์แรก เว้นช่วง 1.5 วิ กันสลับถี่
+  useEffect(() => {
+    const present = tiles.map((t) => t.identity);
+    setSpeakerOrder((prev) => promoteSpeakers(prev, present, []));
+    const speaking = tiles.filter((t) => t.isSpeaking && !t.isLocal).map((t) => t.identity);
+    if (!autoArrange || speaking.length === 0) return;
+    const wait = Math.max(0, 1500 - (Date.now() - lastPromoteAtRef.current));
+    const timer = window.setTimeout(() => {
+      setSpeakerOrder((prev) => {
+        const next = promoteSpeakers(prev, present, speaking);
+        if (next !== prev) lastPromoteAtRef.current = Date.now();
+        return next;
+      });
+    }, wait);
+    return () => window.clearTimeout(timer);
+  }, [tiles, autoArrange]);
+
+  useEffect(() => {
+    if (!mosaicEl) return;
+    const measure = () => setMosaicWidth(Math.max(0, mosaicEl.clientWidth - 16));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(mosaicEl);
+    return () => observer.disconnect();
+  }, [mosaicEl]);
+
+  const handleBringToFront = (identity: string) => {
+    lastPromoteAtRef.current = Date.now();
+    setSpeakerOrder((prev) => [identity, ...prev.filter((id) => id !== identity)]);
+  };
   const [remoteAudioTracks, setRemoteAudioTracks] = useState<Array<{ sid: string; track: Track }>>([]);
   const [actionBusy, setActionBusy] = useState(false);
 
@@ -622,6 +660,8 @@ export function CallWorkspaceBar({
     );
   };
 
+  const mosaicOrder = promoteSpeakers(speakerOrder, tiles.map((t) => t.identity), []);
+  const mosaic = computeMosaicLayout(tiles.length, mosaicWidth);
   const mainTile = tiles.find((t) => !t.isLocal) ?? tiles[0] ?? null;
   const pipTile =
     mainTile && tiles.length === 2
@@ -834,6 +874,23 @@ export function CallWorkspaceBar({
                     <span>เปิดเสียง</span>
                   </button>
                 )}
+                {tiles.length >= 3 && (
+                  <button
+                    type="button"
+                    data-testid="call-auto-arrange-btn"
+                    aria-pressed={autoArrange}
+                    onClick={() => setAutoArrange((v) => !v)}
+                    title={autoArrange ? "ปิดการเรียงตามคนพูดอัตโนมัติ" : "เปิดการเรียงตามคนพูดอัตโนมัติ"}
+                    className={`inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold text-white transition ${
+                      autoArrange
+                        ? "border-[#D4A373] bg-[#D4A373]/30"
+                        : "border-transparent bg-white/15 hover:bg-white/25"
+                    }`}
+                  >
+                    <LayoutDashboard className="h-3.5 w-3.5 shrink-0" />
+                    <span>{autoArrange ? "เรียงอัตโนมัติ" : "เรียงเอง"}</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   data-testid="call-minimize-btn"
@@ -938,39 +995,53 @@ export function CallWorkspaceBar({
                   )}
                 </>
               ) : (
-                <div className="grid h-full grid-cols-2 gap-2 overflow-y-auto p-2">
-                  {tiles.map((tile) => (
-                    <div
-                      key={tile.identity}
-                      data-testid="call-participant-tile"
-                      data-participant-id={tile.identity}
-                      data-has-video={tile.videoTrack ? "true" : "false"}
-                      className={`relative flex aspect-[3/4] items-center justify-center overflow-hidden rounded-xl border bg-[#1C1412] ${
-                        tile.isSpeaking ? "border-2 border-emerald-500" : "border-white/15"
-                      }`}
-                    >
-                      {tile.videoTrack ? (
-                        <VideoTrackView
-                          track={tile.videoTrack}
-                          muted={tile.isLocal}
-                          mirror={tile.isLocal && camFacing !== "environment"}
-                        />
-                      ) : (
-                        <div className="flex flex-col items-center gap-1.5 p-2 text-center">
-                          <UserAvatar name={tile.name} size={48} />
-                          <span className="max-w-[110px] truncate text-xs font-semibold text-white">
-                            {tile.name}
+                <div
+                  ref={setMosaicEl}
+                  data-testid="call-mosaic"
+                  data-auto-arrange={autoArrange ? "true" : "false"}
+                  className="h-full overflow-y-auto p-2"
+                >
+                  <div className="relative" style={{ height: mosaic.height }}>
+                    {tiles.map((tile) => {
+                      const rank = mosaicOrder.indexOf(tile.identity);
+                      const rect = mosaic.rects[rank];
+                      if (!rect) return null;
+                      return (
+                        <button
+                          type="button"
+                          key={tile.identity}
+                          data-testid="call-participant-tile"
+                          data-participant-id={tile.identity}
+                          data-has-video={tile.videoTrack ? "true" : "false"}
+                          data-rank={rank}
+                          onClick={() => handleBringToFront(tile.identity)}
+                          title="แตะเพื่อย้ายขึ้นเป็นอันแรก"
+                          style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
+                          className={`absolute flex items-center justify-center overflow-hidden rounded-2xl border bg-[#1C1412] transition-all duration-500 ease-out ${
+                            tile.isSpeaking
+                              ? "border-2 border-[#D4A373] shadow-[0_0_18px_rgba(212,163,115,0.55)]"
+                              : "border-white/15"
+                          }`}
+                        >
+                          {tile.videoTrack ? (
+                            <VideoTrackView
+                              track={tile.videoTrack}
+                              muted={tile.isLocal}
+                              mirror={tile.isLocal && camFacing !== "environment"}
+                            />
+                          ) : (
+                            <UserAvatar name={tile.name} size={rank === 0 ? 72 : 48} />
+                          )}
+                          <span className="absolute bottom-1.5 left-1.5 right-1.5 flex items-center justify-between gap-1 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white">
+                            <span className="truncate">
+                              {tile.isLocal ? `${tile.name} (คุณ)` : tile.name}
+                            </span>
+                            {!tile.micEnabled && <MicOff className="h-3 w-3 shrink-0 text-red-300" />}
                           </span>
-                        </div>
-                      )}
-                      <div className="absolute bottom-1.5 left-1.5 right-1.5 flex items-center justify-between gap-1 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white">
-                        <span className="truncate">
-                          {tile.isLocal ? `${tile.name} (คุณ)` : tile.name}
-                        </span>
-                        {!tile.micEnabled && <MicOff className="h-3 w-3 shrink-0 text-red-300" />}
-                      </div>
-                    </div>
-                  ))}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>

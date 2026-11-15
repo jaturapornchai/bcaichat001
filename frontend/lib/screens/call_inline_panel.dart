@@ -8,6 +8,7 @@ import '../models/models.dart';
 import '../services/api_service.dart';
 import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
+import 'call_mosaic.dart';
 
 /// Maps network [ConnectionQuality] and participant count to the target
 /// LiveKit remote simulcast layer (`1080p` / `720p` / `360p`).
@@ -66,6 +67,10 @@ class CallInlineManager extends ChangeNotifier {
   CameraPosition _cameraPosition = CameraPosition.front;
   bool _switchingDevice = false;
   bool _devicesTrayOpen = false;
+  bool _autoArrange = true;
+  List<String> _speakerOrder = const [];
+  DateTime _lastPromoteAt = DateTime.fromMillisecondsSinceEpoch(0);
+  Timer? _promoteTimer;
   List<MediaDevice> _devices = const [];
   StreamSubscription<List<MediaDevice>>? _deviceSub;
   bool _expanded = true;
@@ -83,6 +88,11 @@ class CallInlineManager extends ChangeNotifier {
   bool get speakerOn => _speakerOn;
   bool get switchingDevice => _switchingDevice;
   bool get devicesTrayOpen => _devicesTrayOpen;
+  bool get autoArrange => _autoArrange;
+
+  /// ลำดับไทล์วิดีโอคอลกลุ่ม (คนที่พูดล่าสุดอยู่หน้า) เฉพาะคนที่ยังอยู่ในสาย
+  List<String> tileOrder(List<String> present) =>
+      promoteCallSpeakers(_speakerOrder, present, const []);
 
   static bool get _isMobile =>
       defaultTargetPlatform == TargetPlatform.android ||
@@ -406,6 +416,9 @@ class CallInlineManager extends ChangeNotifier {
       notifyListeners();
     });
     listener.on<TrackUnsubscribedEvent>((_) => notifyListeners());
+    listener.on<ActiveSpeakersChangedEvent>(
+      (event) => _onActiveSpeakers(event.speakers),
+    );
     listener.on<ParticipantConnectionQualityUpdatedEvent>((_) {
       _applyAdaptiveRemoteVideoQuality();
       notifyListeners();
@@ -592,6 +605,45 @@ class CallInlineManager extends ChangeNotifier {
     notifyListeners();
   }
 
+  void toggleAutoArrange() {
+    _autoArrange = !_autoArrange;
+    if (!_autoArrange) _promoteTimer?.cancel();
+    notifyListeners();
+  }
+
+  void bringToFront(String identity) {
+    _lastPromoteAt = DateTime.now();
+    _speakerOrder = [identity, ..._speakerOrder.where((id) => id != identity)];
+    notifyListeners();
+  }
+
+  /// คนที่กำลังพูด (ไม่นับตัวเอง) เลื่อนขึ้นเป็นไทล์แรก เว้นช่วง 1.5 วิ กันสลับถี่
+  void _onActiveSpeakers(List<Participant> speakers) {
+    final room = _room;
+    _promoteTimer?.cancel();
+    if (room == null) return;
+    final speaking = speakers
+        .whereType<RemoteParticipant>()
+        .map((p) => p.identity)
+        .toList();
+    if (_autoArrange && speaking.isNotEmpty) {
+      final elapsed = DateTime.now().difference(_lastPromoteAt);
+      final wait = const Duration(milliseconds: 1500) - elapsed;
+      _promoteTimer = Timer(wait.isNegative ? Duration.zero : wait, () {
+        final live = _room;
+        if (live == null || !_autoArrange) return;
+        final present = [
+          ?live.localParticipant?.identity,
+          ...live.remoteParticipants.values.map((p) => p.identity),
+        ];
+        _speakerOrder = promoteCallSpeakers(_speakerOrder, present, speaking);
+        _lastPromoteAt = DateTime.now();
+        notifyListeners();
+      });
+    }
+    notifyListeners();
+  }
+
   void toggleDevicesTray() {
     _devicesTrayOpen = !_devicesTrayOpen;
     notifyListeners();
@@ -660,11 +712,14 @@ class CallInlineManager extends ChangeNotifier {
     if (room == null || device.deviceId == selectedDeviceId(device.kind)) {
       return;
     }
-    await _runDeviceSwitch(() => switch (device.kind) {
-      'videoinput' => room.setVideoInputDevice(device),
-      'audioinput' => room.setAudioInputDevice(device),
-      _ => room.setAudioOutputDevice(device),
-    }, 'เปลี่ยนอุปกรณ์ไม่สำเร็จ ลองใหม่อีกครั้ง');
+    await _runDeviceSwitch(
+      () => switch (device.kind) {
+        'videoinput' => room.setVideoInputDevice(device),
+        'audioinput' => room.setAudioInputDevice(device),
+        _ => room.setAudioOutputDevice(device),
+      },
+      'เปลี่ยนอุปกรณ์ไม่สำเร็จ ลองใหม่อีกครั้ง',
+    );
   }
 
   Future<void> hangup() async {
@@ -691,6 +746,10 @@ class CallInlineManager extends ChangeNotifier {
     _cameraPosition = CameraPosition.front;
     _switchingDevice = false;
     _devicesTrayOpen = false;
+    _autoArrange = true;
+    _speakerOrder = const [];
+    _promoteTimer?.cancel();
+    _promoteTimer = null;
     _elapsedSec = 0;
     _connectionQuality = ConnectionQuality.unknown;
     _statusNote = null;
@@ -726,12 +785,14 @@ class _ParticipantVideoTile {
   final String name;
   final VideoTrack track;
   final bool isLocal;
+  final bool isSpeaking;
 
   const _ParticipantVideoTile({
     required this.identity,
     required this.name,
     required this.track,
     required this.isLocal,
+    this.isSpeaking = false,
   });
 }
 
@@ -755,6 +816,7 @@ List<_ParticipantVideoTile> _collectCallVideoTracks(Room? room) {
             name: lp.name.isNotEmpty ? '${lp.name} (คุณ)' : 'กล้องของคุณ',
             track: track,
             isLocal: true,
+            isSpeaking: lp.isSpeaking,
           ),
         );
       }
@@ -770,6 +832,7 @@ List<_ParticipantVideoTile> _collectCallVideoTracks(Room? room) {
             name: rp.name.isNotEmpty ? rp.name : rp.identity,
             track: track,
             isLocal: false,
+            isSpeaking: rp.isSpeaking,
           ),
         );
       }
@@ -1143,17 +1206,7 @@ class CallFullScreenStage extends StatelessWidget {
     List<_ParticipantVideoTile> videoTiles,
   ) {
     if (videoTiles.length >= 3) {
-      return GridView.builder(
-        padding: const EdgeInsets.all(8),
-        itemCount: videoTiles.length,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          mainAxisSpacing: 8,
-          crossAxisSpacing: 8,
-          childAspectRatio: 3 / 4,
-        ),
-        itemBuilder: (_, idx) => _buildVideoCard(videoTiles[idx]),
-      );
+      return _buildMosaic(mgr, videoTiles);
     }
 
     if (videoTiles.isNotEmpty) {
@@ -1244,6 +1297,70 @@ class CallFullScreenStage extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// วิดีโอคอลกลุ่ม: จัดไทล์แบบ masonry ตามลำดับคนพูด ย้ายตำแหน่ง/ขนาดแบบ animation
+  Widget _buildMosaic(
+    CallInlineManager mgr,
+    List<_ParticipantVideoTile> videoTiles,
+  ) {
+    final order = mgr.tileOrder([for (final t in videoTiles) t.identity]);
+    return LayoutBuilder(
+      builder: (context, box) {
+        final layout = computeCallMosaicLayout(
+          videoTiles.length,
+          box.maxWidth - 16,
+        );
+        return SingleChildScrollView(
+          key: const Key('call-mosaic'),
+          padding: const EdgeInsets.all(8),
+          child: SizedBox(
+            height: layout.height,
+            child: Stack(
+              children: [
+                for (final tile in videoTiles)
+                  _buildMosaicTile(
+                    mgr,
+                    tile,
+                    layout.rects[order.indexOf(tile.identity)],
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMosaicTile(
+    CallInlineManager mgr,
+    _ParticipantVideoTile tile,
+    Rect rect,
+  ) {
+    return AnimatedPositioned(
+      key: ValueKey('call-mosaic-tile-${tile.identity}'),
+      duration: const Duration(milliseconds: 450),
+      curve: Curves.easeOutCubic,
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height,
+      child: GestureDetector(
+        onTap: () => mgr.bringToFront(tile.identity),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: tile.isSpeaking ? AppTheme.goldClay : Colors.white24,
+              width: tile.isSpeaking ? 2.5 : 1,
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: _buildVideoCard(tile, highDensity: false),
         ),
       ),
     );
@@ -1395,7 +1512,11 @@ class CallInlinePanel extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const Icon(Icons.call_end_rounded, size: 16, color: AppTheme.dangerRed),
+          const Icon(
+            Icons.call_end_rounded,
+            size: 16,
+            color: AppTheme.dangerRed,
+          ),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
@@ -1436,11 +1557,7 @@ class CallInlinePanel extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          UserAvatar(
-            name: caller,
-            avatarUrl: call.initiatorAvatar,
-            radius: 18,
-          ),
+          UserAvatar(name: caller, avatarUrl: call.initiatorAvatar, radius: 18),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -1575,7 +1692,10 @@ class CallInlinePanel extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 6),
                     minimumSize: const Size(0, 28),
                   ),
-                  child: const Text('ไปห้องแชท', style: TextStyle(fontSize: 11.5)),
+                  child: const Text(
+                    'ไปห้องแชท',
+                    style: TextStyle(fontSize: 11.5),
+                  ),
                 ),
               TextButton.icon(
                 key: const Key('call-expand-btn'),
@@ -1655,6 +1775,14 @@ class CallInlinePanel extends StatelessWidget {
 
 /// ปุ่มสลับกล้อง + ปุ่มเลือกอุปกรณ์ (แสดงเฉพาะเมื่อใช้ได้จริง)
 List<Widget> _callDeviceChips(CallInlineManager mgr) => [
+  if ((mgr.room?.remoteParticipants.length ?? 0) >= 2)
+    _CallControlChip(
+      key: const Key('call-auto-arrange-btn'),
+      icon: Icons.dashboard_rounded,
+      label: mgr.autoArrange ? 'เรียงอัตโนมัติ' : 'เรียงเอง',
+      active: mgr.autoArrange,
+      onTap: mgr.toggleAutoArrange,
+    ),
   if (mgr.canSwitchCamera)
     _CallControlChip(
       key: const Key('call-switch-camera-btn'),
