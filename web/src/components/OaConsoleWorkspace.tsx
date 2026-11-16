@@ -65,22 +65,22 @@ const ROLE_META: Record<string, { label: string; shortLabel: string; badgeClass:
   owner: {
     label: "เจ้าของร้าน",
     shortLabel: "เจ้าของร้าน",
-    badgeClass: "bg-[var(--bc-primary)] text-white",
+    badgeClass: "bc-tag bc-tag-gold",
   },
   admin: {
     label: "แอดมินร้าน",
     shortLabel: "แอดมินร้าน",
-    badgeClass: "bg-[var(--bc-soft)] text-[var(--bc-deep)]",
+    badgeClass: "bc-tag",
   },
   agent: {
     label: "คนตอบแชท",
     shortLabel: "คนตอบแชท",
-    badgeClass: "bg-emerald-50 text-emerald-800 border border-emerald-200",
+    badgeClass: "bc-tag",
   },
   marketer: {
     label: "ฝ่ายการตลาด",
     shortLabel: "การตลาด",
-    badgeClass: "bg-amber-50 text-amber-800 border border-amber-200",
+    badgeClass: "bc-tag",
   },
 };
 
@@ -89,7 +89,7 @@ function getRoleMeta(role?: string | null) {
     ROLE_META[role || "admin"] || {
       label: role || "ทีมงาน",
       shortLabel: role || "ทีมงาน",
-      badgeClass: "bg-[var(--bc-panel)] text-[var(--bc-text)]",
+      badgeClass: "bc-tag",
     }
   );
 }
@@ -242,7 +242,7 @@ export function OaConsoleWorkspace({
 
   const visibleSubTabs = useMemo(() => {
     const list: Array<{ id: ConsoleSubTab; label: string; icon: typeof BarChart3 }> = [];
-    if (canInbox) list.push({ id: "inbox", label: "💬 แชทลูกค้า", icon: MessageSquare });
+    if (canInbox) list.push({ id: "inbox", label: "แชทลูกค้า", icon: MessageSquare });
     if (canInbox) list.push({ id: "customers", label: "ลูกค้า", icon: Contact });
     list.push({
       id: "team",
@@ -644,7 +644,7 @@ export function OaConsoleWorkspace({
       {/* Multi-Shop Switcher + Create New Business */}
       <div
         data-testid="oa-multi-shop-switcher"
-        className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-2.5 shadow-2xs"
+        className="bc-appbar flex flex-wrap items-center justify-between gap-2 p-2.5"
       >
         <div className="flex flex-wrap items-center gap-1.5">
           {myOas.map((oa) => {
@@ -660,18 +660,12 @@ export function OaConsoleWorkspace({
                   selectOaShop(oa.id);
                   setShowCreateForm(false);
                 }}
-                className={`inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1 text-xs font-bold transition ${
-                  isSelected
-                    ? "bg-[var(--bc-primary)] text-white shadow-xs"
-                    : "border border-[var(--bc-border)] bg-[var(--bc-panel)] text-[var(--bc-text)] hover:border-[var(--bc-primary)]"
-                }`}
+                className={`bc-chip gap-1.5 ${isSelected ? "is-active" : ""}`}
               >
                 <Store className="h-3.5 w-3.5 shrink-0" />
                 <span className="max-w-[140px] truncate">{oa.display_name}</span>
                 <span
-                  className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-                    isSelected ? "bg-white/20 text-white" : meta.badgeClass
-                  }`}
+                  className={isSelected ? "bc-tag bg-white/20 text-white" : meta.badgeClass}
                 >
                   {meta.shortLabel}
                 </span>
@@ -693,11 +687,11 @@ export function OaConsoleWorkspace({
             setShowCreateForm((v) => !v);
             setShowCreateAdvanced(false);
           }}
-          className="inline-flex h-9 shrink-0 items-center gap-1 rounded-xl border border-[var(--bc-primary)] bg-[var(--bc-soft)] px-3 text-xs font-bold text-[var(--bc-deep)] hover:brightness-95"
+          className="bc-btn bc-btn-soft shrink-0"
         >
           <Plus className="h-3.5 w-3.5" />
           <span>
-            {showCreateForm ? "ปิดฟอร์มเปิดร้าน" : "+ เปิดร้านใหม่"}
+            {showCreateForm ? "ปิดฟอร์มเปิดร้าน" : "เปิดร้านใหม่"}
           </span>
         </button>
       </div>
@@ -706,9 +700,9 @@ export function OaConsoleWorkspace({
       {showCreateForm && (
         <form
           onSubmit={handleCreateOa}
-          className="space-y-2 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-3 shadow-2xs"
+          className="bc-card space-y-2 p-3"
         >
-          <h3 className="text-sm font-bold text-[var(--bc-text)]">
+          <h3 className="bc-title text-sm text-[var(--bc-text)]">
             เปิดร้านใหม่
           </h3>
           <div className="grid grid-cols-1 gap-2">
@@ -719,7 +713,7 @@ export function OaConsoleWorkspace({
               onChange={(e) => setNewName(e.target.value)}
               placeholder="ชื่อร้าน เช่น บ้านเชียงคาเฟ่"
               data-testid="create-oa-name"
-              className="h-9 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 text-xs outline-none focus:border-[var(--bc-primary)]"
+              className="bc-input"
             />
             <input
               type="text"
@@ -728,13 +722,13 @@ export function OaConsoleWorkspace({
               onChange={(e) => setNewHandle(e.target.value)}
               placeholder="ไอดีร้าน (ภาษาอังกฤษ) เช่น @myshop"
               data-testid="create-oa-handle"
-              className="h-9 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 text-xs outline-none focus:border-[var(--bc-primary)]"
+              className="bc-input"
             />
             <select
               value={newCat}
               onChange={(e) => setNewCat(e.target.value)}
               aria-label="หมวดหมู่ร้าน"
-              className="h-9 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 text-xs outline-none"
+              className="bc-input"
             >
               {OA_CATEGORIES.filter((c) => c !== "ทั้งหมด").map((c) => (
                 <option key={c} value={c}>
@@ -745,21 +739,21 @@ export function OaConsoleWorkspace({
           </div>
 
           {showCreateAdvanced && (
-            <div className="space-y-2 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2.5">
+            <div className="bc-well space-y-2 rounded-xl p-2.5">
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <input
                   type="text"
                   value={newBio}
                   onChange={(e) => setNewBio(e.target.value)}
                   placeholder="คำอธิบายร้านสั้นๆ"
-                  className="h-8 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 text-xs outline-none"
+                  className="bc-input"
                 />
                 <input
                   type="text"
                   value={newHours}
                   onChange={(e) => setNewHours(e.target.value)}
                   placeholder="เวลาทำการ เช่น 09:00 - 20:00 น."
-                  className="h-8 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 text-xs outline-none"
+                  className="bc-input"
                 />
               </div>
               <input
@@ -767,17 +761,17 @@ export function OaConsoleWorkspace({
                 value={newGreeting}
                 onChange={(e) => setNewGreeting(e.target.value)}
                 placeholder="ข้อความต้อนรับอัตโนมัติเมื่อลูกค้าติดตาม"
-                className="h-8 w-full rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 text-xs outline-none"
+                className="bc-input w-full"
               />
               <textarea
                 rows={2}
                 value={newAiPrompt}
                 onChange={(e) => setNewAiPrompt(e.target.value)}
                 placeholder="ข้อมูลความรู้ร้านค้าให้ AI ช่วยตอบลูกค้า (เช่น เมนูแนะนำ โปรโมชั่น วิธีจัดส่ง)"
-                className="w-full rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1.5 text-xs outline-none"
+                className="bc-input w-full"
               />
               <div className="flex flex-wrap items-center gap-3 text-xs">
-                <label className="inline-flex items-center gap-1.5 font-semibold text-[var(--bc-text)]">
+                <label className="inline-flex items-center gap-1.5 font-medium text-[var(--bc-text)]">
                   <input
                     type="checkbox"
                     checked={newAiEnabled}
@@ -785,7 +779,7 @@ export function OaConsoleWorkspace({
                   />
                   <span>เปิด AI ช่วยตอบลูกค้า</span>
                 </label>
-                <label className="inline-flex items-center gap-1.5 font-semibold text-[var(--bc-text)]">
+                <label className="inline-flex items-center gap-1.5 font-medium text-[var(--bc-text)]">
                   <input
                     type="checkbox"
                     checked={newCallsEnabled}
@@ -803,7 +797,7 @@ export function OaConsoleWorkspace({
               data-testid="toggle-oa-create-advanced"
               aria-expanded={showCreateAdvanced}
               onClick={() => setShowCreateAdvanced((v) => !v)}
-              className="inline-flex h-8 items-center gap-1 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2.5 text-xs font-semibold text-[var(--bc-text)] hover:bg-[var(--bc-soft)]"
+              className="bc-btn bc-btn-secondary bc-btn-sm"
             >
               <span>
                 {showCreateAdvanced
@@ -816,7 +810,7 @@ export function OaConsoleWorkspace({
               type="submit"
               disabled={busy}
               data-testid="submit-create-oa-btn"
-              className="inline-flex h-9 items-center rounded-xl bg-[var(--bc-primary)] px-4 text-xs font-bold text-white hover:brightness-95 disabled:opacity-60"
+              className="bc-btn bc-btn-primary"
             >
               {busy ? "กำลังสร้าง..." : "เปิดร้าน"}
             </button>
@@ -830,17 +824,17 @@ export function OaConsoleWorkspace({
           {/* Compact Single-Row Summary Bar */}
           <div
             data-testid="oa-console-summary-bar"
-            className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] px-3 py-2 shadow-2xs"
+            className="bc-card flex flex-wrap items-center justify-between gap-2 px-3 py-2"
           >
             <div className="flex min-w-0 items-center gap-2">
-              <span className="truncate text-xs font-bold text-[var(--bc-text)]">
+              <span className="truncate text-xs font-semibold text-[var(--bc-text)]">
                 {selectedOa.display_name}
               </span>
               <span className="shrink-0 text-[11px] text-[var(--bc-muted)]">
                 {selectedOa.handle}
               </span>
               <span
-                className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${getRoleMeta(myRole).badgeClass}`}
+                className={`shrink-0 ${getRoleMeta(myRole).badgeClass}`}
               >
                 {getRoleMeta(myRole).shortLabel}
               </span>
@@ -848,26 +842,26 @@ export function OaConsoleWorkspace({
             {overview && (
               <div className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--bc-muted)]">
                 <span>
-                  ผู้ติดตาม <strong className="text-[var(--bc-primary)]">{overview.stats.follower_count}</strong>
+                  ผู้ติดตาม <strong className="bc-num font-semibold text-[var(--bc-primary)]">{overview.stats.follower_count}</strong>
                 </span>
                 <span>•</span>
                 <span>
-                  แชท <strong className="text-[var(--bc-primary)]">{overview.stats.active_chats_count}</strong>
+                  แชท <strong className="bc-num font-semibold text-[var(--bc-primary)]">{overview.stats.active_chats_count}</strong>
                 </span>
                 <span>•</span>
                 <span>
-                  คูปอง <strong className="text-[var(--bc-primary)]">{overview.stats.active_coupon_count}</strong>
+                  คูปอง <strong className="bc-num font-semibold text-[var(--bc-primary)]">{overview.stats.active_coupon_count}</strong>
                 </span>
                 <span>•</span>
                 <span>
-                  ส่งข่าว <strong className="text-[var(--bc-primary)]">{overview.stats.broadcast_count}</strong>
+                  ส่งข่าว <strong className="bc-num font-semibold text-[var(--bc-primary)]">{overview.stats.broadcast_count}</strong>
                 </span>
               </div>
             )}
           </div>
 
           {/* Sub-tab Pills (filtered by myRole) */}
-          <div className="flex flex-wrap items-center gap-1.5 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-2 shadow-2xs">
+          <div className="bc-card flex flex-wrap items-center gap-1.5 p-2">
             {visibleSubTabs.map((t) => {
               const Icon = t.icon;
               return (
@@ -876,11 +870,7 @@ export function OaConsoleWorkspace({
                   type="button"
                   data-testid={`oa-subtab-${t.id}`}
                   onClick={() => setSubTab(t.id)}
-                  className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-xl px-2.5 text-xs font-bold transition ${
-                    subTab === t.id
-                      ? "bg-[var(--bc-primary)] text-white"
-                      : "bg-[var(--bc-panel)] text-[var(--bc-text)] hover:bg-[var(--bc-soft)]/50"
-                  }`}
+                  className={`bc-chip shrink-0 gap-1.5 ${subTab === t.id ? "is-active" : ""}`}
                 >
                   <Icon className="h-3.5 w-3.5 shrink-0" />
                   <span>{t.label}</span>
@@ -891,7 +881,7 @@ export function OaConsoleWorkspace({
 
           {/* SUBTAB: OVERVIEW */}
           {subTab === "overview" && (
-            <div className="rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-3 shadow-2xs">
+            <div className="bc-card p-3">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <UserAvatar
@@ -900,13 +890,13 @@ export function OaConsoleWorkspace({
                     size={36}
                   />
                   <div>
-                    <div className="flex flex-wrap items-center gap-1.5 text-sm font-bold text-[var(--bc-text)]">
+                    <div className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-[var(--bc-text)]">
                       <span>{selectedOa.display_name}</span>
                       <span className="text-xs font-normal text-[var(--bc-muted)]">
                         {selectedOa.handle}
                       </span>
                       <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${getRoleMeta(myRole).badgeClass}`}
+                        className={getRoleMeta(myRole).badgeClass}
                       >
                         บทบาทของคุณ: {getRoleMeta(myRole).shortLabel}
                       </span>
@@ -932,9 +922,9 @@ export function OaConsoleWorkspace({
                     ].map((s) => (
                       <div
                         key={s.label}
-                        className="rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2 text-center"
+                        className="bc-well rounded-xl p-2 text-center"
                       >
-                        <div className="text-lg font-extrabold text-[var(--bc-primary)]">
+                        <div className="bc-num text-lg font-bold text-[var(--bc-primary)]">
                           {s.val}
                         </div>
                         <div className="text-[11px] text-[var(--bc-muted)]">{s.label}</div>
@@ -944,7 +934,7 @@ export function OaConsoleWorkspace({
 
                   {overview.stats.tags.length > 0 && canInbox && (
                     <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                      <span className="text-xs font-bold text-[var(--bc-text)]">
+                      <span className="bc-overline">
                         แท็กลูกค้า:
                       </span>
                       {overview.stats.tags.map((tg) => (
@@ -955,7 +945,7 @@ export function OaConsoleWorkspace({
                             setChatFilterTag(tg.tag);
                             setSubTab("inbox");
                           }}
-                          className="inline-flex items-center gap-1 rounded-full bg-[var(--bc-soft)] px-2.5 py-0.5 text-[11px] font-semibold text-[var(--bc-deep)]"
+                          className="bc-chip"
                         >
                           <Tag className="h-3 w-3" />
                           <span>
@@ -986,27 +976,27 @@ export function OaConsoleWorkspace({
           {subTab === "inbox" && canInbox && (
             <div className="grid grid-cols-1 gap-2.5">
               {/* Customer List */}
-              <div className="space-y-2 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-2.5 shadow-2xs">
+              <div className="bc-card space-y-2 p-2.5">
                 <div className="flex gap-1.5">
                   <input
                     type="text"
                     value={chatFilterQ}
                     onChange={(e) => setChatFilterQ(e.target.value)}
                     placeholder="ค้นหาชื่อลูกค้า / เบอร์ / โน้ต..."
-                    className="flex-1 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1 text-xs outline-none"
+                    className="bc-input bc-search flex-1"
                   />
                   <input
                     type="text"
                     value={chatFilterTag}
                     onChange={(e) => setChatFilterTag(e.target.value)}
                     placeholder="กรองแท็ก"
-                    className="w-24 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2 py-1 text-xs outline-none"
+                    className="bc-input w-24"
                   />
                 </div>
 
-                <div className="max-h-[420px] space-y-1.5 overflow-y-auto">
+                <div className="max-h-[420px] divide-y divide-[var(--bc-line)] overflow-y-auto">
                   {customerChats.length === 0 ? (
-                    <p className="py-4 text-center text-xs text-[var(--bc-muted)]">
+                    <p className="bc-empty py-4 text-center text-xs">
                       ยังไม่มีแชทลูกค้า
                     </p>
                   ) : (
@@ -1016,24 +1006,20 @@ export function OaConsoleWorkspace({
                         type="button"
                         data-testid={`oa-inbox-chat-${ch.conversation_id}`}
                         onClick={() => setActiveCustomerConvId(ch.conversation_id)}
-                        className={`flex w-full items-center gap-2 rounded-xl border p-2 text-left transition ${
-                          activeCustomerConvId === ch.conversation_id
-                            ? "border-[var(--bc-primary)] bg-[var(--bc-soft)]/50"
-                            : "border-[var(--bc-border)] bg-[var(--bc-panel)] hover:border-[var(--bc-primary)]"
-                        }`}
+                        className={`bc-row w-full px-1.5 py-1.5 text-left ${activeCustomerConvId === ch.conversation_id ? "is-active" : ""}`}
                       >
                         <UserAvatar
                           name={ch.follower_name}
                           avatarUrl={ch.follower_avatar}
-                          size={34}
+                          size={38}
                         />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-1">
-                            <span className="truncate text-xs font-bold text-[var(--bc-text)]">
+                            <span className="truncate text-xs font-semibold text-[var(--bc-text)]">
                               {ch.follower_name}
                             </span>
                             {ch.ai_paused && (
-                              <span className="rounded bg-amber-100 px-1 py-0.5 text-[10px] font-bold text-amber-800">
+                              <span className="bc-tag">
                                 พัก AI
                               </span>
                             )}
@@ -1046,7 +1032,7 @@ export function OaConsoleWorkspace({
                               {ch.tags.map((tg) => (
                                 <span
                                   key={tg}
-                                  className="rounded-full bg-[var(--bc-card)] px-1.5 py-0.5 text-[10px] text-[var(--bc-primary)]"
+                                  className="bc-tag"
                                 >
                                   #{tg}
                                 </span>
@@ -1061,14 +1047,14 @@ export function OaConsoleWorkspace({
               </div>
 
               {/* Customer Chat & Tag/Note Detail */}
-              <div className="rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-2.5 shadow-2xs">
+              <div className="bc-card p-2.5">
                 {!activeCustomerChat ? (
-                  <div className="flex h-48 items-center justify-center text-xs text-[var(--bc-muted)]">
+                  <div className="bc-empty flex h-48 items-center justify-center text-xs">
                     เลือกลูกค้าจากรายการเพื่อตอบแชทและจดโน้ตลูกค้า
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--bc-border)] pb-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--bc-line)] pb-2">
                       <div className="flex items-center gap-2">
                         <UserAvatar
                           name={activeCustomerChat.follower_name}
@@ -1076,7 +1062,7 @@ export function OaConsoleWorkspace({
                           size={34}
                         />
                         <div>
-                          <div className="text-xs font-bold text-[var(--bc-text)]">
+                          <div className="text-xs font-semibold text-[var(--bc-text)]">
                             {activeCustomerChat.follower_name}
                           </div>
                           <div className="text-[11px] text-[var(--bc-muted)]">
@@ -1093,7 +1079,7 @@ export function OaConsoleWorkspace({
                             onClick={() =>
                               void onStartCall(activeCustomerChat.conversation_id, "audio")
                             }
-                            className="inline-flex h-8 items-center gap-1 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2.5 text-[11px] font-semibold text-[var(--bc-text)] hover:border-[var(--bc-primary)]"
+                            className="bc-btn bc-btn-secondary bc-btn-sm"
                           >
                             <Phone className="h-3.5 w-3.5 text-[var(--bc-primary)]" />
                             <span>โทร</span>
@@ -1104,7 +1090,7 @@ export function OaConsoleWorkspace({
                             onClick={() =>
                               void onStartCall(activeCustomerChat.conversation_id, "video")
                             }
-                            className="inline-flex h-8 items-center gap-1 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2.5 text-[11px] font-semibold text-[var(--bc-text)] hover:border-[var(--bc-primary)]"
+                            className="bc-btn bc-btn-secondary bc-btn-sm"
                           >
                             <Video className="h-3.5 w-3.5 text-[var(--bc-primary)]" />
                             <span>วิดีโอ</span>
@@ -1121,7 +1107,7 @@ export function OaConsoleWorkspace({
                           data-testid="toggle-oa-crm-bar"
                           aria-expanded={showCrmBar}
                           onClick={() => setShowCrmBar((v) => !v)}
-                          className="inline-flex h-8 items-center gap-1 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2.5 text-[11px] font-bold text-[var(--bc-text)] hover:border-[var(--bc-primary)]"
+                          className="bc-btn bc-btn-secondary bc-btn-sm"
                         >
                           <span>
                             {showCrmBar
@@ -1134,7 +1120,7 @@ export function OaConsoleWorkspace({
                             {activeCustomerChat.tags.map((tg) => (
                               <span
                                 key={tg}
-                                className="rounded-full bg-[var(--bc-soft)] px-2 py-0.5 text-[10px] font-bold text-[var(--bc-deep)]"
+                                className="bc-tag"
                               >
                                 #{tg}
                               </span>
@@ -1144,7 +1130,7 @@ export function OaConsoleWorkspace({
                       </div>
 
                       {showCrmBar && (
-                        <div className="space-y-1.5 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2">
+                        <div className="bc-well space-y-1.5 rounded-xl p-2">
                           <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                             <input
                               type="text"
@@ -1152,7 +1138,7 @@ export function OaConsoleWorkspace({
                               value={crmTagsInput}
                               onChange={(e) => setCrmTagsInput(e.target.value)}
                               placeholder="แท็กลูกค้า คั่นด้วย , (เช่น VIP, รอจัดส่ง)"
-                              className="h-8 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-card)] px-2 text-[11px] outline-none"
+                              className="bc-input"
                             />
                             <input
                               type="text"
@@ -1160,11 +1146,11 @@ export function OaConsoleWorkspace({
                               value={crmNoteInput}
                               onChange={(e) => setCrmNoteInput(e.target.value)}
                               placeholder="บันทึกโน้ตลูกค้าส่วนตัวของร้าน"
-                              className="h-8 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-card)] px-2 text-[11px] outline-none"
+                              className="bc-input"
                             />
                           </div>
                           <div className="flex flex-wrap items-center justify-between gap-2">
-                            <label className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[var(--bc-text)]">
+                            <label className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[var(--bc-text)]">
                               <input
                                 type="checkbox"
                                 checked={crmAiPaused}
@@ -1177,7 +1163,7 @@ export function OaConsoleWorkspace({
                               disabled={busy}
                               data-testid="oa-save-customer-note-btn"
                               onClick={() => void handleSaveCrm()}
-                              className="inline-flex h-8 items-center gap-1 rounded-lg bg-[var(--bc-primary)] px-2.5 text-[11px] font-bold text-white"
+                              className="bc-btn bc-btn-primary bc-btn-sm"
                             >
                               <Check className="h-3 w-3" />
                               <span>บันทึกโน้ตลูกค้า</span>
@@ -1188,7 +1174,7 @@ export function OaConsoleWorkspace({
                     </div>
 
                     {/* Message History */}
-                    <div className="max-h-56 space-y-1.5 overflow-y-auto rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] p-2">
+                    <div className="bc-well max-h-56 space-y-1.5 overflow-y-auto rounded-xl p-2">
                       {customerMessages.map((m) => {
                         const isCustomer = m.sender_id === activeCustomerChat.follower_user_id;
                         return (
@@ -1197,13 +1183,9 @@ export function OaConsoleWorkspace({
                             className={`flex ${isCustomer ? "justify-start" : "justify-end"}`}
                           >
                             <div
-                              className={`max-w-[82%] rounded-xl px-2.5 py-1.5 text-xs ${
-                                isCustomer
-                                  ? "border border-[var(--bc-border)] bg-[var(--bc-card)] text-[var(--bc-text)]"
-                                  : "bg-[var(--bc-bubble-sent)] text-[var(--bc-bubble-sent-text)]"
-                              }`}
+                              className={`bc-bubble max-w-[82%] rounded-xl px-2.5 py-1.5 text-xs ${isCustomer ? "bc-bubble-recv" : "bc-bubble-sent"}`}
                             >
-                              <div className="text-[10px] font-semibold text-[var(--bc-muted)]">
+                              <div className="text-[10px] font-medium text-[var(--bc-muted)]">
                                 {m.sender_name} • {formatThaiTime(m.created_at)}
                               </div>
                               <div className="whitespace-pre-wrap">{m.content}</div>
@@ -1220,7 +1202,7 @@ export function OaConsoleWorkspace({
                           value={selectedCouponToSend}
                           onChange={(e) => setSelectedCouponToSend(e.target.value)}
                           data-testid="oa-inbox-coupon-select"
-                          className="h-9 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2 text-[11px] outline-none"
+                          className="bc-input"
                         >
                           <option value="">+ แนบคูปองส่วนลด (ถ้ามี)</option>
                           {coupons.map((cp) => (
@@ -1235,13 +1217,13 @@ export function OaConsoleWorkspace({
                           onChange={(e) => setCustomerReplyText(e.target.value)}
                           placeholder="พิมพ์ตอบกลับลูกค้าในนามร้าน..."
                           data-testid="oa-inbox-reply-input"
-                          className="h-9 min-w-[160px] flex-1 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 text-xs outline-none focus:border-[var(--bc-primary)]"
+                          className="bc-input min-w-[160px] flex-1"
                         />
                         <button
                           type="submit"
                           disabled={busy}
                           data-testid="oa-inbox-reply-submit"
-                          className="inline-flex h-9 items-center gap-1 rounded-xl bg-[var(--bc-primary)] px-3 text-xs font-bold text-white"
+                          className="bc-btn bc-btn-primary"
                         >
                           <Send className="h-3.5 w-3.5" />
                           <span>ส่งในนามร้าน</span>
@@ -1256,10 +1238,10 @@ export function OaConsoleWorkspace({
 
           {/* SUBTAB: SHORTCUT MENU (<= 6) */}
           {subTab === "rich_menu" && canMarketing && (
-            <div className="space-y-2 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-3 shadow-2xs">
+            <div className="bc-card space-y-2 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <h3 className="text-sm font-bold text-[var(--bc-text)]">
+                  <h3 className="bc-title text-sm text-[var(--bc-text)]">
                     จัดการเมนูลัดใต้แชท (สูงสุด 6 ปุ่ม)
                   </h3>
                   <p className="text-[11px] text-[var(--bc-muted)]">
@@ -1284,7 +1266,7 @@ export function OaConsoleWorkspace({
                         },
                       ])
                     }
-                    className="inline-flex h-8 items-center gap-1 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2.5 text-xs font-bold text-[var(--bc-text)] disabled:opacity-50"
+                    className="bc-btn bc-btn-secondary bc-btn-sm"
                   >
                     <Plus className="h-3.5 w-3.5" />
                     <span>เพิ่มปุ่ม ({richMenuDraft.length}/6)</span>
@@ -1294,7 +1276,7 @@ export function OaConsoleWorkspace({
                     disabled={busy}
                     data-testid="oa-rich-menu-save-btn"
                     onClick={() => void handleSaveRichMenu()}
-                    className="h-8 rounded-xl bg-[var(--bc-primary)] px-3 text-xs font-bold text-white"
+                    className="bc-btn bc-btn-primary bc-btn-sm"
                   >
                     บันทึกเมนูลัด
                   </button>
@@ -1305,10 +1287,10 @@ export function OaConsoleWorkspace({
                 {richMenuDraft.map((item, idx) => (
                   <div
                     key={item.id || idx}
-                    className="space-y-1.5 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2"
+                    className="bc-well space-y-1.5 rounded-xl p-2"
                   >
                     <div className="flex items-center justify-between gap-1.5">
-                      <span className="text-[11px] font-bold text-[var(--bc-primary)]">
+                      <span className="bc-overline">
                         ปุ่มที่ {idx + 1}
                       </span>
                       <button
@@ -1316,7 +1298,7 @@ export function OaConsoleWorkspace({
                         onClick={() =>
                           setRichMenuDraft((prev) => prev.filter((_, i) => i !== idx))
                         }
-                        className="text-red-600 hover:text-red-800"
+                        className="bc-iconbtn h-8 w-8 text-red-600"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -1333,7 +1315,7 @@ export function OaConsoleWorkspace({
                           )
                         }
                         placeholder="ชื่อปุ่ม"
-                        className="rounded-lg border border-[var(--bc-border)] bg-[var(--bc-card)] px-2 py-1 text-xs outline-none"
+                        className="bc-input"
                       />
                       <input
                         type="text"
@@ -1346,7 +1328,7 @@ export function OaConsoleWorkspace({
                           )
                         }
                         placeholder="คำอธิบายสั้น"
-                        className="rounded-lg border border-[var(--bc-border)] bg-[var(--bc-card)] px-2 py-1 text-xs outline-none"
+                        className="bc-input"
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-1.5">
@@ -1359,7 +1341,7 @@ export function OaConsoleWorkspace({
                             )
                           )
                         }
-                        className="rounded-lg border border-[var(--bc-border)] bg-[var(--bc-card)] px-2 py-1 text-xs outline-none"
+                        className="bc-input"
                       >
                         <option value="keyword">ส่งข้อความคีย์เวิร์ด</option>
                         <option value="coupon">เปิดถาดเก็บคูปอง</option>
@@ -1377,7 +1359,7 @@ export function OaConsoleWorkspace({
                           )
                         }
                         placeholder="ค่าคำสั่ง / URL"
-                        className="rounded-lg border border-[var(--bc-border)] bg-[var(--bc-card)] px-2 py-1 text-xs outline-none"
+                        className="bc-input"
                       />
                     </div>
                   </div>
@@ -1391,9 +1373,9 @@ export function OaConsoleWorkspace({
             <div className="space-y-2.5">
               <form
                 onSubmit={handleAddAutoReply}
-                className="space-y-2 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-3 shadow-2xs"
+                className="bc-card space-y-2 p-3"
               >
-                <h3 className="text-sm font-bold text-[var(--bc-text)]">
+                <h3 className="bc-title text-sm text-[var(--bc-text)]">
                   เพิ่มคำตอบกลับอัตโนมัติตามคีย์เวิร์ด
                 </h3>
                 <div className="grid grid-cols-1 gap-2">
@@ -1404,25 +1386,17 @@ export function OaConsoleWorkspace({
                     onChange={(e) => setArKeyword(e.target.value)}
                     placeholder="คีย์เวิร์ด เช่น เมนู หรือ ราคา"
                     data-testid="oa-ar-keyword"
-                    className="rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1.5 text-xs outline-none"
+                    className="bc-input"
                   />
                   <select
                     value={arMode}
                     onChange={(e) => setArMode(e.target.value)}
-                    className="rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1.5 text-xs outline-none"
+                    className="bc-input"
                   >
                     <option value="contains">มีคำนี้อยู่ในข้อความ</option>
                     <option value="exact">ตรงกันทั้งประโยค</option>
                     <option value="starts_with">ขึ้นต้นด้วยคำนี้</option>
                   </select>
-                  <button
-                    type="submit"
-                    disabled={busy}
-                    data-testid="oa-ar-submit"
-                    className="rounded-xl bg-[var(--bc-primary)] px-3 py-1.5 text-xs font-bold text-white"
-                  >
-                    เพิ่มกฎตอบอัตโนมัติ
-                  </button>
                 </div>
                 <textarea
                   rows={2}
@@ -1431,24 +1405,32 @@ export function OaConsoleWorkspace({
                   onChange={(e) => setArReply(e.target.value)}
                   placeholder="ข้อความที่ระบบจะตอบกลับลูกค้าทันที..."
                   data-testid="oa-ar-reply"
-                  className="w-full rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1.5 text-xs outline-none"
+                  className="bc-input w-full"
                 />
+                <button
+                  type="submit"
+                  disabled={busy}
+                  data-testid="oa-ar-submit"
+                  className="bc-btn bc-btn-primary w-full"
+                >
+                  เพิ่มกฎตอบอัตโนมัติ
+                </button>
               </form>
 
-              <div className="space-y-1.5 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-3 shadow-2xs">
+              <div className="bc-card divide-y divide-[var(--bc-line)] p-1.5">
                 {autoReplies.length === 0 ? (
-                  <p className="text-center text-xs text-[var(--bc-muted)]">
+                  <p className="bc-empty text-center text-xs">
                     ยังไม่มีกฎตอบกลับอัตโนมัติ
                   </p>
                 ) : (
                   autoReplies.map((rule) => (
                     <div
                       key={rule.id}
-                      className="flex items-center justify-between gap-2 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2"
+                      className="bc-row justify-between gap-2 px-1.5 py-1"
                     >
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
-                          <span className="rounded bg-[var(--bc-soft)] px-1.5 py-0.5 text-[11px] font-bold text-[var(--bc-deep)]">
+                          <span className="bc-tag">
                             {rule.keyword}
                           </span>
                           <span className="text-[10px] text-[var(--bc-muted)]">
@@ -1467,7 +1449,7 @@ export function OaConsoleWorkspace({
                           await api.deleteOaAutoReply(selectedOa.id, rule.id);
                           await loadSelectedOaData();
                         }}
-                        className="shrink-0 rounded-lg border border-red-200 p-1 text-red-600 hover:bg-red-50"
+                        className="bc-iconbtn h-8 w-8 shrink-0 text-red-600"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -1484,9 +1466,9 @@ export function OaConsoleWorkspace({
               {canMarketing && (
                 <form
                   onSubmit={handleCreateCoupon}
-                  className="space-y-2 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-3 shadow-2xs"
+                  className="bc-card space-y-2 p-3"
                 >
-                  <h3 className="text-sm font-bold text-[var(--bc-text)]">
+                  <h3 className="bc-title text-sm text-[var(--bc-text)]">
                     สร้างคูปองส่วนลดร้านค้า
                   </h3>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -1497,7 +1479,7 @@ export function OaConsoleWorkspace({
                       onChange={(e) => setCpCode(e.target.value)}
                       placeholder="โค้ด เช่น CAFE50"
                       data-testid="oa-coupon-code"
-                      className="rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1.5 text-xs uppercase outline-none"
+                      className="bc-input uppercase"
                     />
                     <input
                       type="text"
@@ -1506,14 +1488,14 @@ export function OaConsoleWorkspace({
                       onChange={(e) => setCpTitle(e.target.value)}
                       placeholder="ชื่อคูปอง เช่น ลด 50 บาท"
                       data-testid="oa-coupon-title"
-                      className="rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1.5 text-xs outline-none"
+                      className="bc-input"
                     />
                     <input
                       type="text"
                       value={cpDiscount}
                       onChange={(e) => setCpDiscount(e.target.value)}
                       placeholder="ข้อความส่วนลด (เช่น ลด 20%)"
-                      className="rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1.5 text-xs outline-none"
+                      className="bc-input"
                     />
                     <input
                       type="number"
@@ -1521,7 +1503,7 @@ export function OaConsoleWorkspace({
                       value={cpMaxClaims}
                       onChange={(e) => setCpMaxClaims(e.target.value)}
                       placeholder="จำนวนจำกัด (0=ไม่จำกัด)"
-                      className="rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1.5 text-xs outline-none"
+                      className="bc-input"
                     />
                   </div>
                   <div className="flex gap-2">
@@ -1530,13 +1512,13 @@ export function OaConsoleWorkspace({
                       value={cpDesc}
                       onChange={(e) => setCpDesc(e.target.value)}
                       placeholder="เงื่อนไขการใช้คูปอง..."
-                      className="flex-1 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1.5 text-xs outline-none"
+                      className="bc-input flex-1"
                     />
                     <button
                       type="submit"
                       disabled={busy}
                       data-testid="oa-coupon-submit"
-                      className="rounded-xl bg-[var(--bc-primary)] px-3 py-1.5 text-xs font-bold text-white"
+                      className="bc-btn bc-btn-primary"
                     >
                       สร้างคูปอง
                     </button>
@@ -1544,27 +1526,27 @@ export function OaConsoleWorkspace({
                 </form>
               )}
 
-              <div className="space-y-1.5 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-3 shadow-2xs">
+              <div className="bc-card divide-y divide-[var(--bc-line)] p-1.5">
                 {coupons.map((cp) => (
                   <div
                     key={cp.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2"
+                    className="bc-row flex-wrap justify-between gap-2 px-2 py-2"
                   >
                     <div>
                       <div className="flex items-center gap-1.5">
-                        <span className="rounded bg-[var(--bc-primary)] px-2 py-0.5 text-[11px] font-bold text-white">
+                        <span className="bc-tag bc-tag-gold bc-num">
                           {cp.code}
                         </span>
-                        <span className="text-xs font-bold text-[var(--bc-text)]">
+                        <span className="text-xs font-semibold text-[var(--bc-text)]">
                           {cp.title}
                         </span>
                         {cp.discount_text && (
-                          <span className="text-[11px] font-semibold text-[var(--bc-ochre)]">
+                          <span className="text-[11px] font-medium text-[var(--bc-ochre)]">
                             ({cp.discount_text})
                           </span>
                         )}
                       </div>
-                      <p className="mt-0.5 text-[11px] text-[var(--bc-muted)]">
+                      <p className="bc-num mt-0.5 text-[11px] text-[var(--bc-muted)]">
                         เก็บแล้ว {cp.claimed_count}
                         {cp.max_claims > 0 ? `/${cp.max_claims}` : ""} • ใช้แล้ว{" "}
                         {cp.redeemed_count}
@@ -1579,7 +1561,7 @@ export function OaConsoleWorkspace({
                           onChange={(e) => setRedeemUserId(e.target.value)}
                           placeholder="รหัสลูกค้า (ถ้าตัดแทน)"
                           data-testid={`oa-redeem-user-${cp.code}`}
-                          className="w-36 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-card)] px-2 py-1 text-[11px] outline-none"
+                          className="bc-input w-36"
                         />
                         <button
                           type="button"
@@ -1599,7 +1581,7 @@ export function OaConsoleWorkspace({
                               );
                             }
                           }}
-                          className="rounded-lg border border-[var(--bc-primary)] bg-[var(--bc-soft)] px-2.5 py-1 text-[11px] font-bold text-[var(--bc-deep)]"
+                          className="bc-btn bc-btn-soft bc-btn-sm"
                         >
                           ตัดสิทธิ์ใช้คูปอง
                         </button>
@@ -1616,14 +1598,14 @@ export function OaConsoleWorkspace({
             <div className="space-y-2.5">
               <form
                 onSubmit={handleSendBroadcast}
-                className="space-y-2 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-3 shadow-2xs"
+                className="bc-card space-y-2 p-3"
               >
-                <h3 className="text-sm font-bold text-[var(--bc-text)]">
+                <h3 className="bc-title text-sm text-[var(--bc-text)]">
                   ส่งข่าวถึงผู้ติดตาม
                 </h3>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <div className="space-y-1 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] p-2 sm:col-span-2">
-                    <div className="text-[11px] font-bold text-[var(--bc-text)]">
+                  <div className="bc-well space-y-1 rounded-xl p-2 sm:col-span-2">
+                    <div className="bc-overline">
                       ส่งถึงกลุ่มแท็ก (ไม่เลือก = ผู้ติดตามทุกคน)
                     </div>
                     <OaTagChips
@@ -1634,7 +1616,7 @@ export function OaConsoleWorkspace({
                     />
                     <div
                       data-testid="oa-broadcast-recipient-count"
-                      className="text-[11px] font-bold text-[var(--bc-deep)]"
+                      className="text-[11px] font-semibold text-[var(--bc-deep)]"
                     >
                       จะส่งถึง{" "}
                       {bcTags.length > 0
@@ -1647,7 +1629,7 @@ export function OaConsoleWorkspace({
                     value={bcCouponId}
                     onChange={(e) => setBcCouponId(e.target.value)}
                     data-testid="oa-broadcast-coupon-select"
-                    className="rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1.5 text-xs outline-none"
+                    className="bc-input"
                   >
                     <option value="">ไม่แนบคูปอง (ส่งเฉพาะข้อความ)</option>
                     {coupons.map((cp) => (
@@ -1663,24 +1645,24 @@ export function OaConsoleWorkspace({
                   onChange={(e) => setBcContent(e.target.value)}
                   placeholder="ข้อความโปรโมชั่นหรือประกาศถึงผู้ติดตามร้าน..."
                   data-testid="oa-broadcast-content"
-                  className="w-full rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1.5 text-xs outline-none"
+                  className="bc-input w-full"
                 />
                 <button
                   type="submit"
                   disabled={busy}
                   data-testid="oa-broadcast-submit"
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-[var(--bc-primary)] px-4 py-1.5 text-xs font-bold text-white"
+                  className="bc-btn bc-btn-primary"
                 >
                   <Megaphone className="h-3.5 w-3.5" />
                   <span>ส่งข่าวทันที</span>
                 </button>
               </form>
 
-              <div className="space-y-1.5 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-3 shadow-2xs">
+              <div className="bc-card divide-y divide-[var(--bc-line)] p-1.5">
                 {broadcasts.map((b) => (
                   <div
                     key={b.id}
-                    className="rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2 text-xs"
+                    className="rounded-xl px-2 py-2 text-xs"
                   >
                     <div className="flex items-center justify-between text-[11px] text-[var(--bc-muted)]">
                       <span>
@@ -1691,7 +1673,7 @@ export function OaConsoleWorkspace({
                       : "ผู้ติดตามทุกคน"} • ส่งถึง{" "}
                         {b.recipient_count} คน
                       </span>
-                      <span>{formatThaiTime(b.created_at)}</span>
+                      <span className="bc-num">{formatThaiTime(b.created_at)}</span>
                     </div>
                     <p className="mt-0.5 text-[var(--bc-text)]">{b.content}</p>
                   </div>
@@ -1707,9 +1689,9 @@ export function OaConsoleWorkspace({
                 <form
                   onSubmit={handleAddStaffMember}
                   data-testid="oa-team-add-form"
-                  className="space-y-2 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-3 shadow-2xs"
+                  className="bc-card space-y-2 p-3"
                 >
-                  <div className="flex items-center gap-1.5 text-sm font-bold text-[var(--bc-text)]">
+                  <div className="flex items-center gap-1.5 text-sm font-semibold text-[var(--bc-text)]">
                     <UserPlus className="h-4 w-4 text-[var(--bc-primary)]" />
                     <span>เพิ่มทีมงาน &amp; คนตอบแชทร้านค้า</span>
                   </div>
@@ -1724,7 +1706,7 @@ export function OaConsoleWorkspace({
                       onChange={(e) => setNewStaffQuery(e.target.value)}
                       placeholder="เบอร์มือถือ (08X...), @BC ID หรืออีเมล"
                       data-testid="oa-team-query-input"
-                      className="min-w-[180px] flex-1 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1.5 text-xs outline-none focus:border-[var(--bc-primary)]"
+                      className="bc-input min-w-[180px] flex-1"
                     />
                     <select
                       value={newStaffRole}
@@ -1732,7 +1714,7 @@ export function OaConsoleWorkspace({
                         setNewStaffRole(e.target.value as "admin" | "agent" | "marketer")
                       }
                       data-testid="oa-team-role-select"
-                      className="rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1.5 text-xs font-semibold outline-none"
+                      className="bc-input"
                     >
                       <option value="agent">คนตอบแชท / รับสาย</option>
                       <option value="marketer">ฝ่ายการตลาด / ส่งข่าว</option>
@@ -1744,7 +1726,7 @@ export function OaConsoleWorkspace({
                       type="submit"
                       disabled={busy}
                       data-testid="oa-team-add-btn"
-                      className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-[var(--bc-primary)] px-3 py-1.5 text-xs font-bold text-white hover:brightness-95 disabled:opacity-60"
+                      className="bc-btn bc-btn-primary shrink-0"
                     >
                       <UserPlus className="h-3.5 w-3.5" />
                       <span>เพิ่มทีมงาน</span>
@@ -1753,9 +1735,9 @@ export function OaConsoleWorkspace({
                 </form>
               )}
 
-              <div className="space-y-1.5 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-3 shadow-2xs">
-                <div className="flex items-center justify-between gap-2 pb-1">
-                  <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[var(--bc-text)]">
+              <div className="bc-card divide-y divide-[var(--bc-line)] p-1.5">
+                <div className="flex items-center justify-between gap-2 px-2 pb-1.5 pt-1">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--bc-text)]">
                     <ShieldCheck className="h-4 w-4 text-[var(--bc-primary)]" />
                     <span>สมาชิกทีมงานร้าน ({staffMembers.length} คน)</span>
                   </span>
@@ -1777,7 +1759,7 @@ export function OaConsoleWorkspace({
                     <div
                       key={member.user_id}
                       data-testid={`oa-staff-row-${member.user_id}`}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2"
+                      className="bc-row flex-wrap justify-between gap-2 px-2 py-2"
                     >
                       <div className="flex min-w-0 items-center gap-2">
                         <UserAvatar
@@ -1787,12 +1769,12 @@ export function OaConsoleWorkspace({
                         />
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="truncate text-xs font-bold text-[var(--bc-text)]">
+                            <span className="truncate text-xs font-semibold text-[var(--bc-text)]">
                               {member.display_name || member.bc_id}
                               {member.user_id === currentUser.id ? " (คุณ)" : ""}
                             </span>
                             <span
-                              className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${meta.badgeClass}`}
+                              className={meta.badgeClass}
                             >
                               {meta.shortLabel}
                             </span>
@@ -1813,7 +1795,7 @@ export function OaConsoleWorkspace({
                             onChange={(e) =>
                               void handleChangeStaffRole(member.user_id, e.target.value)
                             }
-                            className="rounded-lg border border-[var(--bc-border)] bg-[var(--bc-card)] px-2 py-1 text-[11px] font-semibold outline-none"
+                            className="bc-input"
                           >
                             <option value="agent">คนตอบแชท / รับสาย</option>
                             <option value="marketer">ฝ่ายการตลาด</option>
@@ -1831,7 +1813,7 @@ export function OaConsoleWorkspace({
                                 ? "ออกจากทีมร้านค้านี้"
                                 : "ลบออกจากทีมงาน"
                             }
-                            className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-50"
+                            className="bc-btn bc-btn-danger bc-btn-sm"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                             <span className="hidden sm:inline">
@@ -1851,9 +1833,9 @@ export function OaConsoleWorkspace({
           {subTab === "settings" && canEditStoreSettings && (
             <form
               onSubmit={handleSaveOaSettings}
-              className="space-y-2 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-3 shadow-2xs"
+              className="bc-card space-y-2 p-3"
             >
-              <h3 className="text-sm font-bold text-[var(--bc-text)]">
+              <h3 className="bc-title text-sm text-[var(--bc-text)]">
                 ตั้งค่าบัญชีร้านค้า &amp; ความสามารถ AI / โทร
               </h3>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -1862,12 +1844,12 @@ export function OaConsoleWorkspace({
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
                   placeholder="ชื่อร้านค้า"
-                  className="rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1.5 text-xs outline-none"
+                  className="bc-input"
                 />
                 <select
                   value={editCat}
                   onChange={(e) => setEditCat(e.target.value)}
-                  className="rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1.5 text-xs outline-none"
+                  className="bc-input"
                 >
                   {OA_CATEGORIES.filter((c) => c !== "ทั้งหมด").map((c) => (
                     <option key={c} value={c}>
@@ -1881,7 +1863,7 @@ export function OaConsoleWorkspace({
                 value={editBio}
                 onChange={(e) => setEditBio(e.target.value)}
                 placeholder="คำอธิบายร้าน"
-                className="w-full rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1.5 text-xs outline-none"
+                className="bc-input w-full"
               />
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <input
@@ -1889,14 +1871,14 @@ export function OaConsoleWorkspace({
                   value={editGreeting}
                   onChange={(e) => setEditGreeting(e.target.value)}
                   placeholder="ข้อความต้อนรับผู้ติดตามใหม่"
-                  className="rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1.5 text-xs outline-none"
+                  className="bc-input"
                 />
                 <input
                   type="text"
                   value={editHours}
                   onChange={(e) => setEditHours(e.target.value)}
                   placeholder="เวลาทำการ"
-                  className="rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1.5 text-xs outline-none"
+                  className="bc-input"
                 />
               </div>
               <textarea
@@ -1904,11 +1886,11 @@ export function OaConsoleWorkspace({
                 value={editAiPrompt}
                 onChange={(e) => setEditAiPrompt(e.target.value)}
                 placeholder="คลังความรู้ร้านสำหรับ AI (เช่น ราคาสินค้า โปรโมชั่น เงื่อนไขจัดส่ง)"
-                className="w-full rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1.5 text-xs outline-none"
+                className="bc-input w-full"
               />
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-3 text-xs">
-                  <label className="inline-flex items-center gap-1.5 font-semibold">
+                  <label className="inline-flex items-center gap-1.5 font-medium">
                     <input
                       type="checkbox"
                       checked={editActive}
@@ -1916,7 +1898,7 @@ export function OaConsoleWorkspace({
                     />
                     <span>เปิดหน้าร้านสาธารณะ</span>
                   </label>
-                  <label className="inline-flex items-center gap-1.5 font-semibold">
+                  <label className="inline-flex items-center gap-1.5 font-medium">
                     <input
                       type="checkbox"
                       checked={editAiEnabled}
@@ -1925,7 +1907,7 @@ export function OaConsoleWorkspace({
                     <Bot className="h-3.5 w-3.5 text-[var(--bc-primary)]" />
                     <span>AI ตอบแชท</span>
                   </label>
-                  <label className="inline-flex items-center gap-1.5 font-semibold">
+                  <label className="inline-flex items-center gap-1.5 font-medium">
                     <input
                       type="checkbox"
                       checked={editCallsEnabled}
@@ -1940,7 +1922,7 @@ export function OaConsoleWorkspace({
                   type="submit"
                   disabled={busy}
                   data-testid="oa-settings-save-btn"
-                  className="rounded-xl bg-[var(--bc-primary)] px-4 py-1.5 text-xs font-bold text-white"
+                  className="bc-btn bc-btn-primary"
                 >
                   บันทึกการตั้งค่า
                 </button>

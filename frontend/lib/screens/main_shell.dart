@@ -540,14 +540,7 @@ class _MainShellState extends State<MainShell> {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(11),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        border: Border.all(
-          color: AppTheme.brandPrimary.withValues(alpha: 0.35),
-        ),
-        boxShadow: AppTheme.shadowMd,
-      ),
+      decoration: AppTheme.surface(),
       child: child,
     );
   }
@@ -569,7 +562,7 @@ class _MainShellState extends State<MainShell> {
                   'QR ของฉัน',
                   style: TextStyle(
                     fontSize: 15.5,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     color: AppTheme.slateDark,
                   ),
                 ),
@@ -815,8 +808,8 @@ class _MainShellState extends State<MainShell> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: const BoxDecoration(
-        color: Color(0xFFFBF7F5),
-        border: Border(bottom: BorderSide(color: AppTheme.borderSubtle)),
+        color: AppTheme.panelBg,
+        border: Border(bottom: BorderSide(color: AppTheme.hairline)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -838,8 +831,8 @@ class _MainShellState extends State<MainShell> {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.slateDark,
+                    fontWeight: FontWeight.w500,
+                    color: AppTheme.slateMuted,
                   ),
                 ),
               ),
@@ -866,20 +859,17 @@ class _MainShellState extends State<MainShell> {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color:
-                        _showSwitchUserBar ? AppTheme.brandSoft : Colors.white,
+                    color: _showSwitchUserBar
+                        ? AppTheme.tintStrong
+                        : AppTheme.panelBg,
                     borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: _showSwitchUserBar
-                          ? AppTheme.brandPrimary
-                          : AppTheme.borderSubtle,
-                    ),
+                    border: Border.all(color: AppTheme.hairline),
                   ),
                   child: Text(
                     _showSwitchUserBar ? 'สลับบัญชี ▴' : 'สลับบัญชี ▾',
                     style: TextStyle(
                       fontSize: 11.5,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                       color: AppTheme.brandDeep,
                     ),
                   ),
@@ -912,7 +902,7 @@ class _MainShellState extends State<MainShell> {
         ? '${u.displayName} (${u.badge})'
         : u.displayName;
     return Material(
-      color: isCurrent ? AppTheme.brandSoft : Colors.white,
+      color: isCurrent ? AppTheme.tintStrong : AppTheme.panelBg,
       borderRadius: BorderRadius.circular(999),
       child: InkWell(
         key: Key('quick-switch-user-${u.slot}'),
@@ -924,10 +914,7 @@ class _MainShellState extends State<MainShell> {
           padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color:
-                  isCurrent ? AppTheme.brandPrimary : AppTheme.borderSubtle,
-            ),
+            border: Border.all(color: AppTheme.hairline),
           ),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 210),
@@ -948,9 +935,9 @@ class _MainShellState extends State<MainShell> {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 11.5,
-                      fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w600,
+                      fontWeight: isCurrent ? FontWeight.w600 : FontWeight.w500,
                       color:
-                          isCurrent ? AppTheme.brandDeep : AppTheme.slateDark,
+                          isCurrent ? AppTheme.brandDeep : AppTheme.slateMuted,
                     ),
                   ),
                 ),
@@ -1089,7 +1076,7 @@ class _MainShellState extends State<MainShell> {
               padding: const EdgeInsets.symmetric(horizontal: 10),
               decoration: const BoxDecoration(
                 color: Colors.white,
-                border: Border(bottom: BorderSide(color: AppTheme.borderSubtle)),
+                border: Border(bottom: BorderSide(color: AppTheme.hairline)),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
@@ -1111,7 +1098,7 @@ class _MainShellState extends State<MainShell> {
                       style: TextStyle(
                         fontSize: 17,
                         height: 1.3,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: AppTheme.slateDark,
                       ),
                     ),
@@ -1191,7 +1178,7 @@ class _MainShellState extends State<MainShell> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               SizedBox(width: _listPaneWidth, child: _paneScope(tabBody)),
-              const VerticalDivider(width: 1, color: AppTheme.borderSubtle),
+              const VerticalDivider(width: 1, color: AppTheme.hairline),
               Expanded(child: _buildWideRoomPane()),
             ],
           )
@@ -1205,7 +1192,7 @@ class _MainShellState extends State<MainShell> {
             selectedIndex: _navOrder.indexOf(selected),
             onDestinationSelected: (pos) => _onNavSelected(_navOrder[pos]),
             backgroundColor: Colors.white,
-            indicatorColor: AppTheme.brandSoft,
+            indicatorColor: AppTheme.tintStrong,
             labelType: NavigationRailLabelType.all,
             minWidth: 72,
             destinations: [
@@ -1217,7 +1204,7 @@ class _MainShellState extends State<MainShell> {
                 ),
             ],
           ),
-          const VerticalDivider(width: 1, color: AppTheme.borderSubtle),
+          const VerticalDivider(width: 1, color: AppTheme.hairline),
           Expanded(child: content),
         ],
       );
@@ -1241,22 +1228,18 @@ class _MainShellState extends State<MainShell> {
       bottomNavigationBar: isWide
           ? null
           : DecoratedBox(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(top: BorderSide(color: AppTheme.borderSubtle)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Color(0x140F172A),
-                    blurRadius: 18,
-                    offset: Offset(0, -4),
-                  ),
-                ],
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.94),
+                border: const Border(
+                  top: BorderSide(color: AppTheme.hairline),
+                ),
+                boxShadow: AppTheme.shadowUp,
               ),
               child: NavigationBar(
                 selectedIndex: _navOrder.indexOf(selected),
                 onDestinationSelected: (pos) => _onNavSelected(_navOrder[pos]),
                 backgroundColor: Colors.white,
-                indicatorColor: AppTheme.brandSoft,
+                indicatorColor: AppTheme.tintStrong,
                 destinations: [
                   for (final i in _navOrder)
                     NavigationDestination(
@@ -1312,7 +1295,7 @@ class _MainShellState extends State<MainShell> {
                   style: const TextStyle(
                     fontSize: 15,
                     height: 1.35,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     color: AppTheme.slateDark,
                   ),
                 ),
@@ -1350,7 +1333,7 @@ class _MainShellState extends State<MainShell> {
           padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: const BoxDecoration(
             color: Colors.white,
-            border: Border(bottom: BorderSide(color: AppTheme.borderSubtle)),
+            border: Border(bottom: BorderSide(color: AppTheme.hairline)),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
@@ -1372,7 +1355,7 @@ class _MainShellState extends State<MainShell> {
                   style: TextStyle(
                     fontSize: 17,
                     height: 1.3,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: AppTheme.slateDark,
                   ),
                 ),
@@ -1384,7 +1367,7 @@ class _MainShellState extends State<MainShell> {
                   Icons.person_add_alt_1_rounded,
                   color: _homeInlinePanel == 'add_friend'
                       ? AppTheme.brandPrimary
-                      : AppTheme.slateDark,
+                      : AppTheme.slateBody,
                 ),
               ),
               IconButton(
@@ -1394,7 +1377,7 @@ class _MainShellState extends State<MainShell> {
                   Icons.group_add_rounded,
                   color: _homeInlinePanel == 'create_group'
                       ? AppTheme.brandPrimary
-                      : AppTheme.slateDark,
+                      : AppTheme.slateBody,
                 ),
               ),
             ],
@@ -1409,20 +1392,30 @@ class _MainShellState extends State<MainShell> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  gradient: AppTheme.navyGradient,
+                  gradient: AppTheme.primaryGradient,
                   borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-                  boxShadow: AppTheme.shadowMd,
+                  boxShadow: AppTheme.glow(AppTheme.brandPrimary, strength: 0.22),
                 ),
                 child: Column(
                   children: [
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        UserAvatar(
-                          name: _user.displayName,
-                          avatarUrl: _user.avatarUrl,
-                          radius: 20,
-                          showOnline: true,
+                        // วงแหวนขาวให้รูปโปรไฟล์แยกจากพื้นไล่สีของการ์ด
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.85),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: UserAvatar(
+                            name: _user.displayName,
+                            avatarUrl: _user.avatarUrl,
+                            radius: 20,
+                            showOnline: true,
+                          ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -1437,7 +1430,7 @@ class _MainShellState extends State<MainShell> {
                                   color: Colors.white,
                                   fontSize: 16,
                                   height: 1.35,
-                                  fontWeight: FontWeight.w800,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                               const SizedBox(height: 2),
@@ -1448,10 +1441,10 @@ class _MainShellState extends State<MainShell> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                  color: AppTheme.goldClay,
+                                  color: Color(0xD1FFFFFF),
                                   fontSize: 12,
                                   height: 1.4,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
                               if (_user.statusMessage.isNotEmpty)
@@ -1460,7 +1453,7 @@ class _MainShellState extends State<MainShell> {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
-                                    color: Color(0xFFCBD5E1),
+                                    color: Colors.white70,
                                     fontSize: 12,
                                     height: 1.4,
                                   ),
@@ -1480,7 +1473,9 @@ class _MainShellState extends State<MainShell> {
                             child: ElevatedButton.icon(
                               onPressed: () => _toggleHomePanel('qr'),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: AppTheme.brandPrimary,
+                                backgroundColor: Colors.white,
+                                foregroundColor: AppTheme.brandDeep,
+                                elevation: 0,
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 10,
                                 ),
@@ -1500,6 +1495,10 @@ class _MainShellState extends State<MainShell> {
                             child: OutlinedButton.icon(
                               onPressed: () => _toggleHomePanel('profile'),
                               style: OutlinedButton.styleFrom(
+                                // ธีมกลางให้ปุ่มขอบเป็นพื้นขาว บนการ์ดไล่สีต้องโปร่ง
+                                backgroundColor: Colors.white.withValues(
+                                  alpha: 0.14,
+                                ),
                                 foregroundColor: Colors.white,
                                 side: BorderSide(
                                   color: Colors.white.withValues(alpha: 0.28),
@@ -1577,9 +1576,8 @@ class _MainShellState extends State<MainShell> {
                     tooltip: 'เพิ่มเพื่อน 4 ช่องทาง / QR',
                     style: IconButton.styleFrom(
                       backgroundColor: _homeInlinePanel == 'add_friend'
-                          ? AppTheme.brandSoft
-                          : Colors.white,
-                      side: const BorderSide(color: AppTheme.borderSubtle),
+                          ? AppTheme.tintStrong
+                          : Colors.transparent,
                       minimumSize: const Size(38, 38),
                     ),
                     icon: Icon(
@@ -1608,7 +1606,7 @@ class _MainShellState extends State<MainShell> {
                         onPressed: () => _toggleHomePanel('create_group'),
                         icon: const Icon(Icons.group_add_rounded, size: 16),
                         label: const Text(
-                          '+ สร้างกลุ่ม',
+                          'สร้างกลุ่ม',
                           style: TextStyle(fontSize: 12.5),
                         ),
                       ),
@@ -1662,7 +1660,7 @@ class _MainShellState extends State<MainShell> {
                       c.name,
                       style: const TextStyle(
                         fontSize: 13.5,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     subtitle: Text(
@@ -1701,19 +1699,15 @@ class _MainShellState extends State<MainShell> {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 13.5,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
                         const SizedBox(width: 6),
                         PillBadge(
                           text: g.folderLabel,
-                          backgroundColor: g.isFamily
-                              ? const Color(0xFFDBEAFE)
-                              : AppTheme.brandSoft,
-                          textColor: g.isFamily
-                              ? AppTheme.workBlue
-                              : AppTheme.brandDeep,
+                          backgroundColor: AppTheme.tintStrong,
+                          textColor: AppTheme.brandDeep,
                         ),
                       ],
                     ),
@@ -1848,7 +1842,7 @@ class _MainShellState extends State<MainShell> {
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                         fontSize: 13.5,
-                                        fontWeight: FontWeight.w700,
+                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
                                   ),
@@ -1856,7 +1850,7 @@ class _MainShellState extends State<MainShell> {
                                     const SizedBox(width: 6),
                                     const PillBadge(
                                       text: 'บล็อกแล้ว',
-                                      backgroundColor: Color(0xFFFEE2E2),
+                                      backgroundColor: Color(0xFFFEF3F2),
                                       textColor: AppTheme.dangerRed,
                                     ),
                                   ],
@@ -1944,12 +1938,8 @@ class _MainShellState extends State<MainShell> {
                                   horizontal: 10,
                                   vertical: 6,
                                 ),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.surfaceBg,
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: AppTheme.borderSubtle,
-                                  ),
+                                decoration: AppTheme.well(
+                                  radius: AppTheme.radiusSm,
                                 ),
                                 child: Wrap(
                                   spacing: 6,
@@ -2148,7 +2138,7 @@ class _MainShellState extends State<MainShell> {
               const Expanded(
                 child: Text(
                   'ผลการค้นหาผู้ใช้',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                 ),
               ),
               TextButton(
@@ -2216,7 +2206,7 @@ class _MainShellState extends State<MainShell> {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 13,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                           Text(
@@ -2235,7 +2225,7 @@ class _MainShellState extends State<MainShell> {
                     if (u.id == myId)
                       PillBadge(
                         text: 'บัญชีของคุณเอง',
-                        backgroundColor: AppTheme.brandSoft,
+                        backgroundColor: AppTheme.tintStrong,
                         textColor: AppTheme.brandDeep,
                       )
                     else if (_friends.any((f) => f.id == u.id))
@@ -2298,10 +2288,10 @@ class _MainShellState extends State<MainShell> {
           height: 28,
           padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
-            color: active ? AppTheme.slateDark : AppTheme.surfaceBg,
+            color: active ? AppTheme.brandPrimary : Colors.white,
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
-              color: active ? AppTheme.slateDark : AppTheme.borderSubtle,
+              color: active ? AppTheme.brandPrimary : AppTheme.hairline,
             ),
             boxShadow: active ? AppTheme.shadowSm : const [],
           ),
@@ -2313,7 +2303,7 @@ class _MainShellState extends State<MainShell> {
               style: TextStyle(
                 fontSize: 12.5,
                 height: 1.35,
-                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                fontWeight: active ? FontWeight.w600 : FontWeight.w500,
                 color: active ? Colors.white : AppTheme.slateBody,
               ),
               child: Text(label, maxLines: 1),
@@ -2351,7 +2341,7 @@ class _MainShellState extends State<MainShell> {
           padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: const BoxDecoration(
             color: Colors.white,
-            border: Border(bottom: BorderSide(color: AppTheme.borderSubtle)),
+            border: Border(bottom: BorderSide(color: AppTheme.hairline)),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
@@ -2362,7 +2352,7 @@ class _MainShellState extends State<MainShell> {
                 style: TextStyle(
                   fontSize: 17,
                   height: 1.35,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   color: AppTheme.slateDark,
                 ),
               ),
@@ -2387,14 +2377,12 @@ class _MainShellState extends State<MainShell> {
                     : const Icon(Icons.bookmark_rounded, size: 15),
                 label: const Text(
                   'Keep',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                 ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppTheme.brandDeep,
-                  backgroundColor: AppTheme.brandSoft.withValues(alpha: 0.45),
-                  side: BorderSide(
-                    color: AppTheme.brandPrimary.withValues(alpha: 0.3),
-                  ),
+                  backgroundColor: AppTheme.tintStrong,
+                  side: BorderSide.none,
                   visualDensity: VisualDensity.compact,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 7,
@@ -2545,21 +2533,17 @@ class _MainShellState extends State<MainShell> {
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           color: showSecondary
-                              ? AppTheme.brandSoft
-                              : AppTheme.surfaceBg,
+                              ? AppTheme.tintStrong
+                              : Colors.white,
                           borderRadius: BorderRadius.circular(999),
-                          border: Border.all(
-                            color: showSecondary
-                                ? AppTheme.brandPrimary.withValues(alpha: 0.45)
-                                : AppTheme.borderSubtle,
-                          ),
+                          border: Border.all(color: AppTheme.hairline),
                         ),
                         child: Text(
                           showSecondary ? 'ตัวกรอง ▴' : 'ตัวกรอง ▾',
                           maxLines: 1,
                           style: TextStyle(
                             fontSize: 12,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w600,
                             color: showSecondary
                                 ? AppTheme.brandDeep
                                 : AppTheme.slateBody,
@@ -2592,7 +2576,7 @@ class _MainShellState extends State<MainShell> {
             (_isSearchingGlobal || _globalSearchResults.isNotEmpty))
           Container(
             constraints: const BoxConstraints(maxHeight: 160),
-            color: const Color(0xFFF8FAFC),
+            color: AppTheme.panelBg,
             child: _isSearchingGlobal
                 ? const Center(child: CircularProgressIndicator())
                 : ListView.builder(
@@ -2611,7 +2595,7 @@ class _MainShellState extends State<MainShell> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w500,
                             fontSize: 12.5,
                           ),
                         ),
@@ -2660,7 +2644,7 @@ class _MainShellState extends State<MainShell> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                     Material(
-                      color: isSelected ? AppTheme.brandSoft : Colors.white,
+                      color: isSelected ? AppTheme.tint : Colors.white,
                       child: InkWell(
                         onTap: () => _selectConversation(conv, isWide: isWide),
                         onLongPress: () => setState(() {
@@ -2727,7 +2711,7 @@ class _MainShellState extends State<MainShell> {
                                                   style: const TextStyle(
                                                     fontSize: 13.5,
                                                     height: 1.3,
-                                                    fontWeight: FontWeight.w700,
+                                                    fontWeight: FontWeight.w600,
                                                     color: AppTheme.slateDark,
                                                   ),
                                                 ),
@@ -2737,13 +2721,9 @@ class _MainShellState extends State<MainShell> {
                                                 text: conv.folderLabel,
                                                 backgroundColor: conv.isKeep
                                                     ? const Color(0xFFFEF3C7)
-                                                    : conv.isFamily
-                                                    ? const Color(0xFFDBEAFE)
-                                                    : AppTheme.brandSoft,
+                                                    : AppTheme.tintStrong,
                                                 textColor: conv.isKeep
-                                                    ? AppTheme.brandDeep
-                                                    : conv.isFamily
-                                                    ? AppTheme.workBlue
+                                                    ? const Color(0xFF7A4A12)
                                                     : AppTheme.brandDeep,
                                               ),
                                               const SizedBox(width: 8),
@@ -2753,11 +2733,14 @@ class _MainShellState extends State<MainShell> {
                                                 style: TextStyle(
                                                   fontSize: 11,
                                                   height: 1.35,
+                                                  fontFeatures: const [
+                                                    FontFeature.tabularFigures(),
+                                                  ],
                                                   color: hasUnread
                                                       ? AppTheme.brandDeep
                                                       : AppTheme.slateMuted,
                                                   fontWeight: hasUnread
-                                                      ? FontWeight.w700
+                                                      ? FontWeight.w600
                                                       : FontWeight.w400,
                                                 ),
                                               ),
@@ -2788,7 +2771,7 @@ class _MainShellState extends State<MainShell> {
                                                         ? AppTheme.slateDark
                                                         : AppTheme.slateMuted,
                                                     fontWeight: hasUnread
-                                                        ? FontWeight.w600
+                                                        ? FontWeight.w500
                                                         : FontWeight.w400,
                                                   ),
                                                 ),
@@ -2820,8 +2803,11 @@ class _MainShellState extends State<MainShell> {
                                                       color: Colors.white,
                                                       fontSize: 11,
                                                       fontWeight:
-                                                          FontWeight.w700,
+                                                          FontWeight.w600,
                                                       height: 1.2,
+                                                      fontFeatures: [
+                                                        FontFeature.tabularFigures(),
+                                                      ],
                                                     ),
                                                   ),
                                                 ),
@@ -2899,11 +2885,7 @@ class _MainShellState extends State<MainShell> {
       width: double.infinity,
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 6),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceBg,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppTheme.borderSubtle),
-      ),
+      decoration: AppTheme.well(radius: AppTheme.radiusSm),
       child: Wrap(
         spacing: 6,
         runSpacing: 6,
@@ -2994,7 +2976,9 @@ class _MainShellState extends State<MainShell> {
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                 ),
                 icon: Icon(
-                  _showCreateNoteInline ? Icons.close_rounded : Icons.add_rounded,
+                  _showCreateNoteInline
+                      ? Icons.close_rounded
+                      : Icons.edit_note_rounded,
                   size: 16,
                 ),
                 label: Text(
@@ -3043,11 +3027,7 @@ class _MainShellState extends State<MainShell> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(28),
                     alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-                      boxShadow: AppTheme.shadowSm,
-                    ),
+                    decoration: AppTheme.well(radius: AppTheme.radiusLg),
                     child: const Text(
                       'ยังไม่มีบันทึก กด "+ จดบันทึกใหม่"',
                       textAlign: TextAlign.center,
@@ -3062,14 +3042,7 @@ class _MainShellState extends State<MainShell> {
                       return Container(
                         width: isCompact ? double.infinity : 320,
                         padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(
-                            AppTheme.radiusLg,
-                          ),
-                          border: Border.all(color: AppTheme.borderSubtle),
-                          boxShadow: AppTheme.shadowSm,
-                        ),
+                        decoration: AppTheme.surface(),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -3081,7 +3054,7 @@ class _MainShellState extends State<MainShell> {
                                     alignment: Alignment.centerLeft,
                                     child: PillBadge(
                                       text: note.category,
-                                      backgroundColor: AppTheme.brandSoft,
+                                      backgroundColor: AppTheme.tintStrong,
                                       textColor: AppTheme.brandDeep,
                                       icon: Icons.bookmark_rounded,
                                     ),
@@ -3094,6 +3067,7 @@ class _MainShellState extends State<MainShell> {
                                     fontSize: 11,
                                     height: 1.35,
                                     color: AppTheme.slateMuted,
+                                    fontFeatures: [FontFeature.tabularFigures()],
                                   ),
                                 ),
                                 IconButton(
@@ -3117,7 +3091,7 @@ class _MainShellState extends State<MainShell> {
                               style: const TextStyle(
                                 fontSize: 15,
                                 height: 1.35,
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w600,
                                 color: AppTheme.slateDark,
                               ),
                             ),
@@ -3164,7 +3138,7 @@ class _MainShellState extends State<MainShell> {
                                           '${note.likedBy.length}',
                                           style: const TextStyle(
                                             fontSize: 11,
-                                            fontWeight: FontWeight.w600,
+                                            fontWeight: FontWeight.w500,
                                             color: AppTheme.slateMuted,
                                           ),
                                         ),
@@ -3183,7 +3157,7 @@ class _MainShellState extends State<MainShell> {
                                   '${note.comments.length}',
                                   style: const TextStyle(
                                     fontSize: 11,
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.w500,
                                     color: AppTheme.slateMuted,
                                   ),
                                 ),
@@ -3215,16 +3189,7 @@ class _MainShellState extends State<MainShell> {
     final expanded = _openSettingsSection == id;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        border: Border.all(
-          color: expanded
-              ? AppTheme.brandPrimary.withValues(alpha: 0.45)
-              : AppTheme.borderSubtle,
-        ),
-        boxShadow: AppTheme.shadowSm,
-      ),
+      decoration: AppTheme.surface(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -3242,15 +3207,15 @@ class _MainShellState extends State<MainShell> {
                     width: 34,
                     height: 34,
                     decoration: BoxDecoration(
-                      color: expanded ? AppTheme.brandSoft : AppTheme.surfaceBg,
-                      borderRadius: BorderRadius.circular(10),
+                      color: expanded ? AppTheme.tintStrong : AppTheme.panelBg,
+                      borderRadius: BorderRadius.circular(AppTheme.radiusSm),
                     ),
                     child: Icon(
                       icon,
                       size: 18,
                       color: expanded
                           ? AppTheme.brandPrimary
-                          : AppTheme.slateDark,
+                          : AppTheme.slateBody,
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -3262,7 +3227,7 @@ class _MainShellState extends State<MainShell> {
                           title,
                           style: const TextStyle(
                             fontSize: 14,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w600,
                             color: AppTheme.slateDark,
                           ),
                         ),
@@ -3284,7 +3249,7 @@ class _MainShellState extends State<MainShell> {
                     expanded ? '▴' : '▾',
                     style: TextStyle(
                       fontSize: 14,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                       color: expanded
                           ? AppTheme.brandPrimary
                           : AppTheme.slateMuted,
@@ -3339,12 +3304,7 @@ class _MainShellState extends State<MainShell> {
                 // Personal Profile Quick Card
                 Container(
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-                    border: Border.all(color: AppTheme.borderSubtle),
-                    boxShadow: AppTheme.shadowSm,
-                  ),
+                  decoration: AppTheme.surface(),
                   child: Wrap(
                     spacing: 12,
                     runSpacing: 10,
@@ -3369,7 +3329,7 @@ class _MainShellState extends State<MainShell> {
                                 _user.displayName,
                                 style: const TextStyle(
                                   fontSize: 15.5,
-                                  fontWeight: FontWeight.w800,
+                                  fontWeight: FontWeight.w600,
                                   color: AppTheme.slateDark,
                                 ),
                               ),
@@ -3474,11 +3434,7 @@ class _MainShellState extends State<MainShell> {
                       const SizedBox(height: 12),
                       Container(
                         padding: EdgeInsets.all(isCompact ? 10 : 12),
-                        decoration: BoxDecoration(
-                          color: AppTheme.surfaceBg,
-                          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                          border: Border.all(color: AppTheme.borderSubtle),
-                        ),
+                        decoration: AppTheme.well(),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -3503,7 +3459,7 @@ class _MainShellState extends State<MainShell> {
                                         style: TextStyle(
                                           fontSize: 15,
                                           height: 1.35,
-                                          fontWeight: FontWeight.w800,
+                                          fontWeight: FontWeight.w600,
                                         ),
                                       ),
                                     ),
@@ -3588,14 +3544,8 @@ class _MainShellState extends State<MainShell> {
                                 return Container(
                                   width: isCompact ? double.infinity : 320,
                                   padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(
-                                      AppTheme.radiusMd,
-                                    ),
-                                    border: Border.all(
-                                      color: AppTheme.borderSubtle,
-                                    ),
+                                  decoration: AppTheme.surface(
+                                    radius: AppTheme.radiusMd,
                                   ),
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -3630,7 +3580,7 @@ class _MainShellState extends State<MainShell> {
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                               style: const TextStyle(
-                                                fontWeight: FontWeight.w700,
+                                                fontWeight: FontWeight.w600,
                                                 fontSize: 13.5,
                                               ),
                                             ),
@@ -3639,7 +3589,7 @@ class _MainShellState extends State<MainShell> {
                                               style: TextStyle(
                                                 fontSize: 11.5,
                                                 color: color,
-                                                fontWeight: FontWeight.w600,
+                                                fontWeight: FontWeight.w500,
                                               ),
                                             ),
                                           ],
@@ -3688,8 +3638,12 @@ class _MainShellState extends State<MainShell> {
                                       Expanded(
                                         child: ElevatedButton.icon(
                                           onPressed: () => _openMiniApp(app),
+                                          // ปุ่มซ้ำทุกการ์ด ใช้โทนอ่อน สีประจำเครื่องมืออยู่ที่ไอคอน
                                           style: ElevatedButton.styleFrom(
-                                            backgroundColor: color,
+                                            backgroundColor: AppTheme.tintStrong,
+                                            foregroundColor: AppTheme.brandDeep,
+                                            elevation: 0,
+                                            shadowColor: Colors.transparent,
                                           ),
                                           icon: const Icon(
                                             Icons.rocket_launch_rounded,
@@ -3764,7 +3718,7 @@ class _MainShellState extends State<MainShell> {
                                   'ห้องสนทนาทั้งหมด',
                                   '${ov?.totalConversations ?? _conversations.length} ห้อง',
                                   Icons.forum_rounded,
-                                  AppTheme.workBlue,
+                                  AppTheme.brandDeep,
                                   width: tileWidth,
                                   compact: compact,
                                 ),
@@ -3772,7 +3726,7 @@ class _MainShellState extends State<MainShell> {
                                   'ข้อความทั้งหมด',
                                   '${ov?.totalMessages ?? 0} ข้อความ',
                                   Icons.mark_chat_read_rounded,
-                                  AppTheme.personalPurple,
+                                  AppTheme.goldClay,
                                   width: tileWidth,
                                   compact: compact,
                                 ),
@@ -3780,7 +3734,7 @@ class _MainShellState extends State<MainShell> {
                                   'ไฟล์เก็บถาวร',
                                   '${ov?.totalFiles ?? 0} ไฟล์ (${formatFileSize(ov?.totalStorageBytes ?? 0)})',
                                   Icons.cloud_done_rounded,
-                                  AppTheme.warningAmber,
+                                  AppTheme.slateBody,
                                   width: tileWidth,
                                   compact: compact,
                                 ),
@@ -3848,7 +3802,7 @@ class _MainShellState extends State<MainShell> {
       style: const TextStyle(
         fontSize: 15.5,
         height: 1.35,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
         color: AppTheme.slateDark,
       ),
     );
@@ -3856,12 +3810,7 @@ class _MainShellState extends State<MainShell> {
       return Container(
         width: width,
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-          border: Border.all(color: AppTheme.borderSubtle),
-          boxShadow: AppTheme.shadowSm,
-        ),
+        decoration: AppTheme.surface(),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -3878,12 +3827,7 @@ class _MainShellState extends State<MainShell> {
     return Container(
       width: width,
       padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        border: Border.all(color: AppTheme.borderSubtle),
-        boxShadow: AppTheme.shadowSm,
-      ),
+      decoration: AppTheme.surface(),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -3907,12 +3851,7 @@ class _MainShellState extends State<MainShell> {
         : 236.0;
     return Container(
       padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        border: Border.all(color: AppTheme.borderSubtle),
-        boxShadow: AppTheme.shadowMd,
-      ),
+      decoration: AppTheme.surface(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -3941,7 +3880,7 @@ class _MainShellState extends State<MainShell> {
                       'ธีมสีของแอป (บ้านเชียง & 7 โทนสีไทยร่วมสมัย)',
                       style: TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                         color: AppTheme.slateDark,
                         height: 1.3,
                       ),
@@ -4007,14 +3946,7 @@ class _MainShellState extends State<MainShell> {
       builder: (ctx, setCardState) {
         return Container(
           padding: const EdgeInsets.all(13),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-            border: Border.all(
-              color: AppTheme.personalPurple.withValues(alpha: 0.3),
-            ),
-            boxShadow: AppTheme.shadowMd,
-          ),
+          decoration: AppTheme.surface(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -4025,9 +3957,7 @@ class _MainShellState extends State<MainShell> {
                     width: 42,
                     height: 42,
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF6D28D9), Color(0xFF2563EB)],
-                      ),
+                      gradient: AppTheme.aiGradient,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(
@@ -4051,14 +3981,14 @@ class _MainShellState extends State<MainShell> {
                               style: TextStyle(
                                 fontSize: 15.5,
                                 height: 1.35,
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w600,
                                 color: AppTheme.slateDark,
                               ),
                             ),
                             PillBadge(
                               text:
                                   'API Key: ${_aiSettings.maskedKey.isNotEmpty ? _aiSettings.maskedKey : "พร้อมใช้งาน"}',
-                              backgroundColor: AppTheme.brandSoft,
+                              backgroundColor: AppTheme.tintStrong,
                               textColor: AppTheme.brandDeep,
                               icon: Icons.verified_rounded,
                             ),
@@ -4087,7 +4017,7 @@ class _MainShellState extends State<MainShell> {
                     'เลือกโมเดล DeepSeek:',
                     style: TextStyle(
                       fontSize: 13,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                       color: AppTheme.slateDark,
                     ),
                   ),
@@ -4161,9 +4091,6 @@ class _MainShellState extends State<MainShell> {
                       );
                     }
                   },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.personalPurple,
-                  ),
                   icon: const Icon(Icons.save_rounded, size: 17),
                   label: const Text('บันทึกตั้งค่าสมองกล DeepSeek AI'),
                 ),
@@ -4186,12 +4113,7 @@ class _MainShellState extends State<MainShell> {
 
     return Container(
       padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        border: Border.all(color: AppTheme.borderSubtle),
-        boxShadow: AppTheme.shadowSm,
-      ),
+      decoration: AppTheme.surface(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -4206,7 +4128,7 @@ class _MainShellState extends State<MainShell> {
                   style: TextStyle(
                     fontSize: 15.5,
                     height: 1.35,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -4267,27 +4189,22 @@ class _MainShellState extends State<MainShell> {
   Widget _buildUserManagementCard() {
     return Container(
       padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        border: Border.all(color: AppTheme.borderSubtle),
-        boxShadow: AppTheme.shadowSm,
-      ),
+      decoration: AppTheme.surface(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(Icons.verified_user_rounded, color: AppTheme.workBlue),
-              SizedBox(width: 8),
-              Expanded(
+              Icon(Icons.verified_user_rounded, color: AppTheme.brandPrimary),
+              const SizedBox(width: 8),
+              const Expanded(
                 child: Text(
                   'รายชื่อสมาชิกที่ซิงค์ด้วยบัญชี Gmail',
                   style: TextStyle(
                     fontSize: 15.5,
                     height: 1.35,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -4313,7 +4230,7 @@ class _MainShellState extends State<MainShell> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     fontSize: 13.5,
                   ),
                 ),
@@ -4326,7 +4243,7 @@ class _MainShellState extends State<MainShell> {
                 trailing: PillBadge(
                   text: u.role.toUpperCase(),
                   backgroundColor: u.isAdmin
-                      ? AppTheme.brandSoft
+                      ? AppTheme.tintStrong
                       : AppTheme.surfaceBg,
                   textColor: u.isAdmin
                       ? AppTheme.brandDeep
@@ -4356,7 +4273,13 @@ class _ThemePresetTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(14);
     return Material(
-      color: selected ? preset.soft : Colors.white,
+      // ธีมที่เลือก: พื้นจางของสีธีมนั้น ไม่ใช้สีอ่อนเต็มแรง
+      color: selected
+          ? Color.alphaBlend(
+              preset.primary.withValues(alpha: 0.08),
+              Colors.white,
+            )
+          : Colors.white,
       borderRadius: radius,
       child: InkWell(
         borderRadius: radius,
@@ -4366,8 +4289,8 @@ class _ThemePresetTile extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: radius,
             border: Border.all(
-              color: selected ? preset.primary : AppTheme.borderSubtle,
-              width: selected ? 2 : 1,
+              color: selected ? preset.primary : AppTheme.hairline,
+              width: selected ? 1.5 : 1,
             ),
           ),
           child: Row(
@@ -4400,7 +4323,7 @@ class _ThemePresetTile extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 13.5,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                         color: AppTheme.slateDark,
                         height: 1.3,
                       ),
@@ -4511,7 +4434,7 @@ class _InlineEditProfilePanelState extends State<_InlineEditProfilePanel> {
             const Expanded(
               child: Text(
                 'แก้ไขโปรไฟล์ & ตั้งค่า BC ID',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
               ),
             ),
             IconButton(
@@ -4565,7 +4488,7 @@ class _InlineEditProfilePanelState extends State<_InlineEditProfilePanel> {
                   fontSize: 11,
                   fontWeight: _bcIdOk == null
                       ? FontWeight.w500
-                      : FontWeight.w700,
+                      : FontWeight.w600,
                   color: _bcIdOk == true
                       ? Colors.green.shade700
                       : _bcIdOk == false
@@ -4655,7 +4578,7 @@ class BcQrBox extends StatelessWidget {
     this.quietZonePadding = 8,
     this.outerPadding = 10,
     this.borderRadius = 14,
-    this.borderColor = AppTheme.borderSubtle,
+    this.borderColor = AppTheme.hairline,
     this.borderWidth = 1,
   });
 
@@ -5019,9 +4942,9 @@ class _AddFriendInlinePanelState extends State<AddFriendInlinePanel> {
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: AppTheme.brandSoft.withValues(alpha: 0.35),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.borderSubtle),
+        color: AppTheme.tint,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        border: Border.all(color: AppTheme.hairline),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -5040,7 +4963,7 @@ class _AddFriendInlinePanelState extends State<AddFriendInlinePanel> {
                   'ไม่พบผู้ใช้จาก${_modeLabel(_mode)} "$_lastSearchedQuery"',
                   style: const TextStyle(
                     fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     color: AppTheme.slateDark,
                   ),
                 ),
@@ -5139,7 +5062,7 @@ class _AddFriendInlinePanelState extends State<AddFriendInlinePanel> {
     if (isSelf) {
       trailing = PillBadge(
         text: 'บัญชีของคุณเอง',
-        backgroundColor: AppTheme.brandSoft,
+        backgroundColor: AppTheme.tintStrong,
         textColor: AppTheme.brandDeep,
         icon: Icons.person_outline_rounded,
       );
@@ -5174,8 +5097,8 @@ class _AddFriendInlinePanelState extends State<AddFriendInlinePanel> {
             )
           : PillBadge(
               text: 'เป็นเพื่อนแล้ว',
-              backgroundColor: AppTheme.surfaceBg,
-              textColor: AppTheme.slateDark,
+              backgroundColor: AppTheme.panelBg,
+              textColor: AppTheme.slateBody,
               icon: Icons.check_circle_outline_rounded,
             );
     } else {
@@ -5210,7 +5133,7 @@ class _AddFriendInlinePanelState extends State<AddFriendInlinePanel> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     fontSize: 13,
                   ),
                 ),
@@ -5253,7 +5176,7 @@ class _AddFriendInlinePanelState extends State<AddFriendInlinePanel> {
             const Expanded(
               child: Text(
                 'เพิ่มเพื่อน 4 ช่องทาง',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
               ),
             ),
             IconButton(
@@ -5279,13 +5202,13 @@ class _AddFriendInlinePanelState extends State<AddFriendInlinePanel> {
                 c.label,
                 style: TextStyle(
                   fontSize: 12,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w500,
                   color: selected ? Colors.white : AppTheme.slateDark,
                 ),
               ),
               selected: selected,
               selectedColor: AppTheme.brandPrimary,
-              backgroundColor: AppTheme.surfaceBg,
+              backgroundColor: AppTheme.panelBg,
               visualDensity: VisualDensity.compact,
               showCheckmark: false,
               onSelected: (_) => _switchMode(c.id),
@@ -5296,11 +5219,7 @@ class _AddFriendInlinePanelState extends State<AddFriendInlinePanel> {
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: AppTheme.surfaceBg,
-              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-              border: Border.all(color: AppTheme.borderSubtle),
-            ),
+            decoration: AppTheme.well(),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -5310,7 +5229,7 @@ class _AddFriendInlinePanelState extends State<AddFriendInlinePanel> {
                   quietZonePadding: 6,
                   outerPadding: 6,
                   borderRadius: 10,
-                  borderColor: AppTheme.borderSubtle,
+                  borderColor: AppTheme.hairline,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -5321,7 +5240,7 @@ class _AddFriendInlinePanelState extends State<AddFriendInlinePanel> {
                         'QR Code ของฉัน',
                         style: TextStyle(
                           fontSize: 13,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -5441,7 +5360,7 @@ class _AddFriendInlinePanelState extends State<AddFriendInlinePanel> {
             _statusMsg!,
             style: TextStyle(
               fontSize: 12,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w500,
               color: _isError ? AppTheme.dangerRed : AppTheme.brandDeep,
             ),
           ),
@@ -5523,7 +5442,7 @@ class _InlineJoinGroupPanelState extends State<_InlineJoinGroupPanel> {
             const Expanded(
               child: Text(
                 'เข้ากลุ่มด้วยรหัสเชิญ',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
               ),
             ),
             IconButton(
@@ -5619,7 +5538,7 @@ class _InlineCreateGroupPanelState extends State<_InlineCreateGroupPanel> {
             const Expanded(
               child: Text(
                 'สร้างกลุ่มแชทใหม่',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
               ),
             ),
             IconButton(
@@ -5661,14 +5580,14 @@ class _InlineCreateGroupPanelState extends State<_InlineCreateGroupPanel> {
           value: _includeAi,
           title: const Text(
             'เชิญ 🤖 BC AI เข้ากลุ่มด้วยทันที',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
           ),
           onChanged: (v) => setState(() => _includeAi = v ?? true),
         ),
         if (selectable.isNotEmpty) ...[
           const Text(
             'เลือกสมาชิกเข้ากลุ่ม:',
-            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
           ),
           ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 150),
@@ -5683,7 +5602,7 @@ class _InlineCreateGroupPanelState extends State<_InlineCreateGroupPanel> {
                     f.displayName,
                     style: const TextStyle(
                       fontSize: 13,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                   onChanged: (v) => setState(() {
@@ -5704,7 +5623,7 @@ class _InlineCreateGroupPanelState extends State<_InlineCreateGroupPanel> {
             _errMsg!,
             style: const TextStyle(
               fontSize: 12,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w500,
               color: AppTheme.dangerRed,
             ),
           ),
@@ -5879,7 +5798,7 @@ class _InlineNotificationPanelState extends State<_InlineNotificationPanel>
             const Expanded(
               child: Text(
                 'เสียงและการแจ้งเตือน',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
               ),
             ),
             if (widget.showCloseButton && widget.onClose != null)
@@ -5897,12 +5816,12 @@ class _InlineNotificationPanelState extends State<_InlineNotificationPanel>
             decoration: BoxDecoration(
               color: batteryOk
                   ? const Color(0xFFECFDF5)
-                  : const Color(0xFFFFF7ED),
+                  : const Color(0xFFFFFAEB),
               borderRadius: BorderRadius.circular(AppTheme.radiusSm),
               border: Border.all(
                 color: batteryOk
                     ? const Color(0xFFA7F3D0)
-                    : const Color(0xFFFED7AA),
+                    : const Color(0xFFFEDF89),
               ),
             ),
             child: Row(
@@ -5925,7 +5844,7 @@ class _InlineNotificationPanelState extends State<_InlineNotificationPanel>
                         : 'ระบบประหยัดแบตอาจปิดเสียงเตือนตอนปิดจอ แนะนำให้อนุญาตทำงานเบื้องหลัง',
                     style: TextStyle(
                       fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w500,
                       color: batteryOk
                           ? const Color(0xFF065F46)
                           : const Color(0xFF9A3412),
@@ -5965,7 +5884,7 @@ class _InlineNotificationPanelState extends State<_InlineNotificationPanel>
           value: _n.popupEnabled,
           title: const Text(
             'แจ้งเตือนเมื่อมีแชทเข้า',
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
+            style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13.5),
           ),
           onChanged: (v) => _update(() => _n.setPopupEnabled(v)),
         ),
@@ -5975,7 +5894,7 @@ class _InlineNotificationPanelState extends State<_InlineNotificationPanel>
           value: _n.soundEnabled,
           title: const Text(
             'เปิดเสียงแจ้งเตือน',
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
+            style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13.5),
           ),
           onChanged: (v) => _update(() => _n.setSoundEnabled(v)),
         ),
@@ -5999,7 +5918,7 @@ class _InlineNotificationPanelState extends State<_InlineNotificationPanel>
                       : 'โหมดห้ามรบกวนทั้งแอป',
                   style: const TextStyle(
                     fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -6020,13 +5939,13 @@ class _InlineNotificationPanelState extends State<_InlineNotificationPanel>
                   visualDensity: VisualDensity.compact,
                   backgroundColor: (opt.code == 'off' &&
                           !_effectiveUser!.isDndActive)
-                      ? AppTheme.brandSoft
-                      : AppTheme.surfaceBg,
+                      ? AppTheme.tintStrong
+                      : AppTheme.panelBg,
                   label: Text(
                     opt.label,
                     style: const TextStyle(
                       fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                   onPressed: _savingRemote
@@ -6041,7 +5960,7 @@ class _InlineNotificationPanelState extends State<_InlineNotificationPanel>
             value: _effectiveUser!.notifyPreview,
             title: const Text(
               'แสดงตัวอย่างข้อความแจ้งเตือน',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
             ),
             subtitle: const Text(
               'ปิดเพื่อซ่อนข้อความเป็น "คุณมีข้อความใหม่"',
@@ -6057,7 +5976,7 @@ class _InlineNotificationPanelState extends State<_InlineNotificationPanel>
             value: _effectiveUser!.notifyOnMention,
             title: const Text(
               'เตือนเมื่อถูก @กล่าวถึง (แม้ปิดเสียงห้อง)',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
             ),
             onChanged: _savingRemote
                 ? null
@@ -6077,7 +5996,7 @@ class _InlineNotificationPanelState extends State<_InlineNotificationPanel>
                       kind.label,
                       style: const TextStyle(
                         fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),
@@ -6172,12 +6091,7 @@ class _InlinePrivacyAndBlockedCardState
 
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        border: Border.all(color: AppTheme.borderSubtle),
-        boxShadow: AppTheme.shadowSm,
-      ),
+      decoration: AppTheme.surface(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -6189,7 +6103,7 @@ class _InlinePrivacyAndBlockedCardState
               const Expanded(
                 child: Text(
                   'ความเป็นส่วนตัว & รายชื่อที่ซ่อน/บล็อก',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
                 ),
               ),
             ],
@@ -6201,7 +6115,7 @@ class _InlinePrivacyAndBlockedCardState
             value: widget.user.allowAddByPhone,
             title: const Text(
               'อนุญาตเพิ่มเพื่อนด้วยเบอร์โทร',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
             ),
             onChanged: _saving ? null : (v) => _updatePrivacy(allowPhone: v),
           ),
@@ -6211,7 +6125,7 @@ class _InlinePrivacyAndBlockedCardState
             value: widget.user.allowAddById,
             title: const Text(
               'อนุญาตเพิ่มเพื่อนด้วย @BC ID',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
             ),
             onChanged: _saving ? null : (v) => _updatePrivacy(allowId: v),
           ),
@@ -6221,7 +6135,7 @@ class _InlinePrivacyAndBlockedCardState
             value: widget.user.allowAddByEmail,
             title: const Text(
               'อนุญาตเพิ่มเพื่อนด้วยอีเมล',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
             ),
             onChanged: _saving ? null : (v) => _updatePrivacy(allowEmail: v),
           ),
@@ -6292,7 +6206,7 @@ class _InlinePrivacyAndBlockedCardState
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontSize: 12.5,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ),
@@ -6352,7 +6266,7 @@ class _InlinePrivacyAndBlockedCardState
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontSize: 12.5,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ),
@@ -6440,7 +6354,7 @@ class _InlineCreateNotePanelState extends State<_InlineCreateNotePanel> {
             const Expanded(
               child: Text(
                 'สร้างบันทึกใหม่ในสมุดบันทึก BC',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
               ),
             ),
             IconButton(
@@ -6484,7 +6398,7 @@ class _InlineCreateNotePanelState extends State<_InlineCreateNotePanel> {
             _errMsg!,
             style: const TextStyle(
               fontSize: 12,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w500,
               color: AppTheme.dangerRed,
             ),
           ),
@@ -6610,7 +6524,7 @@ class _InlineMiniAppFormPanelState extends State<_InlineMiniAppFormPanel> {
                     : 'แก้ไขเครื่องมือ ${existing.title}',
                 style: const TextStyle(
                   fontSize: 15,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -6657,7 +6571,7 @@ class _InlineMiniAppFormPanelState extends State<_InlineMiniAppFormPanel> {
             _errMsg!,
             style: const TextStyle(
               fontSize: 12,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w500,
               color: AppTheme.dangerRed,
             ),
           ),
@@ -7003,12 +6917,7 @@ class _InlineAccountLinkCardState extends State<_InlineAccountLinkCard> {
 
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        border: Border.all(color: AppTheme.borderSubtle),
-        boxShadow: AppTheme.shadowSm,
-      ),
+      decoration: AppTheme.surface(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -7024,7 +6933,7 @@ class _InlineAccountLinkCardState extends State<_InlineAccountLinkCard> {
               const Expanded(
                 child: Text(
                   'บัญชี & การกู้คืนข้อมูล',
-                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800),
+                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
                 ),
               ),
             ],
@@ -7050,7 +6959,7 @@ class _InlineAccountLinkCardState extends State<_InlineAccountLinkCard> {
                       'สำหรับร้านค้า: ใช้แอป BC Ai Chat OA',
                       style: TextStyle(
                         fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -7069,7 +6978,7 @@ class _InlineAccountLinkCardState extends State<_InlineAccountLinkCard> {
           if (_statusMsg != null) ...[
             Text(
               _statusMsg!,
-              style: const TextStyle(fontSize: 12, color: AppTheme.workBlue),
+              style: TextStyle(fontSize: 12, color: AppTheme.brandDeep),
             ),
             const SizedBox(height: 6),
           ],
@@ -7283,11 +7192,7 @@ class _InlineAccountLinkCardState extends State<_InlineAccountLinkCard> {
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppTheme.surfaceBg,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppTheme.borderSubtle),
-              ),
+              decoration: AppTheme.well(radius: AppTheme.radiusSm),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -7299,7 +7204,7 @@ class _InlineAccountLinkCardState extends State<_InlineAccountLinkCard> {
                           'รหัสสำรองใช้ครั้งเดียว (แสดงครั้งเดียว)',
                           style: TextStyle(
                             fontSize: 12,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w600,
                             color: AppTheme.dangerRed,
                           ),
                         ),
@@ -7337,13 +7242,13 @@ class _InlineAccountLinkCardState extends State<_InlineAccountLinkCard> {
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: AppTheme.borderSubtle),
+                              border: Border.all(color: AppTheme.hairline),
                             ),
                             child: Text(
                               c,
                               style: const TextStyle(
                                 fontSize: 12,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w600,
                                 fontFamily: 'monospace',
                               ),
                             ),
@@ -7369,7 +7274,7 @@ class _InlineAccountLinkCardState extends State<_InlineAccountLinkCard> {
                   const Expanded(
                     child: Text(
                       'ประวัติกู้คืนและการเชื่อมบัญชีล่าสุด',
-                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
                     ),
                   ),
                   Icon(
@@ -7551,12 +7456,7 @@ class _InlineAdminAuthSettingsCardState
 
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        border: Border.all(color: AppTheme.borderSubtle),
-        boxShadow: AppTheme.shadowSm,
-      ),
+      decoration: AppTheme.surface(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -7568,7 +7468,7 @@ class _InlineAdminAuthSettingsCardState
               const Expanded(
                 child: Text(
                   'ตั้งค่าการเข้าสู่ระบบ SMSMKT OTP & Google OAuth',
-                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800),
+                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
                 ),
               ),
               IconButton(
@@ -7588,15 +7488,15 @@ class _InlineAdminAuthSettingsCardState
                     ? 'SMS OTP พร้อมส่ง'
                     : 'ยังไม่ได้ใส่คีย์ SMSMKT',
                 backgroundColor: (s?.phoneOtpReady ?? false)
-                    ? const Color(0xFFE0F2FE)
-                    : const Color(0xFFFEF3C7),
+                    ? const Color(0xFFECFDF5)
+                    : const Color(0xFFFFFAEB),
                 textColor: (s?.phoneOtpReady ?? false)
-                    ? AppTheme.workBlue
+                    ? const Color(0xFF047857)
                     : AppTheme.warningAmber,
               ),
               PillBadge(
                 text: creditText,
-                backgroundColor: AppTheme.brandSoft,
+                backgroundColor: AppTheme.tintStrong,
                 textColor: AppTheme.brandDeep,
               ),
             ],
@@ -7605,7 +7505,7 @@ class _InlineAdminAuthSettingsCardState
             const SizedBox(height: 6),
             Text(
               _statusMsg!,
-              style: const TextStyle(fontSize: 12, color: AppTheme.workBlue),
+              style: TextStyle(fontSize: 12, color: AppTheme.brandDeep),
             ),
           ],
           const SizedBox(height: 8),

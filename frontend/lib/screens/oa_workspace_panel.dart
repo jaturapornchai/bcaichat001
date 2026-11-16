@@ -189,17 +189,15 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
   Color _roleColor(String role) {
     switch (role) {
       case 'owner':
-        return AppTheme.brandDeep;
-      case 'admin':
-        return AppTheme.workBlue;
-      case 'agent':
-        return const Color(0xFF0F766E);
-      case 'marketer':
-        return AppTheme.personalPurple;
+        return const Color(0xFF7A4A12);
       default:
-        return AppTheme.slateMuted;
+        return AppTheme.brandDeep;
     }
   }
+
+  Color _roleBg(String role) => role == 'owner'
+      ? AppTheme.goldClay.withValues(alpha: 0.18)
+      : AppTheme.tintStrong;
 
   bool _isTabAllowed(OaAccountDto oa, String tab) {
     final uid = widget.currentUser.id;
@@ -821,7 +819,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
     return GlassPanel(
       padding: const EdgeInsets.all(10),
       borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: AppTheme.borderSubtle),
+      border: Border.all(color: AppTheme.hairline),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -868,7 +866,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
                 widget.shopApp ? 'จัดการร้านค้า' : 'ค้นหาและติดตามร้านค้า',
                 style: TextStyle(
                   fontSize: 14.5,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
                   color: AppTheme.slateDark,
                 ),
               ),
@@ -925,13 +923,15 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
   }
 
   Widget _buildBanner(String text, {required bool isError}) {
-    final c = isError ? AppTheme.dangerRed : AppTheme.workBlue;
+    final c = isError ? AppTheme.dangerRed : const Color(0xFF027A48);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
-        color: c.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: c.withValues(alpha: 0.35)),
+        color: isError ? const Color(0xFFFEF3F2) : const Color(0xFFECFDF3),
+        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+        border: Border.all(
+          color: isError ? const Color(0xFFFECDCA) : const Color(0xFFABEFC6),
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -1011,11 +1011,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
     final showingCoupons = _expandedCouponOaId == oa.id;
     return Container(
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppTheme.cardBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.borderSubtle),
-      ),
+      decoration: AppTheme.surface(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1043,7 +1039,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 13.5,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w600,
                               color: AppTheme.slateDark,
                             ),
                           ),
@@ -1139,7 +1135,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
                     children: [
                       PillBadge(
                         text: cp.code,
-                        backgroundColor: AppTheme.brandSoft,
+                        backgroundColor: AppTheme.tintStrong,
                         textColor: AppTheme.brandDeep,
                       ),
                       const SizedBox(width: 6),
@@ -1176,11 +1172,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
   Widget _buildCreateSection() {
     return Container(
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppTheme.cardBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.borderSubtle),
-      ),
+      decoration: AppTheme.surface(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1188,7 +1180,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
             'สร้างกิจการ / ร้านค้าใหม่',
             style: TextStyle(
               fontSize: 13.5,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
               color: AppTheme.slateDark,
             ),
           ),
@@ -1238,7 +1230,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
                     : 'ตั้งค่าเพิ่มเติม ▾',
                 style: const TextStyle(
                   fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ),
@@ -1287,7 +1279,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
                           color: AppTheme.parseHexColor(hex),
                           shape: BoxShape.circle,
                           border: _cThemeColor == hex
-                              ? Border.all(color: Colors.black, width: 2)
+                              ? Border.all(color: AppTheme.slateDark, width: 2)
                               : null,
                         ),
                       ),
@@ -1391,9 +1383,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
                       const SizedBox(width: 4),
                       PillBadge(
                         text: _roleLabel(item.effectiveRole(myId)),
-                        backgroundColor: _roleColor(
-                          item.effectiveRole(myId),
-                        ).withValues(alpha: 0.14),
+                        backgroundColor: _roleBg(item.effectiveRole(myId)),
                         textColor: _roleColor(item.effectiveRole(myId)),
                       ),
                     ],
@@ -1449,7 +1439,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
             const SizedBox(width: 6),
             PillBadge(
               text: 'บทบาทของคุณ: ${_roleLabel(myRole)}',
-              backgroundColor: _roleColor(myRole).withValues(alpha: 0.14),
+              backgroundColor: _roleBg(myRole),
               textColor: _roleColor(myRole),
             ),
           ],
@@ -1499,31 +1489,35 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
     }
     return Container(
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppTheme.cardBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.borderSubtle),
-      ),
+      decoration: AppTheme.surface(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _statBox('ผู้ติดตาม', '${s.followerCount}'),
-              _statBox('ห้องแชทค้าง', '${s.activeChatsCount}'),
-              _statBox('กฎตอบอัตโนมัติ', '${s.autoReplyCount}'),
-              _statBox('คูปองใช้งาน', '${s.activeCouponCount}'),
-              _statBox('ยอดเก็บคูปอง', '${s.totalCouponClaims}'),
-              _statBox('ส่งข่าวถึงลูกค้า', '${s.broadcastCount}'),
-            ],
+          LayoutBuilder(
+            builder: (context, box) {
+              // แบ่งช่องสถิติให้เต็มความกว้างการ์ด (3 ช่องต่อแถว จอแคบเหลือ 2)
+              final cols = box.maxWidth >= 330 ? 3 : 2;
+              final w = ((box.maxWidth - 8 * (cols - 1)) / cols)
+                  .floorToDouble();
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _statBox('ผู้ติดตาม', '${s.followerCount}', w),
+                  _statBox('ห้องแชทค้าง', '${s.activeChatsCount}', w),
+                  _statBox('กฎตอบอัตโนมัติ', '${s.autoReplyCount}', w),
+                  _statBox('คูปองใช้งาน', '${s.activeCouponCount}', w),
+                  _statBox('ยอดเก็บคูปอง', '${s.totalCouponClaims}', w),
+                  _statBox('ส่งข่าวถึงลูกค้า', '${s.broadcastCount}', w),
+                ],
+              );
+            },
           ),
           if (s.tags.isNotEmpty) ...[
             const SizedBox(height: 10),
             const Text(
               'แท็ก & โน้ตลูกค้า',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 4),
             Wrap(
@@ -1533,7 +1527,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
                 for (final t in s.tags)
                   PillBadge(
                     text: '${t.tag} (${t.count})',
-                    backgroundColor: AppTheme.brandSoft,
+                    backgroundColor: AppTheme.tintStrong,
                     textColor: AppTheme.brandDeep,
                   ),
               ],
@@ -1544,15 +1538,11 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
     );
   }
 
-  Widget _statBox(String label, String val) {
+  Widget _statBox(String label, String val, double width) {
     return Container(
-      width: 104,
+      width: width,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceBg,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppTheme.borderSubtle),
-      ),
+      decoration: AppTheme.well(radius: AppTheme.radiusSm),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1561,7 +1551,8 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
-              color: AppTheme.brandPrimary,
+              color: AppTheme.slateDark,
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
           Text(
@@ -1577,11 +1568,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
     final chat = _selectedChat;
     return Container(
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppTheme.cardBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.borderSubtle),
-      ),
+      decoration: AppTheme.surface(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1606,7 +1593,6 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
               FilledButton(
                 onPressed: _loadManageTabData,
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppTheme.brandPrimary,
                   minimumSize: const Size(0, 34),
                 ),
                 child: const Text('กรอง', style: TextStyle(fontSize: 12)),
@@ -1628,10 +1614,9 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: _selectedChat?.conversationId == c.conversationId
-                        ? AppTheme.brandSoft.withValues(alpha: 0.45)
-                        : AppTheme.surfaceBg,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppTheme.borderSubtle),
+                        ? AppTheme.tint
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusSm),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -1656,7 +1641,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       fontSize: 12.5,
-                                      fontWeight: FontWeight.w700,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
                                 ),
@@ -1672,7 +1657,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
                                   const SizedBox(width: 4),
                                   PillBadge(
                                     text: t,
-                                    backgroundColor: AppTheme.brandSoft,
+                                    backgroundColor: AppTheme.tintStrong,
                                     textColor: AppTheme.brandDeep,
                                   ),
                                 ],
@@ -1705,15 +1690,15 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
             const Divider(height: 14),
             Text(
               'สนทนากับ ${chat.customerName} (${chat.customerPhone.isNotEmpty ? chat.customerPhone : chat.customerBcId})',
-              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 6),
             Container(
               constraints: const BoxConstraints(maxHeight: 160),
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppTheme.surfaceBg,
-                borderRadius: BorderRadius.circular(8),
+                color: AppTheme.panelBg,
+                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
               ),
               child: ListView(
                 shrinkWrap: true,
@@ -1751,7 +1736,6 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
                 FilledButton(
                   onPressed: () => _sendOaReply(),
                   style: FilledButton.styleFrom(
-                    backgroundColor: AppTheme.brandPrimary,
                     minimumSize: const Size(0, 34),
                   ),
                   child: const Text('ส่ง', style: TextStyle(fontSize: 12)),
@@ -1792,7 +1776,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
                       : 'แท็ก & โน้ตลูกค้า ▾',
                   style: const TextStyle(
                     fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
@@ -1844,11 +1828,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
 
     return Container(
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppTheme.cardBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.borderSubtle),
-      ),
+      decoration: AppTheme.surface(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1916,7 +1896,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
                           color: AppTheme.parseHexColor(hex),
                           shape: BoxShape.circle,
                           border: _eThemeColor == hex
-                              ? Border.all(color: Colors.black, width: 2)
+                              ? Border.all(color: AppTheme.slateDark, width: 2)
                               : null,
                         ),
                       ),
@@ -1976,7 +1956,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
           // Team / Staff Management (GET/POST/PUT/DELETE /api/oa/:id/admins)
           const Text(
             'ทีมงาน & คนตอบแชท',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 6),
           if (_staffMembers.isEmpty)
@@ -1990,9 +1970,10 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
                 margin: const EdgeInsets.only(bottom: 6),
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                 decoration: BoxDecoration(
-                  color: AppTheme.surfaceBg,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppTheme.borderSubtle),
+                  color: Colors.transparent,
+                  border: Border(
+                    bottom: BorderSide(color: AppTheme.hairline),
+                  ),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
@@ -2013,7 +1994,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 12.5,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                           Text(
@@ -2037,9 +2018,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
                         (myRole == 'admin' && m.role == 'admin'))
                       PillBadge(
                         text: _roleLabel(m.role),
-                        backgroundColor: _roleColor(
-                          m.role,
-                        ).withValues(alpha: 0.14),
+                        backgroundColor: _roleBg(m.role),
                         textColor: _roleColor(m.role),
                       )
                     else ...[
@@ -2141,17 +2120,13 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
   Widget _buildRichMenuTab() {
     return Container(
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppTheme.cardBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.borderSubtle),
-      ),
+      decoration: AppTheme.surface(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
             'เมนูลัดใต้แชทร้านค้า (${_richMenuDraft.length}/6 ปุ่ม)',
-            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 6),
           for (var i = 0; i < _richMenuDraft.length; i++)
@@ -2162,7 +2137,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
                 children: [
                   PillBadge(
                     text: _richMenuDraft[i].actionType,
-                    backgroundColor: AppTheme.brandSoft,
+                    backgroundColor: AppTheme.tintStrong,
                     textColor: AppTheme.brandDeep,
                   ),
                   const SizedBox(width: 6),
@@ -2269,11 +2244,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
     final oa = _selectedOa;
     return Container(
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppTheme.cardBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.borderSubtle),
-      ),
+      decoration: AppTheme.surface(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -2313,7 +2284,6 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
           const SizedBox(height: 6),
           FilledButton(
             onPressed: _createAutoReply,
-            style: FilledButton.styleFrom(backgroundColor: AppTheme.brandPrimary),
             child: const Text('เพิ่มกฎตอบอัตโนมัติ'),
           ),
           const Divider(height: 14),
@@ -2331,7 +2301,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
                   children: [
                     PillBadge(
                       text: r.keyword,
-                      backgroundColor: AppTheme.brandSoft,
+                      backgroundColor: AppTheme.tintStrong,
                       textColor: AppTheme.brandDeep,
                     ),
                     const SizedBox(width: 6),
@@ -2370,11 +2340,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
 
     return Container(
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppTheme.cardBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.borderSubtle),
-      ),
+      decoration: AppTheme.surface(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -2459,16 +2425,17 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
                 margin: const EdgeInsets.only(bottom: 6),
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppTheme.surfaceBg,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppTheme.borderSubtle),
+                  color: Colors.transparent,
+                  border: Border(
+                    bottom: BorderSide(color: AppTheme.hairline),
+                  ),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     PillBadge(
                       text: cp.code,
-                      backgroundColor: AppTheme.brandSoft,
+                      backgroundColor: AppTheme.tintStrong,
                       textColor: AppTheme.brandDeep,
                     ),
                     const SizedBox(width: 6),
@@ -2480,7 +2447,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
                             '${cp.title} ${cp.discountText}',
                             style: const TextStyle(
                               fontSize: 12,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                           Text(
@@ -2532,11 +2499,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
   Widget _buildBroadcastsTab() {
     return Container(
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppTheme.cardBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.borderSubtle),
-      ),
+      decoration: AppTheme.surface(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -2585,7 +2548,6 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
           const SizedBox(height: 8),
           FilledButton.icon(
             onPressed: _sendBroadcast,
-            style: FilledButton.styleFrom(backgroundColor: AppTheme.brandPrimary),
             icon: const Icon(Icons.campaign_outlined, size: 18),
             label: const Text('ส่งข่าวถึงลูกค้า'),
           ),
@@ -2604,7 +2566,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
                   children: [
                     PillBadge(
                       text: '${b.recipientCount} คน',
-                      backgroundColor: AppTheme.brandSoft,
+                      backgroundColor: AppTheme.tintStrong,
                       textColor: AppTheme.brandDeep,
                     ),
                     const SizedBox(width: 6),

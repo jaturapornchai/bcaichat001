@@ -77,7 +77,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             'แชร์ตำแหน่ง',
             style: TextStyle(
               fontSize: 15,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
               color: AppTheme.slateDark,
             ),
           ),
@@ -102,7 +102,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontSize: 12.5,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w500,
                 color: AppTheme.slateDark,
               ),
             ),
@@ -116,7 +116,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             icon: const Icon(Icons.check_rounded, size: 16),
             label: const Text('ส่งตำแหน่งนี้'),
             style: FilledButton.styleFrom(
-              backgroundColor: AppTheme.brandPrimary,
               visualDensity: VisualDensity.compact,
             ),
           ),

@@ -20,12 +20,6 @@ export function UserAvatar({
   const resolved = resolveMediaUrl(avatarUrl);
   const showImage = Boolean(resolved && !resolved.includes("ui-avatars.com"));
 
-  const bg = isAi
-    ? "linear-gradient(135deg, #4F46E5, #6D28D9)"
-    : isOfficial
-      ? "linear-gradient(135deg, var(--bc-deep), var(--bc-primary))"
-      : "linear-gradient(135deg, var(--bc-primary), var(--bc-ring))";
-
   if (showImage || isOfficial) {
     return (
       <img
@@ -34,22 +28,22 @@ export function UserAvatar({
         width={size}
         height={size}
         style={{ width: size, height: size }}
-        className={
-          showImage
-            ? "shrink-0 rounded-full border border-[var(--bc-border)] object-cover"
-            : "shrink-0 rounded-full object-cover shadow-2xs"
-        }
+        className={isOfficial ? "bc-avatar-img bc-avatar-gold" : "bc-avatar-img"}
       />
     );
   }
 
   return (
     <div
-      style={{ width: size, height: size, background: bg }}
-      className="flex shrink-0 items-center justify-center rounded-full font-bold text-white shadow-xs select-none"
+      style={{
+        width: size,
+        height: size,
+        ...(isAi ? { background: "linear-gradient(145deg, #6366F1, #6D28D9)" } : {}),
+      }}
+      className="bc-avatar select-none"
       aria-label={name}
     >
-      <span style={{ fontSize: Math.max(12, Math.round(size * 0.42)) }}>
+      <span style={{ fontSize: Math.max(12, Math.round(size * 0.4)) }}>
         {isAi ? "🤖" : initial}
       </span>
     </div>
@@ -175,7 +169,7 @@ export function StickerArt({
       </svg>
       <span
         style={{ color: def.accent }}
-        className="mt-1.5 text-center text-xs font-bold leading-tight"
+        className="mt-1.5 text-center text-xs font-semibold leading-tight"
       >
         {fallbackLabel || def.label}
       </span>

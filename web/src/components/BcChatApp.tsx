@@ -310,16 +310,16 @@ export function BcChatApp({ site = "chat" }: BcChatAppProps) {
   if (booting) {
     return (
       <div className="bc-spiral-bg flex min-h-screen items-center justify-center p-6">
-        <div className="rounded-3xl border border-[var(--bc-border)] bg-[var(--bc-card)] px-8 py-6 text-center shadow-sm">
+        <div className="bc-card bc-card-raised px-8 py-6 text-center">
           <div
-            className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl font-extrabold text-white"
+            className="bc-hero mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl font-bold text-white"
             style={{
               background: "linear-gradient(135deg, var(--bc-deep), var(--bc-primary))",
             }}
           >
             BC
           </div>
-          <h1 className="text-base font-bold text-[var(--bc-text)]">{SITE_NAME[site]}</h1>
+          <h1 className="text-base font-semibold text-[var(--bc-text)]">{SITE_NAME[site]}</h1>
           <p className="mt-1 text-xs text-[var(--bc-muted)]">
             {site === "oa" ? "กำลังเตรียมหน้าจัดการร้านค้า..." : "กำลังเตรียมห้องแชทและธีมบ้านเชียง..."}
           </p>

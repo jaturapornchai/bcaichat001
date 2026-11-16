@@ -115,7 +115,7 @@ class _OaTagFilterChipsState extends State<OaTagFilterChips> {
             '${widget.selected.isEmpty ? " (ผู้ติดตามทุกคน)" : ""}',
             style: TextStyle(
               fontSize: 12,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
               color: AppTheme.brandDeep,
             ),
           ),
@@ -313,11 +313,7 @@ class _OaCustomersSectionState extends State<OaCustomersSection> {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppTheme.cardBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.borderSubtle),
-      ),
+      decoration: AppTheme.surface(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -331,7 +327,7 @@ class _OaCustomersSectionState extends State<OaCustomersSection> {
           if (_status != null) ...[
             Text(
               _status!,
-              style: const TextStyle(fontSize: 12, color: AppTheme.workBlue),
+              style: const TextStyle(fontSize: 12, color: Color(0xFF027A48)),
             ),
             const SizedBox(height: 6),
           ],
@@ -452,9 +448,10 @@ class _OaCustomersSectionState extends State<OaCustomersSection> {
         margin: const EdgeInsets.only(bottom: 4),
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: AppTheme.surfaceBg,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppTheme.borderSubtle),
+          color: Colors.transparent,
+          border: Border(
+            bottom: BorderSide(color: AppTheme.hairline),
+          ),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -478,13 +475,14 @@ class _OaCustomersSectionState extends State<OaCustomersSection> {
                         c.name,
                         style: const TextStyle(
                           fontSize: 12.5,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.slateDark,
                         ),
                       ),
                       for (final t in c.tags.take(3))
                         PillBadge(
                           text: t,
-                          backgroundColor: AppTheme.brandSoft,
+                          backgroundColor: AppTheme.tintStrong,
                           textColor: AppTheme.brandDeep,
                         ),
                     ],
@@ -508,8 +506,8 @@ class _OaCustomersSectionState extends State<OaCustomersSection> {
             PillBadge(
               text: c.isFollowing ? 'ติดตามอยู่' : 'เลิกติดตาม',
               backgroundColor: c.isFollowing
-                  ? AppTheme.brandSoft
-                  : const Color(0xFFF1F5F9),
+                  ? AppTheme.tintStrong
+                  : AppTheme.panelBg,
               textColor: c.isFollowing
                   ? AppTheme.brandDeep
                   : AppTheme.slateMuted,
@@ -570,7 +568,7 @@ class _OaCustomersSectionState extends State<OaCustomersSection> {
                     c.name,
                     style: const TextStyle(
                       fontSize: 14,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                   Text(
@@ -648,7 +646,7 @@ class _OaCustomersSectionState extends State<OaCustomersSection> {
           Text(
             'คูปอง: รับแล้ว ${d.couponsClaimed} · ใช้แล้ว ${d.couponsRedeemed}'
             ' · ข่าวที่ได้รับ ${d.broadcastsReceived}',
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 4),
           if (d.coupons.isEmpty)
@@ -666,8 +664,8 @@ class _OaCustomersSectionState extends State<OaCustomersSection> {
                     PillBadge(
                       text: cp.isRedeemed ? 'ใช้แล้ว' : 'ยังไม่ใช้',
                       backgroundColor: cp.isRedeemed
-                          ? const Color(0xFFF1F5F9)
-                          : AppTheme.brandSoft,
+                          ? AppTheme.panelBg
+                          : AppTheme.tintStrong,
                       textColor: cp.isRedeemed
                           ? AppTheme.slateMuted
                           : AppTheme.brandDeep,
@@ -686,7 +684,7 @@ class _OaCustomersSectionState extends State<OaCustomersSection> {
           const SizedBox(height: 6),
           const Text(
             'ข่าวสารที่ลูกค้าได้รับ',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 4),
           if (d.broadcasts.isEmpty)

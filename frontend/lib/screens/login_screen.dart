@@ -362,8 +362,8 @@ class _LoginScreenState extends State<LoginScreen> {
               constraints: const BoxConstraints(maxWidth: 440),
               child: GlassPanel(
                 padding: EdgeInsets.all(compact ? 14 : 18),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppTheme.borderSubtle),
+                borderRadius: BorderRadius.circular(AppTheme.radiusXl),
+                border: Border.all(color: AppTheme.hairline),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   mainAxisSize: MainAxisSize.min,
@@ -502,11 +502,9 @@ class _LoginScreenState extends State<LoginScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
             decoration: BoxDecoration(
-              color: AppTheme.dangerRed.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: AppTheme.dangerRed.withValues(alpha: 0.35),
-              ),
+              color: const Color(0xFFFEF3F2),
+              borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+              border: Border.all(color: const Color(0xFFFECDCA)),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -534,11 +532,7 @@ class _LoginScreenState extends State<LoginScreen> {
         if (_infoMessage != null) ...[
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-            decoration: BoxDecoration(
-              color: AppTheme.brandSoft.withValues(alpha: 0.55),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppTheme.borderSubtle),
-            ),
+            decoration: AppTheme.well(radius: AppTheme.radiusSm),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -553,7 +547,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     _infoMessage!,
                     style: const TextStyle(
                       fontSize: 12.5,
-                      color: AppTheme.slateDark,
+                      color: AppTheme.slateBody,
                     ),
                   ),
                 ),
@@ -590,7 +584,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ? null
                     : _handleRequestOtp,
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppTheme.brandPrimary,
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                 ),
                 child: Text(
@@ -599,7 +592,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       : (challenge == null ? 'ขอ OTP' : 'ส่งใหม่'),
                   style: const TextStyle(
                     fontSize: 13.5,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
@@ -620,7 +613,7 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               PillBadge(
                 text: 'Ref: ${challenge.refCode}',
-                backgroundColor: AppTheme.brandSoft,
+                backgroundColor: AppTheme.tintStrong,
                 textColor: AppTheme.brandDeep,
               ),
               const SizedBox(width: 8),
@@ -640,6 +633,10 @@ class _LoginScreenState extends State<LoginScreen> {
             controller: _otpController,
             keyboardType: TextInputType.number,
             textInputAction: TextInputAction.next,
+            style: const TextStyle(
+              letterSpacing: 2,
+              fontFeatures: [FontFeature.tabularFigures()],
+            ),
             decoration: const InputDecoration(
               labelText: 'รหัส OTP 6 หลัก',
               prefixIcon: Icon(Icons.pin_outlined, size: 18),
@@ -670,9 +667,6 @@ class _LoginScreenState extends State<LoginScreen> {
             height: 42,
             child: FilledButton.icon(
               onPressed: _isLoading ? null : _handleVerifyOtp,
-              style: FilledButton.styleFrom(
-                backgroundColor: AppTheme.brandDeep,
-              ),
               icon: _isLoading
                   ? const SizedBox(
                       width: 16,
@@ -695,11 +689,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (_pollingGoogle) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: AppTheme.surfaceBg,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppTheme.borderSubtle),
-        ),
+        decoration: AppTheme.well(),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -736,7 +726,7 @@ class _LoginScreenState extends State<LoginScreen> {
           _authConfig.googleEnabled
               ? 'เข้าสู่ระบบด้วย Google'
               : 'เข้าสู่ระบบด้วย Google (รอตั้งค่า)',
-          style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
+          style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500),
         ),
       ),
     );
@@ -768,11 +758,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return Container(
       key: const Key('quick-test-users-box'),
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceBg,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.borderSubtle),
-      ),
+      decoration: AppTheme.well(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
@@ -783,7 +769,7 @@ class _LoginScreenState extends State<LoginScreen> {
               Icon(
                 Icons.flash_on_rounded,
                 size: 16,
-                color: AppTheme.brandPrimary,
+                color: AppTheme.slateMuted,
               ),
               const SizedBox(width: 6),
               Expanded(
@@ -792,9 +778,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.slateDark,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.slateMuted,
+                    letterSpacing: 0.2,
                   ),
                 ),
               ),
@@ -832,7 +819,6 @@ class _LoginScreenState extends State<LoginScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppTheme.borderSubtle),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
@@ -858,7 +844,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 13,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w600,
                               color: AppTheme.slateDark,
                             ),
                           ),
@@ -873,8 +859,8 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               decoration: BoxDecoration(
                                 color: isAdmin
-                                    ? AppTheme.brandSoft
-                                    : const Color(0xFFF6F3F2),
+                                    ? AppTheme.tintStrong
+                                    : AppTheme.panelBg,
                                 borderRadius: BorderRadius.circular(999),
                               ),
                               child: Text(
@@ -883,7 +869,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontSize: 10,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w500,
                                   color: isAdmin
                                       ? AppTheme.brandDeep
                                       : AppTheme.slateMuted,
@@ -911,7 +897,7 @@ class _LoginScreenState extends State<LoginScreen> {
               Icon(
                 Icons.login_rounded,
                 size: 16,
-                color: AppTheme.brandPrimary,
+                color: AppTheme.slateMuted,
               ),
             ],
           ),
@@ -949,7 +935,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 11.5,
-                    fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                    fontWeight: active ? FontWeight.w600 : FontWeight.w500,
                     color: active ? AppTheme.brandPrimary : AppTheme.slateMuted,
                   ),
                 ),
@@ -989,11 +975,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildBootstrapSection() {
     return Container(
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.borderSubtle),
-      ),
+      decoration: AppTheme.well(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1033,9 +1015,6 @@ class _LoginScreenState extends State<LoginScreen> {
             height: 40,
             child: FilledButton(
               onPressed: _isLoading ? null : _handleBootstrapAdmin,
-              style: FilledButton.styleFrom(
-                backgroundColor: AppTheme.brandDeep,
-              ),
               child: const Text('ตั้งค่าและเข้าสู่ระบบเจ้าของ'),
             ),
           ),
@@ -1047,11 +1026,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildServerConfigSection() {
     return Container(
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.borderSubtle),
-      ),
+      decoration: AppTheme.well(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1083,9 +1058,6 @@ class _LoginScreenState extends State<LoginScreen> {
               const Spacer(),
               FilledButton(
                 onPressed: () => _saveServerUrl(),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppTheme.brandPrimary,
-                ),
                 child: const Text('บันทึก'),
               ),
             ],
@@ -1394,7 +1366,7 @@ class _InlineAccountRecoveryCardState
                       'กู้คืนบัญชี / เปลี่ยนเบอร์หรือ Gmail',
                       style: TextStyle(
                         fontSize: 13.5,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                         color: AppTheme.brandDeep,
                       ),
                     ),
@@ -1421,7 +1393,7 @@ class _InlineAccountRecoveryCardState
                     style: TextStyle(fontSize: 12),
                   ),
                   selected: _tab == 'phone',
-                  selectedColor: AppTheme.brandSoft,
+                  selectedColor: AppTheme.tintStrong,
                   visualDensity: VisualDensity.compact,
                   onSelected: (_) => setState(() {
                     _tab = 'phone';
@@ -1437,7 +1409,7 @@ class _InlineAccountRecoveryCardState
                     style: TextStyle(fontSize: 12),
                   ),
                   selected: _tab == 'google',
-                  selectedColor: AppTheme.brandSoft,
+                  selectedColor: AppTheme.tintStrong,
                   visualDensity: VisualDensity.compact,
                   onSelected: (_) => setState(() {
                     _tab = 'google';
@@ -1460,7 +1432,7 @@ class _InlineAccountRecoveryCardState
               const SizedBox(height: 6),
               Text(
                 _infoMsg!,
-                style: const TextStyle(fontSize: 12, color: AppTheme.workBlue),
+                style: const TextStyle(fontSize: 12, color: AppTheme.slateBody),
               ),
             ],
             const SizedBox(height: 8),
@@ -1496,8 +1468,8 @@ class _InlineAccountRecoveryCardState
                     'ยืนยัน Gmail เดิมแล้ว: $_verifiedOauthEmail',
                     style: const TextStyle(
                       fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.workBlue,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF067647),
                     ),
                   )
                 else
@@ -1550,10 +1522,7 @@ class _InlineAccountRecoveryCardState
                     onPressed: (_busy || _otpCooldown > 0)
                         ? null
                         : () => _requestRecoveryOtp(isNewPhone: true),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppTheme.brandPrimary,
-                    ),
-                    child: Text(_otpCooldown > 0 ? '$_otpCooldown วิ' : 'ขอ OTP'),
+                                        child: Text(_otpCooldown > 0 ? '$_otpCooldown วิ' : 'ขอ OTP'),
                   ),
                 ],
               ),
@@ -1581,10 +1550,7 @@ class _InlineAccountRecoveryCardState
               ),
               FilledButton(
                 onPressed: _busy ? null : _submitRecoverPhone,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppTheme.brandDeep,
-                ),
-                child: const Text('ยืนยันเปลี่ยนเบอร์และเข้าสู่ระบบ'),
+                                child: const Text('ยืนยันเปลี่ยนเบอร์และเข้าสู่ระบบ'),
               ),
             ] else ...[
               Wrap(
@@ -1632,10 +1598,7 @@ class _InlineAccountRecoveryCardState
                       onPressed: (_busy || _otpCooldown > 0)
                           ? null
                           : () => _requestRecoveryOtp(isNewPhone: false),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppTheme.brandPrimary,
-                      ),
-                      child: Text(
+                                            child: Text(
                         _otpCooldown > 0 ? '$_otpCooldown วิ' : 'ขอ OTP',
                       ),
                     ),
@@ -1677,8 +1640,8 @@ class _InlineAccountRecoveryCardState
                   'ยืนยัน Gmail ใหม่แล้ว: $_verifiedOauthEmail',
                   style: const TextStyle(
                     fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.workBlue,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF067647),
                   ),
                 )
               else
@@ -1706,10 +1669,7 @@ class _InlineAccountRecoveryCardState
               ),
               FilledButton(
                 onPressed: _busy ? null : _submitRecoverGoogle,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppTheme.brandDeep,
-                ),
-                child: const Text('ยืนยันเปลี่ยน Gmail และเข้าสู่ระบบ'),
+                                child: const Text('ยืนยันเปลี่ยน Gmail และเข้าสู่ระบบ'),
               ),
             ],
           ],
@@ -1718,18 +1678,14 @@ class _InlineAccountRecoveryCardState
     if (widget.embedded) {
       return Container(
         padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: AppTheme.surfaceBg,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppTheme.borderSubtle),
-        ),
+        decoration: AppTheme.well(),
         child: body,
       );
     }
     return GlassPanel(
       padding: const EdgeInsets.all(10),
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: AppTheme.borderSubtle),
+      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+      border: Border.all(color: AppTheme.hairline),
       child: body,
     );
   }

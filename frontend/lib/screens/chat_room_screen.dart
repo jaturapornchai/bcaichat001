@@ -1156,7 +1156,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           backgroundColor: AppTheme.dangerRed,
           content: Text(
             'ลบข้อความและทำลายไฟล์ออกจากเซิร์ฟเวอร์เรียบร้อยแล้ว',
-            style: TextStyle(fontWeight: FontWeight.w700),
+            style: TextStyle(fontWeight: FontWeight.w600),
           ),
         ),
       );
@@ -1581,7 +1581,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: Colors.white,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),
@@ -1640,7 +1640,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   }
 
   Widget _buildRoomHeader() {
-    const iconIdle = Color(0xFFE2E8F0);
+    final dark = ApiService.instance.chatTheme.isDark;
+    final iconIdle = dark ? const Color(0xFFE2E8F0) : AppTheme.slateBody;
     final subtitleText = _conversation.isGroup
         ? '${_conversation.memberCount} สมาชิก · ${_conversation.folderLabel}'
         : _conversation.isOa
@@ -1655,12 +1656,19 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         return Container(
           height: 48,
           padding: EdgeInsets.symmetric(horizontal: isCompact ? 4 : 10),
-          decoration: const BoxDecoration(
-            gradient: AppTheme.navyGradient,
-            border: Border(
-              bottom: BorderSide(color: Color(0x1FFFFFFF), width: 0.8),
-            ),
-          ),
+          decoration: dark
+              ? const BoxDecoration(
+                  gradient: AppTheme.navyGradient,
+                  border: Border(
+                    bottom: BorderSide(color: Color(0x1FFFFFFF), width: 0.8),
+                  ),
+                )
+              : BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.92),
+                  border: const Border(
+                    bottom: BorderSide(color: AppTheme.hairline),
+                  ),
+                ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -1668,7 +1676,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 IconButton(
                   onPressed: () => Navigator.of(context).pop(),
                   icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
-                  color: Colors.white,
+                  color: dark ? Colors.white : AppTheme.slateBody,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints.tightFor(
                     width: 36,
@@ -1700,21 +1708,23 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: Colors.white,
+                              color: dark ? Colors.white : AppTheme.slateDark,
                               fontSize: isCompact ? 15 : 16,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w600,
                               height: 1.25,
                             ),
                           ),
                         ),
                         if (_conversation.isEffectivelyMuted) ...[
                           const SizedBox(width: 5),
-                          const Tooltip(
+                          Tooltip(
                             message: 'ปิดเสียงแจ้งเตือนอยู่',
                             child: Icon(
                               Icons.notifications_off_outlined,
                               size: 14,
-                              color: Color(0xCCFFFFFF),
+                              color: dark
+                                  ? const Color(0xCCFFFFFF)
+                                  : AppTheme.slateMuted,
                             ),
                           ),
                         ],
@@ -1724,8 +1734,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       subtitleText,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFFCBD5E1),
+                      style: TextStyle(
+                        color: dark
+                            ? const Color(0xFFCBD5E1)
+                            : AppTheme.slateMuted,
                         fontSize: 11,
                         height: 1.25,
                       ),
@@ -1748,7 +1760,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                     conversationId: _conversation.id,
                     callType: 'audio',
                   ),
-                  color: iconIdle,
+                  color: dark ? iconIdle : AppTheme.brandPrimary,
                 ),
                 _headerIconButton(
                   icon: Icons.videocam_rounded,
@@ -1757,20 +1769,20 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                     conversationId: _conversation.id,
                     callType: 'video',
                   ),
-                  color: iconIdle,
+                  color: dark ? iconIdle : AppTheme.brandPrimary,
                 ),
               ],
               _headerIconButton(
                 icon: Icons.auto_awesome_rounded,
                 tooltip: 'AI สรุปแชท',
                 onPressed: _openAiSummarizeModal,
-                color: AppTheme.goldClay,
+                color: dark ? AppTheme.goldClay : AppTheme.brandPrimary,
               ),
               _headerIconButton(
                 icon: Icons.menu_rounded,
                 tooltip: 'เมนูห้อง',
                 onPressed: _openGroupManagementSheet,
-                color: Colors.white,
+                color: dark ? Colors.white : AppTheme.slateBody,
               ),
             ],
           ),
@@ -1781,15 +1793,21 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     return widget.isEmbedded
         ? header
         : ColoredBox(
-            color: AppTheme.slateDark,
+            color: dark ? AppTheme.slateDark : Colors.white,
             child: SafeArea(bottom: false, child: header),
           );
   }
 
   Widget _buildInRoomSearchBar() {
+    final dark = ApiService.instance.chatTheme.isDark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      color: AppTheme.slateNavy,
+      decoration: BoxDecoration(
+        color: dark ? AppTheme.slateNavy : Colors.white.withValues(alpha: 0.92),
+        border: dark
+            ? null
+            : const Border(bottom: BorderSide(color: AppTheme.hairline)),
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -1812,7 +1830,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 _roomSearchCtrl.clear();
               });
             },
-            child: const Text('ปิด', style: TextStyle(color: Colors.white)),
+            child: Text(
+              'ปิด',
+              style: TextStyle(color: dark ? Colors.white : AppTheme.slateBody),
+            ),
           ),
         ],
       ),
@@ -1839,9 +1860,6 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             decoration: BoxDecoration(
               color: const Color(0xFFFEF3C7),
               borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-              border: Border.all(
-                color: AppTheme.goldPin.withValues(alpha: 0.4),
-              ),
             ),
             child: const Icon(
               Icons.campaign_rounded,
@@ -1862,7 +1880,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       'ประกาศปักหมุดประจำห้อง',
                       style: TextStyle(
                         fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                         color: AppTheme.warningAmber,
                         height: 1.3,
                       ),
@@ -1888,7 +1906,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 13,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w500,
                     color: AppTheme.slateDark,
                     height: 1.35,
                   ),
@@ -1919,15 +1937,19 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           key: const Key('chat-day-separator'),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
           decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.30),
+            color: ApiService.instance.chatTheme.isDark
+                ? Colors.black.withValues(alpha: 0.30)
+                : Colors.white.withValues(alpha: 0.8),
             borderRadius: BorderRadius.circular(999),
           ),
           child: Text(
             label,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: ApiService.instance.chatTheme.isDark
+                  ? Colors.white
+                  : AppTheme.slateMuted,
               fontSize: 11,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w500,
               height: 1.3,
             ),
           ),
@@ -1949,9 +1971,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.30),
+              color: themeMode.isDark
+                  ? Colors.black.withValues(alpha: 0.30)
+                  : Colors.white.withValues(alpha: 0.8),
               borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -1968,10 +1991,12 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                     '${isMe ? "คุณ" : msg.senderName} ยกเลิกข้อความและทำลายไฟล์แล้ว',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: themeMode.isDark
+                          ? Colors.white
+                          : AppTheme.slateMuted,
                       fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w500,
                       height: 1.35,
                     ),
                   ),
@@ -2005,7 +2030,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     final nameColor = themeMode.isDark
         ? const Color(0xFFE2E8F0)
         : onLight
-        ? AppTheme.slateDark
+        ? AppTheme.brandDeep
         : Colors.white;
 
     final metaColumn = Column(
@@ -2036,9 +2061,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                     readLabel,
                     style: TextStyle(
                       fontSize: 10.5,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w500,
                       color: readColor,
                       height: 1.3,
+                      fontFeatures: const [FontFeature.tabularFigures()],
                       decoration: _conversation.isGroup && msg.readBy.isNotEmpty
                           ? TextDecoration.underline
                           : null,
@@ -2050,7 +2076,12 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           ),
         Text(
           msg.isEdited ? 'แก้ไขแล้ว · $timeStr' : timeStr,
-          style: TextStyle(fontSize: 10.5, color: metaText, height: 1.3),
+          style: TextStyle(
+            fontSize: 10.5,
+            color: metaText,
+            height: 1.3,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
         ),
       ],
     );
@@ -2101,7 +2132,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 12,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                         color: nameColor,
                         height: 1.3,
                       ),
@@ -2128,8 +2159,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 if (msg.isForwarded)
                   PillBadge(
                     text: '↪ ส่งต่อจาก ${msg.forwardedFrom}',
-                    backgroundColor: const Color(0xFFE0F2FE),
-                    textColor: const Color(0xFF0369A1),
+                    // ป้ายบอกที่มา ไม่ใช่การเตือน ใช้โทนกลางเข้ากับทุกธีม
+                    backgroundColor: AppTheme.slateDark.withValues(alpha: 0.08),
+                    textColor: AppTheme.slateBody,
                   ),
                 if (msg.isExpiring)
                   const PillBadge(
@@ -2284,7 +2316,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 11.5,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -2297,7 +2329,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       style: TextStyle(
                         color: Color(0xFFFDE68A),
                         fontSize: 11,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -2324,7 +2356,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       'เนื้อหาความลับถูกซ่อนไว้เพื่อความปลอดภัย',
                       style: TextStyle(
                         fontSize: 13,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                         color: AppTheme.slateDark,
                       ),
                     ),
@@ -2335,7 +2367,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       style: const TextStyle(
                         fontSize: 11.5,
                         color: AppTheme.dangerRed,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
@@ -2357,7 +2389,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       'เปิดอ่านโดย ${currentUser?.email ?? ""}',
                       style: TextStyle(
                         fontSize: 10,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         color: AppTheme.dangerRed.withValues(alpha: 0.45),
                       ),
                     ),
@@ -2396,9 +2428,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     final canRecall = _selectedActionCanRecall;
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-      decoration: const BoxDecoration(
-        color: Color(0xFFFDF8F6),
-        border: Border(top: BorderSide(color: AppTheme.borderSubtle)),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.94),
+        border: const Border(top: BorderSide(color: AppTheme.hairline)),
+        boxShadow: AppTheme.shadowUp,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -2411,7 +2444,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 'จัดการข้อความ:',
                 style: TextStyle(
                   fontSize: 12,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
                   color: AppTheme.slateDark,
                 ),
               ),
@@ -2481,10 +2514,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   msg.type == 'text' &&
                   !msg.isUnsent) ...[
                 ActionChip(
-                  avatar: const Icon(
+                  avatar: Icon(
                     Icons.edit_rounded,
                     size: 15,
-                    color: AppTheme.workBlue,
+                    color: AppTheme.brandPrimary,
                   ),
                   label: const Text('แก้ไข', style: TextStyle(fontSize: 12)),
                   onPressed: () {
@@ -2551,10 +2584,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   !msg.isUnsent &&
                   (msg.taskStatus ?? 'open') == 'open') ...[
                 ActionChip(
-                  avatar: const Icon(
+                  avatar: Icon(
                     Icons.pan_tool_alt_rounded,
                     size: 15,
-                    color: AppTheme.workBlue,
+                    color: AppTheme.brandPrimary,
                   ),
                   label: const Text('อาสาช่วย', style: TextStyle(fontSize: 12)),
                   onPressed: () {
@@ -2584,7 +2617,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                     style: TextStyle(
                       fontSize: 12,
                       color: AppTheme.dangerRed,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   onPressed: () {
@@ -2603,7 +2636,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                     style: TextStyle(
                       fontSize: 12,
                       color: Color(0xFF991B1B),
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   onPressed: () {
@@ -2616,6 +2649,20 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  /// Premium bubble shape: radius 18 with one tight corner (6) on the sender side.
+  BoxDecoration _bubbleDecoration(bool isMe) {
+    return BoxDecoration(
+      color: isMe ? AppTheme.sentBubble : AppTheme.receivedBubble,
+      borderRadius: BorderRadius.only(
+        topLeft: Radius.circular(isMe ? AppTheme.radiusLg : 6),
+        topRight: Radius.circular(isMe ? 6 : AppTheme.radiusLg),
+        bottomLeft: const Radius.circular(AppTheme.radiusLg),
+        bottomRight: const Radius.circular(AppTheme.radiusLg),
+      ),
+      boxShadow: isMe ? null : AppTheme.shadowSm,
     );
   }
 
@@ -2646,23 +2693,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       default:
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: isMe ? null : AppTheme.receivedBubble,
-            gradient: isMe
-                ? LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [const Color(0xFFFEECE8), AppTheme.sentBubble],
-                  )
-                : null,
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(isMe ? 14 : 5),
-              topRight: Radius.circular(isMe ? 5 : 14),
-              bottomLeft: const Radius.circular(14),
-              bottomRight: const Radius.circular(14),
-            ),
-            boxShadow: AppTheme.shadowSm,
-          ),
+          decoration: _bubbleDecoration(isMe),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -2687,8 +2718,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(8),
+        color: AppTheme.brandPrimary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
         border: Border(left: BorderSide(color: AppTheme.brandDeep, width: 3)),
       ),
       child: Column(
@@ -2698,7 +2729,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             'ตอบกลับ ${reply.senderName}',
             style: TextStyle(
               fontSize: 11,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
               color: AppTheme.brandDeep,
             ),
           ),
@@ -2736,7 +2767,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 : (matched['label'] ?? ''),
             style: const TextStyle(
               fontSize: 12.5,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
               color: AppTheme.slateDark,
             ),
           ),
@@ -2750,17 +2781,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     final fileName = msg.attachment?.fileName ?? msg.cleanContent;
 
     return Container(
-      decoration: BoxDecoration(
-        color: isMe ? AppTheme.sentBubble : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+      decoration: _bubbleDecoration(isMe),
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2806,7 +2827,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                     '$fileName · เก็บถาวร (ไม่หมดอายุ)',
                     style: TextStyle(
                       fontSize: 11,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w500,
                       color: AppTheme.brandDeep,
                     ),
                   ),
@@ -2834,17 +2855,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: isMe ? AppTheme.sentBubble : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 5,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+      decoration: _bubbleDecoration(isMe),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2856,12 +2867,12 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: AppTheme.workBlue.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
+                  color: AppTheme.tintStrong,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.insert_drive_file_rounded,
-                  color: AppTheme.workBlue,
+                  color: AppTheme.brandPrimary,
                   size: 22,
                 ),
               ),
@@ -2874,7 +2885,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       fileName,
                       style: const TextStyle(
                         fontSize: 13.5,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                         color: AppTheme.slateDark,
                       ),
                     ),
@@ -2893,7 +2904,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                         const SizedBox(width: 6),
                         PillBadge(
                           text: 'เก็บถาวร ไม่หมดอายุ',
-                          backgroundColor: AppTheme.brandSoft,
+                          backgroundColor: AppTheme.tintStrong,
                           textColor: AppTheme.brandDeep,
                           icon: Icons.verified_rounded,
                         ),
@@ -2964,7 +2975,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                     style: TextStyle(
                       color: fg,
                       fontSize: 11.5,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                       height: 1.3,
                     ),
                   ),
@@ -2991,7 +3002,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         icon: Icons.check_circle_rounded,
         label: 'รับช่วยโดย: $actor • กดเมื่อเสร็จ',
         fg: AppTheme.brandDeep,
-        bg: AppTheme.brandSoft,
+        bg: AppTheme.tintStrong,
         border: AppTheme.brandPrimary,
         onTap: () => _handleTaskAction(msg, 'done'),
       );
@@ -3000,9 +3011,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     return chip(
       icon: Icons.pan_tool_alt_rounded,
       label: 'อาสาช่วยเรื่องนี้',
-      fg: AppTheme.workBlue,
+      fg: AppTheme.brandPrimary,
       bg: Colors.white.withValues(alpha: 0.95),
-      border: AppTheme.borderSubtle,
+      border: AppTheme.hairline,
       onTap: () => _handleTaskAction(msg, 'accept'),
     );
   }
@@ -3025,11 +3036,11 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
               color: reacted
-                  ? AppTheme.brandSoft
+                  ? AppTheme.tintStrong
                   : Colors.white.withValues(alpha: 0.94),
               borderRadius: BorderRadius.circular(999),
               border: Border.all(
-                color: reacted ? AppTheme.brandPrimary : AppTheme.borderSubtle,
+                color: reacted ? AppTheme.brandPrimary : AppTheme.hairline,
               ),
               boxShadow: AppTheme.shadowSm,
             ),
@@ -3037,7 +3048,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               '${e.key} ${e.value.length}',
               style: TextStyle(
                 fontSize: 11.5,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w600,
                 color: reacted ? AppTheme.brandDeep : AppTheme.slateDark,
               ),
             ),
@@ -3095,11 +3106,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: isMe ? AppTheme.sentBubble : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: AppTheme.shadowSm,
-      ),
+      decoration: _bubbleDecoration(isMe),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -3111,7 +3118,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: AppTheme.brandPrimary,
+                gradient: AppTheme.primaryGradient,
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -3132,7 +3139,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 13,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     color: AppTheme.slateDark,
                   ),
                 ),
@@ -3142,6 +3149,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   style: const TextStyle(
                     fontSize: 11,
                     color: AppTheme.slateMuted,
+                    fontFeatures: [FontFeature.tabularFigures()],
                   ),
                 ),
               ],
@@ -3155,12 +3163,12 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: _audioPlaybackRate == 1.0
-                    ? AppTheme.surfaceBg
-                    : AppTheme.brandSoft,
+                    ? AppTheme.panelBg
+                    : AppTheme.tintStrong,
                 borderRadius: BorderRadius.circular(999),
                 border: Border.all(
                   color: _audioPlaybackRate == 1.0
-                      ? AppTheme.borderSubtle
+                      ? AppTheme.hairline
                       : AppTheme.brandPrimary,
                 ),
               ),
@@ -3168,7 +3176,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 rateText,
                 style: TextStyle(
                   fontSize: 11,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   color: _audioPlaybackRate == 1.0
                       ? AppTheme.slateDark
                       : AppTheme.brandDeep,
@@ -3193,7 +3201,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.96),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppTheme.borderSubtle),
+        border: Border.all(color: AppTheme.hairline),
         boxShadow: AppTheme.shadowSm,
       ),
       child: Row(
@@ -3209,7 +3217,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   : 'อ่านแล้ว (${readers.length}): ${readers.join(", ")}',
               style: const TextStyle(
                 fontSize: 11.5,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w500,
                 color: AppTheme.slateDark,
               ),
             ),
@@ -3243,12 +3251,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     return Container(
       width: 270,
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: isMe ? const Color(0xFFFFF5F3) : Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.borderSubtle),
-        boxShadow: AppTheme.shadowSm,
-      ),
+      decoration: _bubbleDecoration(isMe),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -3259,8 +3262,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: AppTheme.brandSoft,
-                  borderRadius: BorderRadius.circular(9),
+                  color: AppTheme.tintStrong,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusSm),
                 ),
                 child: Icon(
                   Icons.location_on_rounded,
@@ -3279,7 +3282,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 13.5,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: AppTheme.slateDark,
                       ),
                     ),
@@ -3330,7 +3333,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   icon: const Icon(Icons.directions_rounded, size: 15),
                   label: const Text('นำทาง Maps', style: TextStyle(fontSize: 12)),
                   style: FilledButton.styleFrom(
-                    backgroundColor: AppTheme.brandPrimary,
+                    backgroundColor: AppTheme.tintStrong,
+                    foregroundColor: AppTheme.brandDeep,
+                    elevation: 0,
+                    shadowColor: Colors.transparent,
                     visualDensity: VisualDensity.compact,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8,
@@ -3380,12 +3386,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     return Container(
       width: 256,
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: isMe ? const Color(0xFFFFF5F3) : Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.borderSubtle),
-        boxShadow: AppTheme.shadowSm,
-      ),
+      decoration: _bubbleDecoration(isMe),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -3408,7 +3409,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 13.5,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: AppTheme.slateDark,
                       ),
                     ),
@@ -3419,7 +3420,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 11.5,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w500,
                           color: AppTheme.brandDeep,
                         ),
                       ),
@@ -3441,7 +3442,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           if (isSelf)
             PillBadge(
               text: 'นามบัตรของคุณ',
-              backgroundColor: AppTheme.brandSoft,
+              backgroundColor: AppTheme.tintStrong,
               textColor: AppTheme.brandDeep,
             )
           else if (userId.isNotEmpty || bcId.isNotEmpty)
@@ -3498,7 +3499,6 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   style: const TextStyle(fontSize: 12),
                 ),
                 style: FilledButton.styleFrom(
-                  backgroundColor: AppTheme.brandPrimary,
                   visualDensity: VisualDensity.compact,
                   padding: const EdgeInsets.symmetric(vertical: 6),
                 ),
@@ -3520,12 +3520,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     return Container(
       width: 274,
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: isMe ? const Color(0xFFFFF5F3) : Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.borderSubtle),
-        boxShadow: AppTheme.shadowSm,
-      ),
+      decoration: _bubbleDecoration(isMe),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -3541,7 +3536,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 13.5,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     color: AppTheme.slateDark,
                   ),
                 ),
@@ -3564,7 +3559,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                     collapsed ? 'ดูผล (${entries.length})' : 'ซ่อนผล',
                     style: TextStyle(
                       fontSize: 11,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                       color: AppTheme.brandPrimary,
                     ),
                   ),
@@ -3582,11 +3577,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                     horizontal: 8,
                     vertical: 5,
                   ),
-                  decoration: BoxDecoration(
-                    color: AppTheme.surfaceBg,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppTheme.borderSubtle),
-                  ),
+                  decoration: AppTheme.well(radius: AppTheme.radiusSm),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
@@ -3597,7 +3588,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontSize: 12,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w600,
                             color: AppTheme.slateDark,
                           ),
                         ),
@@ -3617,7 +3608,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: AppTheme.brandSoft,
+                            color: AppTheme.tintStrong,
                             borderRadius: BorderRadius.circular(999),
                           ),
                           child: Text(
@@ -3626,7 +3617,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 11.5,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w600,
                               color: AppTheme.brandDeep,
                             ),
                           ),
@@ -3680,7 +3671,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             color: isMe
                 ? Colors.white.withValues(alpha: 0.72)
                 : accent.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
           ),
           alignment: Alignment.center,
           child: Icon(icon, size: 18, color: accent),
@@ -3695,7 +3686,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 isVideo ? 'วิดีโอคอล' : 'โทรด้วยเสียง',
                 style: const TextStyle(
                   fontSize: 13,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
                   color: AppTheme.slateDark,
                 ),
               ),
@@ -3703,7 +3694,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 statusLabel,
                 style: TextStyle(
                   fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w500,
                   color: isMissed ? AppTheme.dangerRed : AppTheme.slateMuted,
                 ),
               ),
@@ -3721,15 +3712,14 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
               decoration: BoxDecoration(
-                color: AppTheme.brandSoft,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppTheme.borderSubtle),
+                color: AppTheme.tintStrong,
+                borderRadius: BorderRadius.circular(AppTheme.radiusSm),
               ),
               child: Text(
                 'โทรกลับ',
                 style: TextStyle(
                   fontSize: 11,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
                   color: AppTheme.brandDeep,
                 ),
               ),
@@ -3768,9 +3758,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     final cols = menu.length <= 2 ? menu.length : (menu.length <= 4 ? 2 : 3);
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
-      decoration: const BoxDecoration(
-        color: Color(0xFFFAF6F5),
-        border: Border(top: BorderSide(color: AppTheme.borderSubtle)),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.94),
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(AppTheme.radiusLg),
+        ),
+        border: const Border(top: BorderSide(color: AppTheme.hairline)),
+        boxShadow: AppTheme.shadowUp,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -3792,7 +3786,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 12,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     color: AppTheme.slateDark,
                   ),
                 ),
@@ -3810,7 +3804,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                         'ซ่อนเมนู',
                         style: TextStyle(
                           fontSize: 11,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w500,
                           color: AppTheme.slateMuted,
                         ),
                       ),
@@ -3839,9 +3833,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                     width: itemW,
                     child: Material(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                       child: InkWell(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                         onTap: () => _triggerRichMenuItem(item),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -3849,8 +3843,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                             vertical: 7,
                           ),
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: AppTheme.borderSubtle),
+                            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                            border: Border.all(color: AppTheme.hairline),
                           ),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.center,
@@ -3872,7 +3866,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                         fontSize: 11.5,
-                                        fontWeight: FontWeight.w700,
+                                        fontWeight: FontWeight.w600,
                                         color: AppTheme.slateDark,
                                       ),
                                     ),
@@ -3907,9 +3901,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   Widget _buildInlineOaCouponTray() {
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
-      decoration: const BoxDecoration(
-        color: Color(0xF5FFFFFF),
-        border: Border(top: BorderSide(color: AppTheme.borderSubtle)),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.94),
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(AppTheme.radiusLg),
+        ),
+        border: const Border(top: BorderSide(color: AppTheme.hairline)),
+        boxShadow: AppTheme.shadowUp,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -3931,7 +3929,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     color: AppTheme.slateDark,
                   ),
                 ),
@@ -3979,11 +3977,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       horizontal: 10,
                       vertical: 8,
                     ),
-                    decoration: BoxDecoration(
-                      color: AppTheme.surfaceBg,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppTheme.borderSubtle),
-                    ),
+                    decoration: AppTheme.well(),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
@@ -3998,7 +3992,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   fontSize: 12,
-                                  fontWeight: FontWeight.w700,
+                                  fontWeight: FontWeight.w600,
                                   color: AppTheme.slateDark,
                                 ),
                               ),
@@ -4009,7 +4003,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     fontSize: 11,
-                                    fontWeight: FontWeight.w700,
+                                    fontWeight: FontWeight.w600,
                                     color: AppTheme.brandPrimary,
                                   ),
                                 ),
@@ -4043,7 +4037,6 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                             onPressed:
                                 busy ? null : () => _claimCouponInRoom(coupon),
                             style: FilledButton.styleFrom(
-                              backgroundColor: AppTheme.brandPrimary,
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 10,
                                 vertical: 6,
@@ -4092,8 +4085,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        border: Border.all(color: AppTheme.borderSubtle),
-        boxShadow: AppTheme.shadowMd,
+        border: Border.all(color: AppTheme.hairline),
+        boxShadow: AppTheme.shadowSm,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -4107,7 +4100,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   poll.isClosed ? 'โพล (ปิดโหวตแล้ว)' : 'โพลสำรวจความคิดเห็น',
                   style: TextStyle(
                     fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     color: AppTheme.brandDeep,
                   ),
                 ),
@@ -4126,7 +4119,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             poll.question,
             style: const TextStyle(
               fontSize: 14.5,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               color: AppTheme.slateDark,
             ),
           ),
@@ -4137,7 +4130,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             return Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: InkWell(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                 onTap: poll.isClosed
                     ? null
                     : () async {
@@ -4177,10 +4170,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   decoration: BoxDecoration(
-                    color: voted ? AppTheme.brandSoft : AppTheme.surfaceBg,
-                    borderRadius: BorderRadius.circular(10),
+                    color: voted ? AppTheme.tintStrong : AppTheme.panelBg,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                     border: Border.all(
-                      color: voted ? AppTheme.brandPrimary : AppTheme.borderSubtle,
+                      color: voted ? AppTheme.brandPrimary : AppTheme.hairline,
                     ),
                   ),
                   child: Column(
@@ -4201,7 +4194,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                               opt.text,
                               style: TextStyle(
                                 fontSize: 13,
-                                fontWeight: voted ? FontWeight.w700 : FontWeight.w500,
+                                fontWeight: voted ? FontWeight.w600 : FontWeight.w500,
                                 color: AppTheme.slateDark,
                               ),
                             ),
@@ -4210,7 +4203,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                             '${opt.voterIds.length}',
                             style: TextStyle(
                               fontSize: 12,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w600,
                               color: AppTheme.brandDeep,
                             ),
                           ),
@@ -4292,17 +4285,17 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           style: OutlinedButton.styleFrom(
             minimumSize: const Size(0, 32),
             padding: const EdgeInsets.symmetric(horizontal: 4),
-            backgroundColor: active ? AppTheme.brandSoft : Colors.white,
+            backgroundColor: active ? AppTheme.tintStrong : Colors.white,
             foregroundColor: active ? AppTheme.brandDeep : AppTheme.slateBody,
             side: BorderSide(
-              color: active ? AppTheme.brandPrimary : AppTheme.borderSubtle,
+              color: active ? AppTheme.brandPrimary : AppTheme.hairline,
             ),
           ),
           child: Text(
             '$label ($count)',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
           ),
         ),
       );
@@ -4314,8 +4307,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        border: Border.all(color: AppTheme.borderSubtle),
-        boxShadow: AppTheme.shadowMd,
+        border: Border.all(color: AppTheme.hairline),
+        boxShadow: AppTheme.shadowSm,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -4328,7 +4321,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 'นัดหมาย / กิจกรรม',
                 style: TextStyle(
                   fontSize: 11.5,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
                   color: AppTheme.brandDeep,
                 ),
               ),
@@ -4339,7 +4332,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             ev.title,
             style: const TextStyle(
               fontSize: 14.5,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
               color: AppTheme.slateDark,
             ),
           ),
@@ -4401,7 +4394,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        boxShadow: AppTheme.shadowMd,
+        border: Border.all(color: AppTheme.hairline),
+        boxShadow: AppTheme.shadowSm,
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -4431,7 +4425,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 13,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -4453,7 +4447,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 10,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),
@@ -4470,7 +4464,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   title,
                   style: const TextStyle(
                     fontSize: 14.5,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     color: AppTheme.slateDark,
                     height: 1.4,
                   ),
@@ -4493,11 +4487,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       horizontal: 12,
                       vertical: 8,
                     ),
-                    decoration: BoxDecoration(
-                      color: AppTheme.surfaceBg,
-                      borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-                      border: Border.all(color: AppTheme.borderSubtle),
-                    ),
+                    decoration: AppTheme.well(),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -4516,7 +4506,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                             textAlign: TextAlign.right,
                             style: TextStyle(
                               fontSize: 12.5,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w600,
                               color: accent,
                             ),
                           ),
@@ -4549,7 +4539,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                     decoration: BoxDecoration(
                       color: isRejected
                           ? const Color(0xFFFEF2F2)
-                          : AppTheme.brandSoft,
+                          : AppTheme.tintStrong,
                       borderRadius: BorderRadius.circular(AppTheme.radiusSm),
                       border: Border.all(
                         color: isRejected
@@ -4577,7 +4567,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                                 : 'ตกลงโดย ${approvedBy.isNotEmpty ? approvedBy : "ผู้รับ"}',
                             style: TextStyle(
                               fontSize: 11.5,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w600,
                               color: isRejected
                                   ? AppTheme.dangerRed
                                   : AppTheme.brandDeep,
@@ -4598,8 +4588,6 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                             onPressed: () =>
                                 _handleApproveRichCard(msg, 'อนุมัติแล้ว'),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.brandPrimary,
-                              foregroundColor: Colors.white,
                               minimumSize: Size.zero,
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 8,
@@ -4617,7 +4605,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 12,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
@@ -4653,7 +4641,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontSize: 12,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
@@ -4717,7 +4705,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                         color: accent,
                       ),
                     ),
@@ -4734,9 +4722,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   Widget _buildStickerPickerPanel() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: const BoxDecoration(
-        color: Color(0xF5FFFFFF),
-        border: Border(top: BorderSide(color: AppTheme.borderSubtle)),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.94),
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(AppTheme.radiusLg),
+        ),
+        border: const Border(top: BorderSide(color: AppTheme.hairline)),
+        boxShadow: AppTheme.shadowUp,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -4750,7 +4742,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 'สติกเกอร์ "อารมณ์ดีดินเผาไทย" (คลิกเพื่อส่งทันที)',
                 style: TextStyle(
                   fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
                   color: AppTheme.slateDark,
                 ),
               ),
@@ -4765,18 +4757,14 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             runSpacing: 8,
             children: _thaiStickers.map((stk) {
               return InkWell(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                 onTap: () => _sendSticker(stk),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
                     vertical: 8,
                   ),
-                  decoration: BoxDecoration(
-                    color: AppTheme.surfaceBg,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppTheme.borderSubtle),
-                  ),
+                  decoration: AppTheme.well(),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -4787,7 +4775,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                         stk['label']!,
                         style: const TextStyle(
                           fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w500,
                           color: AppTheme.slateDark,
                         ),
                       ),
@@ -4805,9 +4793,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   Widget _buildInlineAttachmentTray() {
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
-      decoration: const BoxDecoration(
-        color: Color(0xF5FFFFFF),
-        border: Border(top: BorderSide(color: AppTheme.borderSubtle)),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.94),
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(AppTheme.radiusLg),
+        ),
+        border: const Border(top: BorderSide(color: AppTheme.hairline)),
+        boxShadow: AppTheme.shadowUp,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -4829,7 +4821,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 13,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     color: AppTheme.slateDark,
                   ),
                 ),
@@ -4860,10 +4852,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 },
               ),
               ActionChip(
-                avatar: const Icon(
+                avatar: Icon(
                   Icons.map_rounded,
                   size: 16,
-                  color: AppTheme.workBlue,
+                  color: AppTheme.brandPrimary,
                 ),
                 label: const Text('ส่งไฟล์แพลนเที่ยวตัวอย่าง'),
                 onPressed: () {
@@ -4922,9 +4914,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     if (target == null) return const SizedBox.shrink();
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
-      decoration: const BoxDecoration(
-        color: Color(0xFFFDF8F6),
-        border: Border(top: BorderSide(color: AppTheme.borderSubtle)),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.94),
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(AppTheme.radiusLg),
+        ),
+        border: const Border(top: BorderSide(color: AppTheme.hairline)),
+        boxShadow: AppTheme.shadowUp,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -4933,14 +4929,14 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const Icon(Icons.edit_rounded, size: 16, color: AppTheme.workBlue),
+              Icon(Icons.edit_rounded, size: 16, color: AppTheme.brandPrimary),
               const SizedBox(width: 6),
               const Expanded(
                 child: Text(
                   'แก้ไขข้อความของคุณ',
                   style: TextStyle(
                     fontSize: 12.5,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     color: AppTheme.slateDark,
                   ),
                 ),
@@ -5006,9 +5002,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         .toList();
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
-      decoration: const BoxDecoration(
-        color: Color(0xFFFDF8F6),
-        border: Border(top: BorderSide(color: AppTheme.borderSubtle)),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.94),
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(AppTheme.radiusLg),
+        ),
+        border: const Border(top: BorderSide(color: AppTheme.hairline)),
+        boxShadow: AppTheme.shadowUp,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -5026,7 +5026,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     color: AppTheme.slateDark,
                   ),
                 ),
@@ -5077,7 +5077,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                     final selected = _forwardTargetIds.contains(r.id);
                     return FilterChip(
                       selected: selected,
-                      selectedColor: AppTheme.brandSoft,
+                      selectedColor: AppTheme.tintStrong,
                       label: Text(
                         r.name,
                         maxLines: 1,
@@ -5108,9 +5108,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   Widget _buildInlineMiniAppTray() {
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
-      decoration: const BoxDecoration(
-        color: Color(0xF5FFFFFF),
-        border: Border(top: BorderSide(color: AppTheme.borderSubtle)),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.94),
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(AppTheme.radiusLg),
+        ),
+        border: const Border(top: BorderSide(color: AppTheme.hairline)),
+        boxShadow: AppTheme.shadowUp,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -5132,7 +5136,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 13,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     color: AppTheme.slateDark,
                   ),
                 ),
@@ -5180,7 +5184,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                     decoration: BoxDecoration(
                       color: AppTheme.surfaceBg,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppTheme.borderSubtle),
+                      border: Border.all(color: AppTheme.hairline),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
@@ -5190,7 +5194,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                           height: 34,
                           decoration: BoxDecoration(
                             color: color,
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(AppTheme.radiusSm),
                           ),
                           child: Icon(
                             AppTheme.resolveMiniAppIcon(app.icon),
@@ -5206,7 +5210,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 12,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w600,
                               color: AppTheme.slateDark,
                             ),
                           ),
@@ -5226,9 +5230,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   Widget _buildReplyBanner(ChatMessage replyMsg) {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 4, 6, 4),
-      decoration: const BoxDecoration(
-        color: Color(0xF5F8FAFC),
-        border: Border(top: BorderSide(color: AppTheme.borderSubtle)),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.94),
+        border: const Border(top: BorderSide(color: AppTheme.hairline)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -5242,7 +5246,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontSize: 12.5,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w500,
                 color: AppTheme.slateDark,
               ),
             ),
@@ -5294,7 +5298,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 style: TextStyle(
                   color: fg,
                   fontSize: 12,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w500,
                   height: 1.3,
                 ),
               ),
@@ -5360,9 +5364,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   Widget _buildAiMenuTray() {
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
-      decoration: const BoxDecoration(
-        color: Color(0xF5FFFFFF),
-        border: Border(top: BorderSide(color: AppTheme.borderSubtle)),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.94),
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(AppTheme.radiusLg),
+        ),
+        border: const Border(top: BorderSide(color: AppTheme.hairline)),
+        boxShadow: AppTheme.shadowUp,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -5384,7 +5392,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 13,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     color: AppTheme.slateDark,
                   ),
                 ),
@@ -5425,14 +5433,14 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 icon: Icons.tips_and_updates_rounded,
                 label: 'คิดคำตอบไวจากแชทล่าสุด',
                 fg: AppTheme.brandDeep,
-                bg: AppTheme.brandSoft,
+                bg: AppTheme.tintStrong,
               ),
               _modeChip(
                 onTap: _openAiSummarizeModal,
                 icon: Icons.summarize_rounded,
                 label: 'AI สรุปแชทสำคัญ',
-                fg: AppTheme.workBlue,
-                bg: const Color(0xFFE0E7FF),
+                fg: AppTheme.brandDeep,
+                bg: AppTheme.tintStrong,
               ),
               if (_conversation.isOa && _oaRichMenu.isNotEmpty)
                 _modeChip(
@@ -5443,7 +5451,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   icon: Icons.grid_view_rounded,
                   label: _showOaRichMenu ? 'ซ่อนเมนูลัดร้านค้า' : 'เมนูลัดร้านค้า',
                   fg: _showOaRichMenu ? Colors.white : AppTheme.brandPrimary,
-                  bg: _showOaRichMenu ? AppTheme.brandPrimary : AppTheme.brandSoft,
+                  bg: _showOaRichMenu ? AppTheme.brandPrimary : AppTheme.tintStrong,
                 ),
               if (_conversation.isOa)
                 _modeChip(
@@ -5492,12 +5500,12 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         children: List.generate(candidates.length, (i) {
           final c = candidates[i];
           return ActionChip(
-            backgroundColor: AppTheme.brandSoft,
+            backgroundColor: AppTheme.tintStrong,
             label: Text(
               c.$3,
               style: TextStyle(
                 fontSize: 12,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w600,
                 color: AppTheme.brandDeep,
               ),
             ),
@@ -5548,7 +5556,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   'คุณได้บล็อกผู้ใช้นี้ กรุณาปลดบล็อกก่อนส่งข้อความหรือโทร',
                   style: TextStyle(
                     fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     color: AppTheme.dangerRed,
                   ),
                 ),
@@ -5582,13 +5590,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       blur: 20,
       tint: _isConfidentialMode
           ? const Color(0xF2FFFBEB)
-          : const Color(0xE6FFFFFF),
+          : const Color(0xF0FFFFFF),
       border: Border(
         top: BorderSide(
           color: _isConfidentialMode
               ? AppTheme.dangerRed
-              : AppTheme.borderSubtle,
-          width: _isConfidentialMode ? 1.5 : 0.8,
+              : AppTheme.hairline,
+          width: _isConfidentialMode ? 1.5 : 1,
         ),
       ),
       padding: const EdgeInsets.fromLTRB(8, 5, 8, 6),
@@ -5668,7 +5676,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       filled: true,
                       fillColor: _isConfidentialMode
                           ? Colors.white
-                          : AppTheme.surfaceBg,
+                          : AppTheme.panelBg,
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: 7,
@@ -5695,15 +5703,15 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                         ),
                       ),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(18),
+                        borderRadius: BorderRadius.circular(22),
                         borderSide: BorderSide.none,
                       ),
                       enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(18),
+                        borderRadius: BorderRadius.circular(22),
                         borderSide: BorderSide.none,
                       ),
                       focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(18),
+                        borderRadius: BorderRadius.circular(22),
                         borderSide: BorderSide(
                           color: accent.withValues(alpha: 0.5),
                         ),
@@ -5744,7 +5752,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                           width: 40,
                           height: 40,
                           decoration: const BoxDecoration(
-                            color: AppTheme.surfaceBg,
+                            color: AppTheme.panelBg,
                             shape: BoxShape.circle,
                           ),
                           child: IconButton(
@@ -5771,9 +5779,12 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                           width: 40,
                           height: 40,
                           decoration: BoxDecoration(
-                            color: accent,
+                            color: accent == AppTheme.brandPrimary ? null : accent,
+                            gradient: accent == AppTheme.brandPrimary
+                                ? AppTheme.primaryGradient
+                                : null,
                             shape: BoxShape.circle,
-                            boxShadow: AppTheme.glow(accent),
+                            boxShadow: AppTheme.glow(accent, strength: 0.22),
                           ),
                           child: Material(
                             color: Colors.transparent,
@@ -5902,7 +5913,10 @@ class _RoomVaultPanelState extends State<_RoomVaultPanel>
       children: [
         Container(
           padding: const EdgeInsets.fromLTRB(20, 14, 10, 6),
-          decoration: const BoxDecoration(gradient: AppTheme.navyGradient),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(bottom: BorderSide(color: AppTheme.hairline)),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -5921,28 +5935,31 @@ class _RoomVaultPanelState extends State<_RoomVaultPanel>
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: Colors.white,
+                        color: AppTheme.slateDark,
                         fontSize: 15.5,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                         height: 1.35,
                       ),
                     ),
                   ),
                   IconButton(
                     onPressed: widget.onClose,
-                    icon: const Icon(Icons.close_rounded, color: Colors.white),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: AppTheme.slateBody,
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 6),
-              const FittedBox(
+              FittedBox(
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.centerLeft,
                 child: PillBadge(
                   text:
                       'เก็บไฟล์ถาวร · ส่งผิดกดลบทำลายไฟล์ได้ทันที',
-                  backgroundColor: Color(0xFF3E1914),
-                  textColor: AppTheme.goldClay,
+                  backgroundColor: AppTheme.goldClay.withValues(alpha: 0.18),
+                  textColor: const Color(0xFF7A4A12),
                   icon: Icons.verified_rounded,
                 ),
               ),
@@ -5952,12 +5969,12 @@ class _RoomVaultPanelState extends State<_RoomVaultPanel>
                 dividerColor: Colors.transparent,
                 labelStyle: const TextStyle(
                   fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
                   height: 1.4,
                 ),
                 indicatorColor: AppTheme.brandPrimary,
-                labelColor: Colors.white,
-                unselectedLabelColor: const Color(0xFF94A3B8),
+                labelColor: AppTheme.brandDeep,
+                unselectedLabelColor: AppTheme.slateMuted,
                 tabs: [
                   Tab(text: 'รูปภาพ (${_vault.images.length})'),
                   Tab(text: 'ไฟล์เก็บไว้ (${_vault.files.length})'),
@@ -6005,8 +6022,8 @@ class _RoomVaultPanelState extends State<_RoomVaultPanel>
         final url = msg.attachment?.url ?? '';
         return Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppTheme.borderSubtle),
+            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+            border: Border.all(color: AppTheme.hairline),
           ),
           clipBehavior: Clip.antiAlias,
           child: Stack(
@@ -6059,16 +6076,16 @@ class _RoomVaultPanelState extends State<_RoomVaultPanel>
         final att = msg.attachment;
         return ListTile(
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: const BorderSide(color: AppTheme.borderSubtle),
+            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+            side: const BorderSide(color: AppTheme.hairline),
           ),
-          leading: const Icon(
+          leading: Icon(
             Icons.description_rounded,
-            color: AppTheme.workBlue,
+            color: AppTheme.brandPrimary,
           ),
           title: Text(
             att?.fileName ?? msg.cleanContent,
-            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
           ),
           subtitle: Text(
             'ส่งโดย ${msg.senderName} · ${formatFileSize(att?.fileSize ?? 0)}',
@@ -6128,7 +6145,7 @@ class _RoomVaultPanelState extends State<_RoomVaultPanel>
                 child: Text(
                   'สมุดโน้ตและเรื่องที่คุยกันไว้ในห้อง',
                   style: TextStyle(
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     color: AppTheme.slateDark,
                   ),
                 ),
@@ -6149,11 +6166,7 @@ class _RoomVaultPanelState extends State<_RoomVaultPanel>
           Container(
             margin: const EdgeInsets.fromLTRB(16, 6, 16, 6),
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppTheme.surfaceBg,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppTheme.borderSubtle),
-            ),
+            decoration: AppTheme.well(),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -6211,11 +6224,7 @@ class _RoomVaultPanelState extends State<_RoomVaultPanel>
                     final isCommenting = _commentingNoteId == note.id;
                     return Container(
                       padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppTheme.surfaceBg,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppTheme.borderSubtle),
-                      ),
+                      decoration: AppTheme.surface(),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -6233,7 +6242,7 @@ class _RoomVaultPanelState extends State<_RoomVaultPanel>
                                 child: Text(
                                   note.title,
                                   style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
+                                    fontWeight: FontWeight.w600,
                                     fontSize: 14,
                                   ),
                                 ),
@@ -6453,9 +6462,8 @@ class _AiSummaryPanelState extends State<_AiSummaryPanel> {
         Container(
           padding: const EdgeInsets.fromLTRB(18, 14, 10, 14),
           decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFF4C1D95), Color(0xFF1E3A8A)],
-            ),
+            color: Colors.white,
+            border: Border(bottom: BorderSide(color: AppTheme.hairline)),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
@@ -6464,12 +6472,12 @@ class _AiSummaryPanelState extends State<_AiSummaryPanel> {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(12),
+                  color: const Color(0xFFF3E8FF),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                 ),
                 child: const Icon(
                   Icons.auto_awesome_rounded,
-                  color: Color(0xFFFDE68A),
+                  color: AppTheme.personalPurple,
                   size: 22,
                 ),
               ),
@@ -6481,9 +6489,9 @@ class _AiSummaryPanelState extends State<_AiSummaryPanel> {
                     const Text(
                       '✨ BC AI สรุปแชทให้เข้าใจไว',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: AppTheme.slateDark,
                         fontSize: 16,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     Text(
@@ -6491,7 +6499,7 @@ class _AiSummaryPanelState extends State<_AiSummaryPanel> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: Color(0xFFDDD6FE),
+                        color: AppTheme.slateMuted,
                         fontSize: 12,
                       ),
                     ),
@@ -6500,7 +6508,10 @@ class _AiSummaryPanelState extends State<_AiSummaryPanel> {
               ),
               IconButton(
                 onPressed: widget.onClose,
-                icon: const Icon(Icons.close_rounded, color: Colors.white),
+                icon: const Icon(
+                  Icons.close_rounded,
+                  color: AppTheme.slateBody,
+                ),
               ),
             ],
           ),
@@ -6520,7 +6531,7 @@ class _AiSummaryPanelState extends State<_AiSummaryPanel> {
                         'BC AI กำลังอ่านแชทและสรุปประเด็นสำคัญ...',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w500,
                           color: AppTheme.slateBody,
                         ),
                       ),
@@ -6583,7 +6594,7 @@ class _AiSummaryPanelState extends State<_AiSummaryPanel> {
                                   '📌 สรุปประเด็นสำคัญในห้องแชท',
                                   style: TextStyle(
                                     fontSize: 13.5,
-                                    fontWeight: FontWeight.w800,
+                                    fontWeight: FontWeight.w600,
                                     color: AppTheme.personalPurple,
                                   ),
                                 ),
@@ -6606,13 +6617,9 @@ class _AiSummaryPanelState extends State<_AiSummaryPanel> {
                         Container(
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
-                            color: AppTheme.brandSoft,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: AppTheme.brandPrimary.withValues(
-                                alpha: 0.35,
-                              ),
-                            ),
+                            color: AppTheme.tint,
+                            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                            border: Border.all(color: AppTheme.hairline),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -6630,7 +6637,7 @@ class _AiSummaryPanelState extends State<_AiSummaryPanel> {
                                     '✅ สิ่งที่ต้องทำต่อ:',
                                     style: TextStyle(
                                       fontSize: 13.5,
-                                      fontWeight: FontWeight.w800,
+                                      fontWeight: FontWeight.w600,
                                       color: AppTheme.brandDeep,
                                     ),
                                   ),
@@ -6647,7 +6654,7 @@ class _AiSummaryPanelState extends State<_AiSummaryPanel> {
                                       Text(
                                         '• ',
                                         style: TextStyle(
-                                          fontWeight: FontWeight.w800,
+                                          fontWeight: FontWeight.w700,
                                           color: AppTheme.brandDeep,
                                         ),
                                       ),
@@ -6672,31 +6679,25 @@ class _AiSummaryPanelState extends State<_AiSummaryPanel> {
                         const SizedBox(height: 12),
                         Container(
                           padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFEFF6FF),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: const Color(0xFFBFDBFE),
-                            ),
-                          ),
+                          decoration: AppTheme.well(),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Row(
+                              Row(
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
                                   Icon(
                                     Icons.lightbulb_rounded,
                                     size: 17,
-                                    color: AppTheme.workBlue,
+                                    color: AppTheme.brandPrimary,
                                   ),
-                                  SizedBox(width: 6),
+                                  const SizedBox(width: 6),
                                   Text(
                                     '💡 ข้อสรุปที่คุยกันไว้',
                                     style: TextStyle(
                                       fontSize: 13.5,
-                                      fontWeight: FontWeight.w800,
-                                      color: AppTheme.workBlue,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppTheme.brandDeep,
                                     ),
                                   ),
                                 ],
@@ -6726,7 +6727,7 @@ class _AiSummaryPanelState extends State<_AiSummaryPanel> {
           Container(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
             decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: AppTheme.borderSubtle)),
+              border: Border(top: BorderSide(color: AppTheme.hairline)),
             ),
             child: Wrap(
               spacing: 8,
@@ -6849,9 +6850,13 @@ class _AiWritingAssistPanelState extends State<_AiWritingAssistPanel> {
 
     return Container(
       constraints: const BoxConstraints(maxHeight: 350),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(top: BorderSide(color: AppTheme.borderSubtle)),
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(AppTheme.radiusLg),
+        ),
+        border: const Border(top: BorderSide(color: AppTheme.hairline)),
+        boxShadow: AppTheme.shadowUp,
       ),
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
@@ -6867,7 +6872,7 @@ class _AiWritingAssistPanelState extends State<_AiWritingAssistPanel> {
                   height: 34,
                   decoration: BoxDecoration(
                     color: const Color(0xFFF3E8FF),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                   ),
                   child: const Icon(
                     Icons.psychology_rounded,
@@ -6886,7 +6891,7 @@ class _AiWritingAssistPanelState extends State<_AiWritingAssistPanel> {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 13.5,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w600,
                           color: AppTheme.slateDark,
                         ),
                       ),
@@ -6937,7 +6942,7 @@ class _AiWritingAssistPanelState extends State<_AiWritingAssistPanel> {
                           style: TextStyle(
                             fontSize: 11.5,
                             fontWeight: active
-                                ? FontWeight.w700
+                                ? FontWeight.w600
                                 : FontWeight.w500,
                             color: active
                                 ? AppTheme.personalPurple
@@ -6996,7 +7001,7 @@ class _AiWritingAssistPanelState extends State<_AiWritingAssistPanel> {
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF5F3FF),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                   border: Border.all(color: const Color(0xFFDDD6FE)),
                 ),
                 child: Column(
@@ -7006,7 +7011,7 @@ class _AiWritingAssistPanelState extends State<_AiWritingAssistPanel> {
                       '✨ ข้อความที่ BC AI แนะนำ:',
                       style: TextStyle(
                         fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                         color: AppTheme.personalPurple,
                       ),
                     ),
@@ -7015,7 +7020,7 @@ class _AiWritingAssistPanelState extends State<_AiWritingAssistPanel> {
                       res.suggestion,
                       style: const TextStyle(
                         fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w500,
                         color: AppTheme.slateDark,
                       ),
                     ),
@@ -7034,9 +7039,6 @@ class _AiWritingAssistPanelState extends State<_AiWritingAssistPanel> {
                         ElevatedButton.icon(
                           onPressed: () =>
                               widget.onSendImmediately(res.suggestion),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.brandPrimary,
-                          ),
                           icon: const Icon(Icons.send_rounded, size: 15),
                           label: const Text('ส่งทันที'),
                         ),
@@ -7053,20 +7055,14 @@ class _AiWritingAssistPanelState extends State<_AiWritingAssistPanel> {
                       (alt) => Padding(
                         padding: const EdgeInsets.only(bottom: 4),
                         child: InkWell(
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(AppTheme.radiusSm),
                           onTap: () => widget.onApplyToComposer(alt),
                           child: Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 10,
                               vertical: 6,
                             ),
-                            decoration: BoxDecoration(
-                              color: AppTheme.surfaceBg,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: AppTheme.borderSubtle,
-                              ),
-                            ),
+                            decoration: AppTheme.well(radius: AppTheme.radiusSm),
                             child: Row(
                               children: [
                                 Expanded(
@@ -7193,11 +7189,14 @@ class _RoomAlbumsPanelState extends State<_RoomAlbumsPanel> {
       children: [
         Container(
           padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
-          decoration: const BoxDecoration(gradient: AppTheme.navyGradient),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(bottom: BorderSide(color: AppTheme.hairline)),
+          ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(Icons.photo_library_rounded, color: AppTheme.goldClay),
+              Icon(Icons.photo_library_rounded, color: AppTheme.brandPrimary),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -7205,9 +7204,9 @@ class _RoomAlbumsPanelState extends State<_RoomAlbumsPanel> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: AppTheme.slateDark,
                     fontSize: 15,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -7224,7 +7223,10 @@ class _RoomAlbumsPanelState extends State<_RoomAlbumsPanel> {
               ),
               IconButton(
                 onPressed: widget.onClose,
-                icon: const Icon(Icons.close_rounded, color: Colors.white),
+                icon: const Icon(
+                  Icons.close_rounded,
+                  color: AppTheme.slateBody,
+                ),
               ),
             ],
           ),
@@ -7233,11 +7235,7 @@ class _RoomAlbumsPanelState extends State<_RoomAlbumsPanel> {
           Container(
             margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppTheme.surfaceBg,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppTheme.borderSubtle),
-            ),
+            decoration: AppTheme.well(),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -7294,11 +7292,7 @@ class _RoomAlbumsPanelState extends State<_RoomAlbumsPanel> {
                     final alb = _albums[i];
                     return Container(
                       padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: AppTheme.surfaceBg,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppTheme.borderSubtle),
-                      ),
+                      decoration: AppTheme.surface(radius: AppTheme.radiusMd),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -7308,7 +7302,7 @@ class _RoomAlbumsPanelState extends State<_RoomAlbumsPanel> {
                                 child: Text(
                                   '${alb.title} (${alb.photos.length} รูป)',
                                   style: const TextStyle(
-                                    fontWeight: FontWeight.w800,
+                                    fontWeight: FontWeight.w600,
                                     fontSize: 14.5,
                                   ),
                                 ),
@@ -7360,7 +7354,7 @@ class _RoomAlbumsPanelState extends State<_RoomAlbumsPanel> {
                                 itemBuilder: (context, pIdx) {
                                   final photo = alb.photos[pIdx];
                                   return ClipRRect(
-                                    borderRadius: BorderRadius.circular(10),
+                                    borderRadius: BorderRadius.circular(AppTheme.radiusSm),
                                     child: Image.network(
                                       photo.url,
                                       width: 92,
@@ -7370,7 +7364,7 @@ class _RoomAlbumsPanelState extends State<_RoomAlbumsPanel> {
                                           Container(
                                             width: 92,
                                             height: 92,
-                                            color: AppTheme.borderSubtle,
+                                            color: AppTheme.panelBg,
                                             child: const Icon(Icons.image),
                                           ),
                                     ),
@@ -7486,11 +7480,14 @@ class _RoomEventsPanelState extends State<_RoomEventsPanel> {
       children: [
         Container(
           padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
-          decoration: const BoxDecoration(gradient: AppTheme.navyGradient),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(bottom: BorderSide(color: AppTheme.hairline)),
+          ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(Icons.event_available_rounded, color: AppTheme.goldClay),
+              Icon(Icons.event_available_rounded, color: AppTheme.brandPrimary),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -7498,9 +7495,9 @@ class _RoomEventsPanelState extends State<_RoomEventsPanel> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: AppTheme.slateDark,
                     fontSize: 15,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -7515,7 +7512,10 @@ class _RoomEventsPanelState extends State<_RoomEventsPanel> {
               ),
               IconButton(
                 onPressed: widget.onClose,
-                icon: const Icon(Icons.close_rounded, color: Colors.white),
+                icon: const Icon(
+                  Icons.close_rounded,
+                  color: AppTheme.slateBody,
+                ),
               ),
             ],
           ),
@@ -7524,11 +7524,7 @@ class _RoomEventsPanelState extends State<_RoomEventsPanel> {
           Container(
             margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppTheme.surfaceBg,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppTheme.borderSubtle),
-            ),
+            decoration: AppTheme.well(),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -7639,18 +7635,14 @@ class _RoomEventsPanelState extends State<_RoomEventsPanel> {
                     if (ev == null) return const SizedBox.shrink();
                     return Container(
                       padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: AppTheme.surfaceBg,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppTheme.borderSubtle),
-                      ),
+                      decoration: AppTheme.surface(radius: AppTheme.radiusMd),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             ev.title,
                             style: const TextStyle(
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w600,
                               fontSize: 14.5,
                             ),
                           ),
@@ -7781,25 +7773,28 @@ class _InlineCreatePollPanelState extends State<_InlineCreatePollPanel> {
       children: [
         Container(
           padding: const EdgeInsets.fromLTRB(18, 12, 8, 12),
-          decoration: const BoxDecoration(gradient: AppTheme.navyGradient),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(bottom: BorderSide(color: AppTheme.hairline)),
+          ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(Icons.poll_rounded, color: AppTheme.goldClay),
+              Icon(Icons.poll_rounded, color: AppTheme.brandPrimary),
               const SizedBox(width: 8),
               const Expanded(
                 child: Text(
                   'สร้างโพลโหวตในห้องแชท',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: AppTheme.slateDark,
                     fontSize: 15.5,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
               IconButton(
                 onPressed: widget.onClose,
-                icon: const Icon(Icons.close_rounded, color: Colors.white),
+                icon: const Icon(Icons.close_rounded, color: AppTheme.slateBody),
               ),
             ],
           ),
@@ -8000,11 +7995,14 @@ class _InlineGroupManagePanelState extends State<_InlineGroupManagePanel> {
       children: [
         Container(
           padding: const EdgeInsets.fromLTRB(18, 12, 8, 12),
-          decoration: const BoxDecoration(gradient: AppTheme.navyGradient),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(bottom: BorderSide(color: AppTheme.hairline)),
+          ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(Icons.tune_rounded, color: AppTheme.goldClay),
+              Icon(Icons.tune_rounded, color: AppTheme.brandPrimary),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -8012,15 +8010,18 @@ class _InlineGroupManagePanelState extends State<_InlineGroupManagePanel> {
                       ? 'จัดการกลุ่ม & ตั้งค่าห้องแชท'
                       : 'ตั้งค่าห้องแชท',
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: AppTheme.slateDark,
                     fontSize: 15.5,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
               IconButton(
                 onPressed: widget.onClose,
-                icon: const Icon(Icons.close_rounded, color: Colors.white),
+                icon: const Icon(
+                  Icons.close_rounded,
+                  color: AppTheme.slateBody,
+                ),
               ),
             ],
           ),
@@ -8035,7 +8036,7 @@ class _InlineGroupManagePanelState extends State<_InlineGroupManagePanel> {
                   'เครื่องมือในห้องแชท',
                   style: TextStyle(
                     fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     color: AppTheme.slateDark,
                   ),
                 ),
@@ -8115,7 +8116,7 @@ class _InlineGroupManagePanelState extends State<_InlineGroupManagePanel> {
                   'สีพื้นหลังห้องแชท',
                   style: TextStyle(
                     fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     color: AppTheme.slateDark,
                   ),
                 ),
@@ -8128,21 +8129,21 @@ class _InlineGroupManagePanelState extends State<_InlineGroupManagePanel> {
                     return ChoiceChip(
                       visualDensity: VisualDensity.compact,
                       selected: selected,
-                      selectedColor: AppTheme.brandSoft,
+                      selectedColor: AppTheme.tintStrong,
                       avatar: Container(
                         width: 14,
                         height: 14,
                         decoration: BoxDecoration(
                           color: m.backgroundColor,
                           shape: BoxShape.circle,
-                          border: Border.all(color: AppTheme.borderSubtle),
+                          border: Border.all(color: AppTheme.hairline),
                         ),
                       ),
                       label: Text(
                         m.label,
                         style: TextStyle(
                           fontSize: 12,
-                          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                          fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                         ),
                       ),
                       onSelected: (_) => widget.onThemeChanged(m),
@@ -8171,7 +8172,7 @@ class _InlineGroupManagePanelState extends State<_InlineGroupManagePanel> {
                             'การแจ้งเตือนห้องนี้',
                             style: TextStyle(
                               fontSize: 13.5,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                           Text(
@@ -8203,13 +8204,13 @@ class _InlineGroupManagePanelState extends State<_InlineGroupManagePanel> {
                         backgroundColor: ((opt.code == 'off' &&
                                     !conv.isEffectivelyMuted) ||
                                 (opt.code == 'forever' && conv.isMuted))
-                            ? AppTheme.brandSoft
-                            : AppTheme.surfaceBg,
+                            ? AppTheme.tintStrong
+                            : AppTheme.panelBg,
                         label: Text(
                           opt.label,
                           style: const TextStyle(
                             fontSize: 11.5,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                         onPressed: _savingMute
@@ -8235,7 +8236,7 @@ class _InlineGroupManagePanelState extends State<_InlineGroupManagePanel> {
                     'จัดการเพื่อนในห้อง 1-1',
                     style: TextStyle(
                       fontSize: 13,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                       color: AppTheme.slateDark,
                     ),
                   ),
@@ -8340,11 +8341,7 @@ class _InlineGroupManagePanelState extends State<_InlineGroupManagePanel> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       margin: const EdgeInsets.only(bottom: 12),
-                      decoration: BoxDecoration(
-                        color: AppTheme.brandSoft,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppTheme.borderSubtle),
-                      ),
+                      decoration: AppTheme.well(),
                       child: Row(
                         children: [
                           Expanded(
@@ -8355,7 +8352,7 @@ class _InlineGroupManagePanelState extends State<_InlineGroupManagePanel> {
                                   'รหัสเชิญเข้ากลุ่ม',
                                   style: TextStyle(
                                     fontSize: 11.5,
-                                    fontWeight: FontWeight.w700,
+                                    fontWeight: FontWeight.w600,
                                     color: AppTheme.slateMuted,
                                   ),
                                 ),
@@ -8364,7 +8361,7 @@ class _InlineGroupManagePanelState extends State<_InlineGroupManagePanel> {
                                   conv.inviteToken,
                                   style: TextStyle(
                                     fontSize: 14,
-                                    fontWeight: FontWeight.w800,
+                                    fontWeight: FontWeight.w600,
                                     color: AppTheme.brandDeep,
                                   ),
                                 ),
@@ -8423,7 +8420,7 @@ class _InlineGroupManagePanelState extends State<_InlineGroupManagePanel> {
                       ),
                       decoration: BoxDecoration(
                         color: const Color(0xFFF3E8FF),
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
                       ),
                       child: const Row(
                         children: [
@@ -8438,7 +8435,7 @@ class _InlineGroupManagePanelState extends State<_InlineGroupManagePanel> {
                               '🤖 BC AI อยู่ในกลุ่มนี้แล้ว (พิมพ์ @ai ถามได้ทันที)',
                               style: TextStyle(
                                 fontSize: 12.5,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w600,
                                 color: AppTheme.personalPurple,
                               ),
                             ),
@@ -8450,7 +8447,7 @@ class _InlineGroupManagePanelState extends State<_InlineGroupManagePanel> {
                   Text(
                     'สมาชิกในกลุ่ม (${conv.memberCount} คน)',
                     style: const TextStyle(
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                       color: AppTheme.slateDark,
                     ),
                   ),
@@ -8481,7 +8478,7 @@ class _InlineGroupManagePanelState extends State<_InlineGroupManagePanel> {
                     const Text(
                       'เชิญเพื่อนเข้ากลุ่มเพิ่ม:',
                       style: TextStyle(
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                         color: AppTheme.slateDark,
                       ),
                     ),
@@ -8719,34 +8716,39 @@ class _InlinePlusActionPanelState extends State<_InlinePlusActionPanel> {
       width: width,
       child: InkWell(
         onTap: onTap ?? () => setState(() => _tab = code),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 4),
+          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
           decoration: BoxDecoration(
-            color: active ? AppTheme.brandPrimary : AppTheme.surfaceBg,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: active ? AppTheme.brandPrimary : AppTheme.borderSubtle,
-            ),
+            color: active ? AppTheme.tint : Colors.transparent,
+            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(
-                icon,
-                size: 20,
-                color: active ? Colors.white : AppTheme.slateBody,
+              Container(
+                width: 44,
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppTheme.tintStrong,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                  border: active
+                      ? Border.all(color: AppTheme.brandPrimary)
+                      : null,
+                ),
+                child: Icon(icon, size: 22, color: AppTheme.brandPrimary),
               ),
-              const SizedBox(height: 3),
+              const SizedBox(height: 4),
               Text(
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 11.5,
-                  fontWeight: FontWeight.w700,
-                  color: active ? Colors.white : AppTheme.slateDark,
+                  fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                  color: active ? AppTheme.brandDeep : AppTheme.slateBody,
                 ),
               ),
             ],
@@ -8773,8 +8775,12 @@ class _InlinePlusActionPanelState extends State<_InlinePlusActionPanel> {
       constraints: const BoxConstraints(maxHeight: 335),
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
       decoration: const BoxDecoration(
-        color: Color(0xF8FFFFFF),
-        border: Border(top: BorderSide(color: AppTheme.borderSubtle)),
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppTheme.radiusLg),
+        ),
+        border: Border(top: BorderSide(color: AppTheme.hairline)),
+        boxShadow: AppTheme.shadowUp,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -8856,7 +8862,7 @@ class _InlinePlusActionPanelState extends State<_InlinePlusActionPanel> {
                         ? AppTheme.dangerRed
                         : isSilent
                         ? const Color(0xFF312E81)
-                        : AppTheme.surfaceBg,
+                        : AppTheme.panelBg,
                     avatar: Icon(
                       isUrgent
                           ? Icons.notifications_active_rounded
@@ -8876,7 +8882,7 @@ class _InlinePlusActionPanelState extends State<_InlinePlusActionPanel> {
                           : 'โหมดส่ง: ปกติ',
                       style: TextStyle(
                         fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                         color: (isUrgent || isSilent)
                             ? Colors.white
                             : AppTheme.slateDark,
@@ -8888,7 +8894,7 @@ class _InlinePlusActionPanelState extends State<_InlinePlusActionPanel> {
                     visualDensity: VisualDensity.compact,
                     backgroundColor: widget.isConfidentialMode
                         ? const Color(0xFF991B1B)
-                        : AppTheme.surfaceBg,
+                        : AppTheme.panelBg,
                     avatar: Icon(
                       widget.isConfidentialMode
                           ? Icons.lock_rounded
@@ -8902,7 +8908,7 @@ class _InlinePlusActionPanelState extends State<_InlinePlusActionPanel> {
                       'โหมดความลับ',
                       style: TextStyle(
                         fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                         color: widget.isConfidentialMode
                             ? Colors.white
                             : AppTheme.slateDark,
@@ -8914,7 +8920,7 @@ class _InlinePlusActionPanelState extends State<_InlinePlusActionPanel> {
                     visualDensity: VisualDensity.compact,
                     backgroundColor: isDisappearOn
                         ? const Color(0xFF92400E)
-                        : AppTheme.surfaceBg,
+                        : AppTheme.panelBg,
                     avatar: Icon(
                       isDisappearOn
                           ? Icons.timer_rounded
@@ -8926,7 +8932,7 @@ class _InlinePlusActionPanelState extends State<_InlinePlusActionPanel> {
                       widget.disappearLabel,
                       style: TextStyle(
                         fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                         color: isDisappearOn ? Colors.white : AppTheme.slateDark,
                       ),
                     ),
@@ -8985,7 +8991,7 @@ class _InlinePlusActionPanelState extends State<_InlinePlusActionPanel> {
                             f.displayName,
                             style: const TextStyle(
                               fontSize: 13,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                           subtitle: Text(

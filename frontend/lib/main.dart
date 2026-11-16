@@ -153,8 +153,9 @@ class _SplashLoadingView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppTheme.surfaceBg,
       body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: AppTheme.navyGradient),
+        decoration: BoxDecoration(color: AppTheme.surfaceBg),
         child: Center(
           child: TweenAnimationBuilder<double>(
             tween: Tween(begin: 0, end: 1),
@@ -174,9 +175,9 @@ class _SplashLoadingView extends StatelessWidget {
                   width: 72,
                   height: 72,
                   decoration: BoxDecoration(
-                    gradient: AppTheme.brandGradient,
-                    borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-                    boxShadow: AppTheme.glow(AppTheme.brandPrimary),
+                    gradient: AppTheme.primaryGradient,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusXl),
+                    boxShadow: AppTheme.shadowMd,
                   ),
                   alignment: Alignment.center,
                   child: const Text(
@@ -184,7 +185,7 @@ class _SplashLoadingView extends StatelessWidget {
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 28,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       height: 1.1,
                     ),
                   ),
@@ -204,7 +205,7 @@ class _SplashLoadingView extends StatelessWidget {
                       ? 'กำลังเปิดแอปร้านค้า...'
                       : 'กำลังซิงค์ข้อมูลแชทส่วนตัว ครอบครัว & เพื่อนสนิท...',
                   style: TextStyle(
-                    color: Colors.white70,
+                    color: AppTheme.slateMuted,
                     fontSize: 13.5,
                     height: 1.4,
                   ),

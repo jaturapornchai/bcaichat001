@@ -63,18 +63,18 @@ export default function LocationPickerView({
       data-testid="loc-fullmap-view"
       className="flex h-full min-h-0 flex-col bg-[var(--bc-card)]"
     >
-      <header className="flex shrink-0 items-center gap-1.5 border-b border-[var(--bc-border)] px-2 py-1.5">
+      <header className="bc-appbar flex shrink-0 items-center gap-1.5 px-2 py-1.5">
         <button
           type="button"
           data-testid="loc-fullmap-close-btn"
           aria-label="ย้อนกลับ"
           title="ย้อนกลับ"
           onClick={onCancel}
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--bc-border)] bg-[var(--bc-panel)] text-[var(--bc-text)]"
+          className="bc-iconbtn h-8 w-8 shrink-0"
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
-        <h2 className="min-w-0 flex-1 truncate text-sm font-bold text-[var(--bc-text)]">
+        <h2 className="bc-title min-w-0 flex-1 truncate text-sm">
           แชร์ตำแหน่ง
         </h2>
         <button
@@ -82,7 +82,7 @@ export default function LocationPickerView({
           data-testid="loc-fullmap-gps-btn"
           onClick={handleUseGps}
           disabled={gpsLoading}
-          className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-[var(--bc-primary)] bg-[var(--bc-soft)] px-2.5 text-[11px] font-bold text-[var(--bc-deep)]"
+          className="bc-btn bc-btn-soft bc-btn-sm shrink-0"
         >
           <LocateFixed className="h-3.5 w-3.5" />
           <span>{gpsLoading ? "กำลังจับพิกัด..." : "ตำแหน่งปัจจุบัน"}</span>
@@ -103,10 +103,10 @@ export default function LocationPickerView({
         />
       </div>
 
-      <footer className="flex shrink-0 items-center gap-2 border-t border-[var(--bc-border)] px-2 py-1.5">
+      <footer className="bc-glass flex shrink-0 items-center gap-2 border-t border-[var(--bc-line)] px-2 py-1.5">
         <p
           data-testid="loc-fullmap-coords"
-          className="min-w-0 flex-1 truncate text-xs font-semibold tabular-nums text-[var(--bc-text)]"
+          className="bc-num min-w-0 flex-1 truncate text-xs font-medium text-[var(--bc-muted)]"
         >
           {notice ??
             (pin
@@ -118,7 +118,7 @@ export default function LocationPickerView({
           data-testid="loc-fullmap-confirm-btn"
           disabled={!pin || sending}
           onClick={() => void handleConfirm()}
-          className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg bg-[var(--bc-primary)] px-3 text-xs font-bold text-white hover:brightness-95 disabled:opacity-50"
+          className="bc-btn bc-btn-primary shrink-0"
         >
           <Check className="h-3.5 w-3.5" />
           <span>{sending ? "กำลังส่ง..." : "ส่งตำแหน่งนี้"}</span>

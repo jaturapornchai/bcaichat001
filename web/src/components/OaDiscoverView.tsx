@@ -78,16 +78,16 @@ export function OaDiscoverView({
 
   return (
     <div className="space-y-2.5">
-      <div className="flex items-center gap-2 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-2.5 shadow-2xs">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[var(--bc-soft)] text-[var(--bc-primary)]">
+      <div className="bc-card flex items-center gap-2 p-2.5">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[var(--bc-tint-strong)] text-[var(--bc-primary)]">
           <Store className="h-4 w-4" />
         </div>
         <div>
-          <h2 className="text-sm font-bold text-[var(--bc-text)]">ร้านค้า</h2>
+          <h2 className="bc-title text-sm text-[var(--bc-text)]">ร้านค้า</h2>
           <p className="text-[11px] text-[var(--bc-muted)]">ค้นหาและติดตามร้านค้า แล้วแชทกับร้านได้ทันที</p>
         </div>
       </div>
-      <div className="rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-2.5 shadow-2xs">
+      <div className="bc-card p-2.5">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex min-w-[200px] flex-1 items-center">
             <Search className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-[var(--bc-muted)]" />
@@ -97,7 +97,7 @@ export function OaDiscoverView({
               onChange={(e) => setDiscoverQ(e.target.value)}
               placeholder="ค้นหาชื่อร้าน หรือไอดีร้าน..."
               data-testid="oa-discover-search"
-              className="w-full rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] py-1.5 pl-8 pr-2.5 text-xs text-[var(--bc-text)] outline-none focus:border-[var(--bc-primary)]"
+              className="bc-input bc-search w-full pl-8"
             />
           </div>
         </div>
@@ -108,11 +108,7 @@ export function OaDiscoverView({
               key={cat}
               type="button"
               onClick={() => setDiscoverCat(cat)}
-              className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
-                discoverCat === cat
-                  ? "bg-[var(--bc-primary)] text-white"
-                  : "border border-[var(--bc-border)] bg-[var(--bc-panel)] text-[var(--bc-muted)]"
-              }`}
+              className={`bc-chip shrink-0 ${discoverCat === cat ? "is-active" : ""}`}
             >
               {cat}
             </button>
@@ -125,35 +121,35 @@ export function OaDiscoverView({
           กำลังโหลดร้านค้า...
         </p>
       ) : discoverList.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-[var(--bc-border)] bg-[var(--bc-card)] p-4 text-center text-xs text-[var(--bc-muted)]">
+        <div className="bc-empty rounded-2xl p-4 text-center text-xs">
           ไม่พบร้านค้าที่ค้นหา ลองคำอื่นหรือกดเปิดร้านค้าใหม่ได้เลย
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-2">
+        <div className="bc-card grid grid-cols-1 divide-y divide-[var(--bc-line)] overflow-hidden">
           {discoverList.map((oa) => (
             <div
               key={oa.id}
               data-testid={`oa-card-${oa.handle}`}
-              className="flex flex-col justify-between gap-2 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-2.5 shadow-2xs"
+              className="flex flex-col justify-between gap-2 p-2.5"
             >
               <div className="flex items-start gap-2.5">
                 <UserAvatar name={oa.display_name} avatarUrl={oa.avatar_url} size={40} />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1">
-                    <span className="truncate text-sm font-bold text-[var(--bc-text)]">
+                    <span className="truncate text-sm font-semibold text-[var(--bc-text)]">
                       {oa.display_name}
                     </span>
                     {oa.is_verified && (
                       <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-[var(--bc-primary)]" />
                     )}
-                    <span className="rounded-full bg-[var(--bc-soft)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--bc-deep)]">
+                    <span className="bc-tag">
                       {oa.category}
                     </span>
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--bc-muted)]">
                     <span>{oa.handle}</span>
                     <span>•</span>
-                    <span>ผู้ติดตาม {oa.follower_count}</span>
+                    <span className="bc-num">ผู้ติดตาม {oa.follower_count}</span>
                     {oa.calls_enabled && <span>• โทรหาได้</span>}
                   </div>
                   {oa.bio && (
@@ -167,13 +163,13 @@ export function OaDiscoverView({
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-1.5 border-t border-[var(--bc-border)]/60 pt-2">
+              <div className="flex items-center justify-end gap-1.5">
                 {oa.is_following && (
                   <button
                     type="button"
                     disabled={busy}
                     onClick={() => void handleUnfollow(oa)}
-                    className="rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2.5 py-1 text-[11px] font-semibold text-[var(--bc-muted)] hover:text-red-700"
+                    className="bc-btn bc-btn-ghost bc-btn-sm"
                   >
                     เลิกติดตาม
                   </button>
@@ -183,7 +179,7 @@ export function OaDiscoverView({
                   disabled={busy}
                   data-testid={`oa-follow-btn-${oa.handle}`}
                   onClick={() => void handleFollowAndOpen(oa)}
-                  className="inline-flex items-center gap-1 rounded-xl bg-[var(--bc-primary)] px-3 py-1 text-xs font-bold text-white shadow-xs hover:brightness-95 disabled:opacity-60"
+                  className="bc-btn bc-btn-soft bc-btn-sm"
                 >
                   <MessageSquare className="h-3.5 w-3.5" />
                   <span>{oa.is_following ? "เปิดห้องแชท" : "ติดตาม & แชทเลย"}</span>

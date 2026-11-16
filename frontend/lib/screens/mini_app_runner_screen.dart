@@ -216,16 +216,6 @@ class _MiniAppRunnerScreenState extends State<MiniAppRunnerScreen> {
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        // A childless DecoratedBox collapses to 0x0 here; expand it so the
-        // gradient actually fills the bar behind the white title.
-        flexibleSpace: const SizedBox.expand(
-          child: DecoratedBox(
-            decoration: BoxDecoration(gradient: AppTheme.navyGradient),
-          ),
-        ),
         title: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -255,8 +245,8 @@ class _MiniAppRunnerScreenState extends State<MiniAppRunnerScreen> {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.slateDark,
                       height: 1.3,
                     ),
                   ),
@@ -266,7 +256,7 @@ class _MiniAppRunnerScreenState extends State<MiniAppRunnerScreen> {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontSize: 11.5,
-                      color: Color(0xFF94A3B8),
+                      color: AppTheme.slateMuted,
                       height: 1.3,
                     ),
                   ),
@@ -299,11 +289,9 @@ class _MiniAppRunnerScreenState extends State<MiniAppRunnerScreen> {
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: AppTheme.brandSoft,
+                    color: AppTheme.tint,
                     borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                    border: Border.all(
-                      color: AppTheme.brandPrimary.withValues(alpha: 0.35),
-                    ),
+                    border: Border.all(color: AppTheme.hairline),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -319,7 +307,7 @@ class _MiniAppRunnerScreenState extends State<MiniAppRunnerScreen> {
                           'เชื่อมต่อ SSO ด้วยบัญชี Gmail: ${user?.email ?? "-"} (${user?.displayName ?? "-"}) เรียบร้อยแล้ว',
                           style: TextStyle(
                             fontSize: 13,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w500,
                             color: AppTheme.brandDeep,
                             height: 1.4,
                           ),
@@ -328,7 +316,7 @@ class _MiniAppRunnerScreenState extends State<MiniAppRunnerScreen> {
                       const SizedBox(width: 8),
                       PillBadge(
                         text: 'JS Bridge Active',
-                        backgroundColor: Colors.white,
+                        backgroundColor: AppTheme.tintStrong,
                         textColor: AppTheme.brandDeep,
                         icon: Icons.check_circle_rounded,
                       ),
@@ -360,7 +348,7 @@ class _MiniAppRunnerScreenState extends State<MiniAppRunnerScreen> {
         text,
         style: TextStyle(
           fontSize: 13,
-          fontWeight: strong ? FontWeight.w700 : FontWeight.w600,
+          fontWeight: strong ? FontWeight.w600 : FontWeight.w500,
           color: strong ? AppTheme.slateDark : AppTheme.slateBody,
           height: 1.4,
         ),
@@ -371,7 +359,7 @@ class _MiniAppRunnerScreenState extends State<MiniAppRunnerScreen> {
   Widget _folderBadge(Conversation conv) {
     return PillBadge(
       text: conv.folderLabel,
-      backgroundColor: AppTheme.brandSoft,
+      backgroundColor: AppTheme.tintStrong,
       textColor: AppTheme.brandDeep,
     );
   }
@@ -394,7 +382,7 @@ class _MiniAppRunnerScreenState extends State<MiniAppRunnerScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Material(
-          color: AppTheme.surfaceBg,
+          color: AppTheme.panelBg,
           borderRadius: BorderRadius.circular(AppTheme.radiusMd),
           child: InkWell(
             borderRadius: BorderRadius.circular(AppTheme.radiusMd),
@@ -408,7 +396,7 @@ class _MiniAppRunnerScreenState extends State<MiniAppRunnerScreen> {
                 border: Border.all(
                   color: _roomPickerExpanded
                       ? AppTheme.brandPrimary
-                      : AppTheme.borderSubtle,
+                      : AppTheme.hairline,
                 ),
               ),
               child: Row(
@@ -430,7 +418,7 @@ class _MiniAppRunnerScreenState extends State<MiniAppRunnerScreen> {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 13.5,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w500,
                         color: AppTheme.slateDark,
                         height: 1.3,
                       ),
@@ -457,11 +445,7 @@ class _MiniAppRunnerScreenState extends State<MiniAppRunnerScreen> {
           const SizedBox(height: 8),
           Container(
             constraints: const BoxConstraints(maxHeight: 220),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-              border: Border.all(color: AppTheme.borderSubtle),
-            ),
+            decoration: AppTheme.surface(radius: AppTheme.radiusMd),
             child: ListView.separated(
               shrinkWrap: true,
               padding: const EdgeInsets.all(6),
@@ -471,7 +455,7 @@ class _MiniAppRunnerScreenState extends State<MiniAppRunnerScreen> {
                 final conv = widget.conversations[i];
                 final isSel = conv.id == _selectedConversationId;
                 return Material(
-                  color: isSel ? AppTheme.brandSoft : AppTheme.surfaceBg,
+                  color: isSel ? AppTheme.tintStrong : AppTheme.panelBg,
                   borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(AppTheme.radiusMd),
@@ -496,7 +480,7 @@ class _MiniAppRunnerScreenState extends State<MiniAppRunnerScreen> {
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 fontSize: 13,
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.w500,
                                 color: AppTheme.slateDark,
                               ),
                             ),
@@ -527,12 +511,7 @@ class _MiniAppRunnerScreenState extends State<MiniAppRunnerScreen> {
   Widget _buildFormCard(Color accentColor) {
     return Container(
       padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        border: Border.all(color: AppTheme.borderSubtle),
-        boxShadow: AppTheme.shadowSm,
-      ),
+      decoration: AppTheme.surface(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -546,7 +525,7 @@ class _MiniAppRunnerScreenState extends State<MiniAppRunnerScreen> {
                   'กรอกข้อมูล ${widget.miniApp.title}',
                   style: const TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     color: AppTheme.slateDark,
                     height: 1.3,
                   ),
@@ -610,7 +589,7 @@ class _MiniAppRunnerScreenState extends State<MiniAppRunnerScreen> {
                 'ส่งการ์ดโต้ตอบเข้าห้องแชท',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontWeight: FontWeight.w700),
+                style: TextStyle(fontWeight: FontWeight.w600),
               ),
             ),
           ),
@@ -648,7 +627,7 @@ class _MiniAppRunnerScreenState extends State<MiniAppRunnerScreen> {
                   'ตัวอย่างการ์ดโต้ตอบที่จะแสดงในห้องแชท',
                   style: TextStyle(
                     fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     color: AppTheme.slateBody,
                     height: 1.4,
                   ),
@@ -691,7 +670,7 @@ class _MiniAppRunnerScreenState extends State<MiniAppRunnerScreen> {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: Colors.white,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w600,
                             fontSize: 14,
                             height: 1.3,
                           ),
@@ -715,7 +694,7 @@ class _MiniAppRunnerScreenState extends State<MiniAppRunnerScreen> {
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 10.5,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w500,
                               height: 1.3,
                             ),
                           ),
@@ -733,7 +712,7 @@ class _MiniAppRunnerScreenState extends State<MiniAppRunnerScreen> {
                         _field1Ctrl.text.isEmpty ? '-' : _field1Ctrl.text,
                         style: const TextStyle(
                           fontSize: 15,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                           color: AppTheme.slateDark,
                           height: 1.35,
                         ),
@@ -753,12 +732,7 @@ class _MiniAppRunnerScreenState extends State<MiniAppRunnerScreen> {
                           horizontal: 10,
                           vertical: 8,
                         ),
-                        decoration: BoxDecoration(
-                          color: AppTheme.surfaceBg,
-                          borderRadius: BorderRadius.circular(
-                            AppTheme.radiusSm,
-                          ),
-                        ),
+                        decoration: AppTheme.well(radius: AppTheme.radiusSm),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -782,9 +756,12 @@ class _MiniAppRunnerScreenState extends State<MiniAppRunnerScreen> {
                                 textAlign: TextAlign.right,
                                 style: TextStyle(
                                   fontSize: 13,
-                                  fontWeight: FontWeight.w700,
+                                  fontWeight: FontWeight.w600,
                                   color: accentColor,
                                   height: 1.35,
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures(),
+                                  ],
                                 ),
                               ),
                             ),
@@ -837,7 +814,7 @@ class _MiniAppRunnerScreenState extends State<MiniAppRunnerScreen> {
                               'เปิดดูรายละเอียด',
                               style: TextStyle(
                                 fontSize: 11.5,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w600,
                                 color: accentColor,
                                 height: 1.3,
                               ),

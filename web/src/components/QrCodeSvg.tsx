@@ -56,7 +56,7 @@ export function QrCodeSvg({
     <div
       data-testid="qr-code-svg"
       style={{ width: size, height: size }}
-      className={`shrink-0 overflow-hidden rounded-xl border border-[var(--bc-border)] bg-white p-1.5 shadow-sm [&>svg]:block [&>svg]:h-full [&>svg]:w-full ${className}`}
+      className={`shrink-0 overflow-hidden rounded-xl border border-[var(--bc-line)] bg-white p-1.5 shadow-sm [&>svg]:block [&>svg]:h-full [&>svg]:w-full ${className}`}
       dangerouslySetInnerHTML={{ __html: svgMarkup }}
     />
   );

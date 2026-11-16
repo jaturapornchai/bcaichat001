@@ -45,7 +45,7 @@ class _NotificationSettingsInlinePanelState
                 'เสียงและการแจ้งเตือน',
                 style: TextStyle(
                   fontSize: 18,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
                   color: AppTheme.slateDark,
                   height: 1.3,
                 ),
@@ -83,9 +83,10 @@ class _NotificationSettingsInlinePanelState
                 Text(
                   kind.label,
                   style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.slateDark,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.slateMuted,
+                    letterSpacing: 0.2,
                     height: 1.3,
                   ),
                 ),

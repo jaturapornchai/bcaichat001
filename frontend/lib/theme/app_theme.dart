@@ -149,6 +149,18 @@ class AppTheme {
   static const Color surfaceBg = Color(0xFFFBF9F8);
   static const Color cardBg = Color(0xFFFFFFFF);
   static const Color borderSubtle = Color(0xFFDCC0BC);
+
+  /// เส้นบางของการ์ด เส้นคั่น และขอบแถบ (borderSubtle ที่ความทึบ ~58%)
+  static const Color hairline = Color(0x94DCC0BC);
+
+  /// เส้นเข้มขึ้นหนึ่งระดับสำหรับช่องกรอกและปุ่มขอบ
+  static const Color hairlineStrong = Color(0xEBDCC0BC);
+  static const Color panelBg = Color(0xFFF6F3F2);
+  static const Color sand = Color(0xFFE4DFD1);
+
+  /// พื้นตอนแตะ/ชี้ และพื้นตอนเลือกอยู่ — อิงสี soft ของธีมที่เลือก
+  static Color get tint => Color.lerp(cardBg, brandSoft, 0.34)!;
+  static Color get tintStrong => Color.lerp(cardBg, brandSoft, 0.64)!;
   static const Color goldClay = Color(0xFFD4A373);
   static const Color terracottaNightBg = Color(0xFF1C1412);
 
@@ -161,24 +173,50 @@ class AppTheme {
   static const Color goldPin = Color(0xFFF59E0B);
 
   // Radius scale
-  static const double radiusSm = 8;
-  static const double radiusMd = 11;
-  static const double radiusLg = 15;
-  static const double radiusXl = 22;
+  static const double radiusSm = 10;
+  static const double radiusMd = 14;
+  static const double radiusLg = 18;
+  static const double radiusXl = 24;
 
   // Soft layered shadows: a tight contact shadow + a wide ambient one,
-  // tinted with slate instead of pure black so cards look lifted, not dirty.
+  // tinted with warm terracotta ink instead of black so cards look lifted,
+  // not dirty.
   static const List<BoxShadow> shadowSm = [
-    BoxShadow(color: Color(0x0D0F172A), blurRadius: 2, offset: Offset(0, 1)),
-    BoxShadow(color: Color(0x0A0F172A), blurRadius: 10, offset: Offset(0, 4)),
+    BoxShadow(color: Color(0x0D2B1410), blurRadius: 2, offset: Offset(0, 1)),
+    BoxShadow(
+      color: Color(0x0F2B1410),
+      blurRadius: 14,
+      spreadRadius: -4,
+      offset: Offset(0, 6),
+    ),
   ];
   static const List<BoxShadow> shadowMd = [
-    BoxShadow(color: Color(0x0F0F172A), blurRadius: 3, offset: Offset(0, 1)),
-    BoxShadow(color: Color(0x120F172A), blurRadius: 24, offset: Offset(0, 10)),
+    BoxShadow(color: Color(0x0D2B1410), blurRadius: 4, offset: Offset(0, 2)),
+    BoxShadow(
+      color: Color(0x242B1410),
+      blurRadius: 28,
+      spreadRadius: -10,
+      offset: Offset(0, 12),
+    ),
   ];
   static const List<BoxShadow> shadowLg = [
-    BoxShadow(color: Color(0x140F172A), blurRadius: 6, offset: Offset(0, 2)),
-    BoxShadow(color: Color(0x1F0F172A), blurRadius: 48, offset: Offset(0, 24)),
+    BoxShadow(color: Color(0x0F2B1410), blurRadius: 6, offset: Offset(0, 2)),
+    BoxShadow(
+      color: Color(0x382B1410),
+      blurRadius: 44,
+      spreadRadius: -14,
+      offset: Offset(0, 20),
+    ),
+  ];
+
+  /// เงาด้านบนของแถบล่าง / ถาดที่กางขึ้นมา
+  static const List<BoxShadow> shadowUp = [
+    BoxShadow(
+      color: Color(0x1F2B1410),
+      blurRadius: 26,
+      spreadRadius: -14,
+      offset: Offset(0, -10),
+    ),
   ];
 
   static List<BoxShadow> glow(Color color, {double strength = 0.32}) => [
@@ -195,6 +233,48 @@ class AppTheme {
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
+  /// พื้นปุ่มหลัก: ขอบบนสว่าง → สีหลัก → สีเข้ม (ชุดเดียวกับเว็บ)
+  static LinearGradient get primaryGradient => LinearGradient(
+    colors: [
+      Color.lerp(brandPrimary, Colors.white, 0.14)!,
+      brandPrimary,
+      brandDeep,
+    ],
+    stops: const [0, 0.48, 1],
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+  );
+
+  /// เส้นทองบางใต้แถบหัว
+  static const LinearGradient goldLine = LinearGradient(
+    colors: [
+      Color(0x00D4A373),
+      Color(0xBFD4A373),
+      Color(0xBFD4A373),
+      Color(0x00D4A373),
+    ],
+    stops: [0, 0.2, 0.8, 1],
+  );
+
+  /// การ์ดมาตรฐาน: พื้นขาว เส้นบาง เงาอุ่น (raised = เงาชั้นที่สอง)
+  static BoxDecoration surface({
+    double radius = radiusLg,
+    bool raised = false,
+    Color color = cardBg,
+  }) => BoxDecoration(
+    color: color,
+    borderRadius: BorderRadius.circular(radius),
+    border: Border.all(color: hairline),
+    boxShadow: raised ? shadowMd : shadowSm,
+  );
+
+  /// กล่องย่อยในการ์ด (พื้นเข้มกว่าการ์ดหนึ่งระดับ ไม่มีเงา)
+  static BoxDecoration well({double radius = radiusMd}) => BoxDecoration(
+    color: panelBg,
+    borderRadius: BorderRadius.circular(radius),
+    border: Border.all(color: hairline),
+  );
+
   static const LinearGradient aiGradient = LinearGradient(
     colors: [Color(0xFF8B5CF6), Color(0xFF6D28D9)],
     begin: Alignment.topLeft,
@@ -234,18 +314,18 @@ class AppTheme {
     final textTheme = base
         .copyWith(
           displaySmall: base.displaySmall?.copyWith(
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w600,
             height: 1.25,
             letterSpacing: -0.4,
           ),
           headlineSmall: base.headlineSmall?.copyWith(
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w600,
             height: 1.3,
             letterSpacing: -0.2,
           ),
           titleLarge: base.titleLarge?.copyWith(
             fontSize: 20,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w600,
             height: 1.3,
             letterSpacing: -0.1,
           ),
@@ -316,18 +396,21 @@ class AppTheme {
       ),
       textTheme: textTheme,
       appBarTheme: AppBarTheme(
-        backgroundColor: slateDark,
-        foregroundColor: Colors.white,
+        backgroundColor: cardBg,
+        foregroundColor: slateDark,
         elevation: 0,
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
         centerTitle: false,
         toolbarHeight: 48,
+        shape: const Border(bottom: BorderSide(color: hairline)),
+        iconTheme: const IconThemeData(color: slateBody, size: 22),
         titleTextStyle: GoogleFonts.prompt(
           fontSize: 16.5,
           fontWeight: FontWeight.w600,
-          color: Colors.white,
+          color: slateDark,
           height: 1.3,
+          letterSpacing: -0.1,
         ),
       ),
       cardTheme: CardThemeData(
@@ -337,29 +420,29 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radiusLg),
-          side: const BorderSide(color: borderSubtle, width: 1),
+          side: const BorderSide(color: hairline, width: 1),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: Colors.white,
         isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMd),
-          borderSide: const BorderSide(color: borderSubtle),
+          borderSide: const BorderSide(color: hairlineStrong),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMd),
-          borderSide: const BorderSide(color: borderSubtle),
+          borderSide: const BorderSide(color: hairlineStrong),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMd),
-          borderSide: BorderSide(color: brandPrimary, width: 1.6),
+          borderSide: BorderSide(color: brandPrimary, width: 1.4),
         ),
         hintStyle: GoogleFonts.prompt(
           fontSize: 13.5,
-          color: slateMuted,
+          color: slateMuted.withValues(alpha: 0.7),
           height: 1.3,
         ),
         labelStyle: GoogleFonts.prompt(
@@ -372,8 +455,8 @@ class AppTheme {
         style: ElevatedButton.styleFrom(
           backgroundColor: brandPrimary,
           foregroundColor: Colors.white,
-          elevation: 0,
-          shadowColor: Colors.transparent,
+          elevation: 1.5,
+          shadowColor: brandPrimary.withValues(alpha: 0.5),
           minimumSize: const Size(0, 36),
           padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
           shape: roundedMd,
@@ -386,6 +469,8 @@ class AppTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
+          elevation: 1.5,
+          shadowColor: brandPrimary.withValues(alpha: 0.5),
           minimumSize: const Size(0, 36),
           padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
           shape: roundedMd,
@@ -399,8 +484,9 @@ class AppTheme {
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: slateDark,
+          backgroundColor: cardBg,
           minimumSize: const Size(0, 36),
-          side: const BorderSide(color: borderSubtle),
+          side: const BorderSide(color: hairlineStrong),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
           shape: roundedMd,
           textStyle: GoogleFonts.prompt(
@@ -428,9 +514,12 @@ class AppTheme {
         backgroundColor: Colors.white,
         // Light selected fill so a chip label stays readable even when the
         // call site does not set its own selected text color.
-        selectedColor: brandSoft,
+        selectedColor: tintStrong,
         checkmarkColor: brandDeep,
-        side: const BorderSide(color: borderSubtle),
+        // Selected chips are told apart by their tinted fill; the tick only
+        // covers the chip icon (room tone swatch, tool icon).
+        showCheckmark: false,
+        side: const BorderSide(color: hairline),
         shape: const StadiumBorder(),
         // A chip resolves only the colour of its label style by state. A
         // state-dependent style as a whole is never resolved and leaves the
@@ -449,16 +538,16 @@ class AppTheme {
       navigationBarTheme: NavigationBarThemeData(
         height: 54,
         elevation: 0,
-        backgroundColor: Colors.white.withValues(alpha: 0.86),
+        backgroundColor: Colors.white.withValues(alpha: 0.92),
         surfaceTintColor: Colors.transparent,
-        indicatorColor: brandSoft,
+        indicatorColor: tintStrong,
         indicatorShape: const StadiumBorder(),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         iconTheme: WidgetStateProperty.resolveWith(
           (states) => IconThemeData(
-            size: 20,
+            size: 21,
             color: states.contains(WidgetState.selected)
-                ? brandDeep
+                ? brandPrimary
                 : slateMuted,
           ),
         ),
@@ -470,7 +559,7 @@ class AppTheme {
                 ? FontWeight.w600
                 : FontWeight.w500,
             color: states.contains(WidgetState.selected)
-                ? brandDeep
+                ? brandPrimary
                 : slateMuted,
           ),
         ),
@@ -484,7 +573,7 @@ class AppTheme {
         ),
         titleTextStyle: GoogleFonts.prompt(
           fontSize: 18,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w600,
           color: slateDark,
           height: 1.3,
         ),
@@ -501,10 +590,10 @@ class AppTheme {
         color: Colors.white,
         surfaceTintColor: Colors.transparent,
         elevation: 8,
-        shadowColor: const Color(0x330F172A),
+        shadowColor: const Color(0x402B1410),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radiusMd),
-          side: const BorderSide(color: borderSubtle),
+          side: const BorderSide(color: hairline),
         ),
         textStyle: GoogleFonts.prompt(
           fontSize: 13.5,
@@ -542,7 +631,7 @@ class AppTheme {
         unselectedLabelColor: slateMuted,
         indicatorColor: brandPrimary,
         indicatorSize: TabBarIndicatorSize.label,
-        dividerColor: borderSubtle,
+        dividerColor: hairline,
         labelStyle: GoogleFonts.prompt(
           fontSize: 13.5,
           fontWeight: FontWeight.w600,
@@ -555,12 +644,16 @@ class AppTheme {
         ),
       ),
       switchTheme: SwitchThemeData(
-        thumbColor: WidgetStateProperty.resolveWith(
-          (s) => s.contains(WidgetState.selected) ? Colors.white : null,
-        ),
-        trackColor: WidgetStateProperty.resolveWith(
-          (s) => s.contains(WidgetState.selected) ? brandPrimary : null,
-        ),
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        thumbColor: WidgetStateProperty.all(Colors.white),
+        trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
+        trackColor: WidgetStateProperty.resolveWith((s) {
+          final on = s.contains(WidgetState.selected);
+          final base = on ? brandPrimary : const Color(0xFFD6CEC2);
+          return s.contains(WidgetState.disabled)
+              ? base.withValues(alpha: 0.45)
+              : base;
+        }),
       ),
       listTileTheme: ListTileThemeData(
         shape: roundedMd,
@@ -586,7 +679,7 @@ class AppTheme {
       ),
       progressIndicatorTheme: ProgressIndicatorThemeData(color: brandPrimary),
       dividerTheme: const DividerThemeData(
-        color: borderSubtle,
+        color: hairline,
         thickness: 1,
         space: 1,
       ),
@@ -711,23 +804,12 @@ class UserAvatar extends StatelessWidget {
     this.isGroup = false,
   });
 
-  List<Color> _gradientColors() {
-    if (isOfficial) {
-      return AppTheme.preset.value.gradient;
-    }
-    if (isGroup) {
-      return const [Color(0xFF3B82F6), Color(0xFF1D4ED8)];
-    }
-    final hash = name.codeUnits.fold<int>(0, (a, b) => a + b);
-    const palettes = [
-      [Color(0xFF38BDF8), Color(0xFF2563EB)],
-      [Color(0xFFA78BFA), Color(0xFF6D28D9)],
-      [Color(0xFFF472B6), Color(0xFFBE185D)],
-      [Color(0xFF34D399), Color(0xFF047857)],
-      [Color(0xFFFBBF24), Color(0xFFD97706)],
-    ];
-    return palettes[hash % palettes.length];
-  }
+  // ไล่สีตามธีมที่เลือก ทุกคนใช้ชุดเดียวกันเพื่อให้ทั้งรายการดูเป็นชุดเดียว
+  List<Color> _gradientColors() => [
+    Color.lerp(AppTheme.brandPrimary, Colors.white, 0.2)!,
+    AppTheme.brandPrimary,
+    AppTheme.brandDeep,
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -756,11 +838,14 @@ class UserAvatar extends StatelessWidget {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
-              boxShadow: [
+              border: isOfficial
+                  ? Border.all(color: AppTheme.goldClay, width: 1.5)
+                  : null,
+              boxShadow: const [
                 BoxShadow(
-                  color: colors.last.withValues(alpha: 0.24),
-                  blurRadius: 10,
-                  offset: const Offset(0, 3),
+                  color: Color(0x292B1410),
+                  blurRadius: 4,
+                  offset: Offset(0, 1.5),
                 ),
               ],
             ),

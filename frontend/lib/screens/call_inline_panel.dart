@@ -878,7 +878,7 @@ class CallFullScreenStage extends StatelessWidget {
 
         return Material(
           key: const Key('call-fullscreen-stage'),
-          color: const Color(0xFF1A110F),
+          color: const Color(0xFF14100F),
           child: SafeArea(
             child: isIncomingOnly
                 ? _buildIncomingStage(mgr, incoming)
@@ -898,7 +898,7 @@ class CallFullScreenStage extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFF2B1310), Color(0xFF1A110F)],
+          colors: [Color(0xFF2B1310), Color(0xFF14100F)],
         ),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
@@ -950,7 +950,7 @@ class CallFullScreenStage extends StatelessWidget {
             style: const TextStyle(
               color: Colors.white,
               fontSize: 24,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               height: 1.25,
             ),
           ),
@@ -986,7 +986,7 @@ class CallFullScreenStage extends StatelessWidget {
                     ? Icons.videocam_rounded
                     : Icons.call_rounded,
                 label: 'รับสาย',
-                bgColor: const Color(0xFF0F766E),
+                bgColor: const Color(0xFF16A34A),
                 fgColor: Colors.white,
                 size: 62,
                 onTap: () => mgr.acceptIncomingCall(asVideo: call.isVideo),
@@ -1031,9 +1031,9 @@ class CallFullScreenStage extends StatelessWidget {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white12,
+                    color: Colors.white.withValues(alpha: 0.14),
                     borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: Colors.white24),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
                   ),
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
@@ -1050,7 +1050,7 @@ class CallFullScreenStage extends StatelessWidget {
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 12,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
@@ -1070,7 +1070,7 @@ class CallFullScreenStage extends StatelessWidget {
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 14,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     Text(
@@ -1080,7 +1080,8 @@ class CallFullScreenStage extends StatelessWidget {
                       style: const TextStyle(
                         color: AppTheme.goldClay,
                         fontSize: 11.5,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w500,
+                        fontFeatures: [FontFeature.tabularFigures()],
                       ),
                     ),
                   ],
@@ -1101,8 +1102,8 @@ class CallFullScreenStage extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: Colors.black38,
-                borderRadius: BorderRadius.circular(10),
+                color: Colors.black.withValues(alpha: 0.35),
+                borderRadius: BorderRadius.circular(AppTheme.radiusSm),
                 border: Border.all(
                   color: mgr.errorMessage != null
                       ? AppTheme.dangerRed
@@ -1129,12 +1130,12 @@ class CallFullScreenStage extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(AppTheme.radiusXl),
               child: Container(
                 decoration: BoxDecoration(
                   color: const Color(0xFF261916),
-                  border: Border.all(color: Colors.white12),
-                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusXl),
                 ),
                 child: _buildStageBody(mgr, title, statusText, videoTiles),
               ),
@@ -1156,9 +1157,9 @@ class CallFullScreenStage extends StatelessWidget {
                 icon: mgr.micMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
                 label: mgr.micMuted ? 'เปิดไมค์' : 'ปิดไมค์',
                 bgColor: mgr.micMuted
-                    ? Colors.white.withValues(alpha: 0.24)
-                    : Colors.white12,
-                fgColor: Colors.white,
+                    ? Colors.white
+                    : Colors.white.withValues(alpha: 0.14),
+                fgColor: mgr.micMuted ? AppTheme.slateDark : Colors.white,
                 onTap: mgr.toggleMic,
               ),
               _FullScreenCircleControl(
@@ -1168,9 +1169,9 @@ class CallFullScreenStage extends StatelessWidget {
                     : Icons.videocam_off_rounded,
                 label: mgr.cameraEnabled ? 'ปิดกล้อง' : 'เปิดกล้อง',
                 bgColor: mgr.cameraEnabled
-                    ? AppTheme.brandPrimary
-                    : Colors.white12,
-                fgColor: Colors.white,
+                    ? Colors.white.withValues(alpha: 0.14)
+                    : Colors.white,
+                fgColor: mgr.cameraEnabled ? Colors.white : AppTheme.slateDark,
                 onTap: mgr.toggleCamera,
               ),
               _FullScreenCircleControl(
@@ -1179,7 +1180,7 @@ class CallFullScreenStage extends StatelessWidget {
                     ? Icons.volume_up_rounded
                     : Icons.hearing_rounded,
                 label: mgr.speakerOn ? 'ลำโพง' : 'หูฟัง',
-                bgColor: mgr.speakerOn ? AppTheme.brandDeep : Colors.white12,
+                bgColor: Colors.white.withValues(alpha: 0.14),
                 fgColor: Colors.white,
                 onTap: mgr.toggleSpeaker,
               ),
@@ -1189,7 +1190,7 @@ class CallFullScreenStage extends StatelessWidget {
                 label: 'วางสาย',
                 bgColor: const Color(0xFFDC2626),
                 fgColor: Colors.white,
-                size: 58,
+                size: 56,
                 onTap: mgr.hangup,
               ),
             ],
@@ -1227,8 +1228,8 @@ class CallFullScreenStage extends StatelessWidget {
               height: 148,
               child: Container(
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white38, width: 1.5),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.18), width: 1.5),
                   boxShadow: const [
                     BoxShadow(
                       color: Color(0x66000000),
@@ -1254,7 +1255,7 @@ class CallFullScreenStage extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFF2B1815), Color(0xFF1A110F)],
+          colors: [Color(0xFF2B1815), Color(0xFF14100F)],
         ),
       ),
       padding: const EdgeInsets.all(24),
@@ -1284,7 +1285,7 @@ class CallFullScreenStage extends StatelessWidget {
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 22,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 8),
@@ -1293,7 +1294,7 @@ class CallFullScreenStage extends StatelessWidget {
               style: const TextStyle(
                 color: AppTheme.goldClay,
                 fontSize: 15,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
@@ -1353,10 +1354,12 @@ class CallFullScreenStage extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 250),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppTheme.radiusLg),
             border: Border.all(
-              color: tile.isSpeaking ? AppTheme.goldClay : Colors.white24,
-              width: tile.isSpeaking ? 2.5 : 1,
+              color: tile.isSpeaking
+                  ? AppTheme.goldClay
+                  : Colors.white.withValues(alpha: 0.10),
+              width: tile.isSpeaking ? 2 : 1,
             ),
           ),
           clipBehavior: Clip.antiAlias,
@@ -1392,15 +1395,15 @@ class CallFullScreenStage extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: Colors.black54,
-                borderRadius: BorderRadius.circular(8),
+                color: Colors.black.withValues(alpha: 0.35),
+                borderRadius: BorderRadius.circular(999),
               ),
               child: Text(
                 tile.name,
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ),
@@ -1436,7 +1439,11 @@ class _FullScreenCircleControl extends StatelessWidget {
       children: [
         Material(
           color: bgColor,
-          shape: const CircleBorder(),
+          elevation: bgColor == const Color(0xFFDC2626) ? 8 : 0,
+          shadowColor: const Color(0xFFDC2626).withValues(alpha: 0.5),
+          shape: CircleBorder(
+            side: BorderSide(color: Colors.white.withValues(alpha: 0.18)),
+          ),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: onTap,
@@ -1453,7 +1460,7 @@ class _FullScreenCircleControl extends StatelessWidget {
           style: const TextStyle(
             color: Colors.white,
             fontSize: 11.5,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ],
@@ -1505,9 +1512,9 @@ class CallInlinePanel extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(8, 6, 8, 2),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: AppTheme.dangerRed.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppTheme.dangerRed.withValues(alpha: 0.35)),
+        color: const Color(0xFFFEF3F2),
+        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+        border: Border.all(color: const Color(0xFFFECDCA)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -1545,14 +1552,8 @@ class CallInlinePanel extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         gradient: AppTheme.brandGradient,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x26812920),
-            blurRadius: 10,
-            offset: Offset(0, 3),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        boxShadow: AppTheme.shadowMd,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -1571,7 +1572,7 @@ class CallInlinePanel extends StatelessWidget {
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 Text(
@@ -1598,7 +1599,7 @@ class CallInlinePanel extends StatelessWidget {
           FilledButton.tonal(
             onPressed: mgr.declineIncomingCall,
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFB91C1C),
+              backgroundColor: const Color(0xFFDC2626),
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
               minimumSize: const Size(0, 32),
@@ -1614,7 +1615,7 @@ class CallInlinePanel extends StatelessWidget {
               mgr.acceptIncomingCall(asVideo: call.isVideo);
             },
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF0F766E),
+              backgroundColor: const Color(0xFF16A34A),
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
               minimumSize: const Size(0, 32),
@@ -1640,8 +1641,9 @@ class CallInlinePanel extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: AppTheme.terracottaNightBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.goldClay.withValues(alpha: 0.45)),
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+        boxShadow: AppTheme.shadowMd,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1668,7 +1670,7 @@ class CallInlinePanel extends StatelessWidget {
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 13,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
@@ -1849,9 +1851,9 @@ class _CallDevicesTray extends StatelessWidget {
       margin: const EdgeInsets.only(top: 6),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white24),
+        color: Colors.white.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1918,10 +1920,14 @@ class _CallDevicesTray extends StatelessWidget {
         constraints: const BoxConstraints(maxWidth: 220),
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
         decoration: BoxDecoration(
-          color: selected ? AppTheme.brandPrimary : Colors.transparent,
+          color: selected
+              ? Colors.white.withValues(alpha: 0.16)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
-            color: selected ? AppTheme.goldClay : Colors.white24,
+            color: selected
+                ? AppTheme.goldClay
+                : Colors.white.withValues(alpha: 0.18),
           ),
         ),
         child: Text(
@@ -1957,10 +1963,14 @@ class _CallControlChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: active ? Colors.white12 : Colors.white.withValues(alpha: 0.05),
+          color: active
+              ? Colors.white.withValues(alpha: 0.16)
+              : Colors.white.withValues(alpha: 0.10),
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
-            color: active ? AppTheme.goldClay : Colors.white24,
+            color: active
+                ? AppTheme.goldClay
+                : Colors.white.withValues(alpha: 0.18),
           ),
         ),
         child: Row(

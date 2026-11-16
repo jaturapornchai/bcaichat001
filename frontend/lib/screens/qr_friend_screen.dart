@@ -89,7 +89,7 @@ class _QrFriendScreenState extends State<QrFriendScreen> {
             style: const TextStyle(
               color: Colors.white,
               fontSize: 15,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -118,7 +118,7 @@ class _QrFriendScreenState extends State<QrFriendScreen> {
                 width: frame,
                 height: frame,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(22),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusXl),
                   border: Border.all(color: AppTheme.goldClay, width: 3),
                 ),
               ),
@@ -243,10 +243,10 @@ class _QrFriendScreenState extends State<QrFriendScreen> {
         child: Container(
           key: const Key('qr-fullscreen-my-qr'),
           constraints: const BoxConstraints(maxWidth: 320),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
+          padding: const EdgeInsets.all(20),
+          decoration: AppTheme.surface(
+            radius: AppTheme.radiusXl,
+            raised: true,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -265,7 +265,8 @@ class _QrFriendScreenState extends State<QrFriendScreen> {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontSize: 16,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.slateDark,
                 ),
               ),
               if (widget.bcId.isNotEmpty)
@@ -310,8 +311,9 @@ class _QrFriendScreenState extends State<QrFriendScreen> {
       child: Container(
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
-          color: Colors.white12,
+          color: Colors.white.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -364,7 +366,7 @@ class _QrFriendScreenState extends State<QrFriendScreen> {
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 13.5,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],

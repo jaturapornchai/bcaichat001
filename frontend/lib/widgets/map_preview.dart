@@ -333,7 +333,7 @@ class _BcMapPreviewState extends State<BcMapPreview>
     );
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(AppTheme.radiusLg),
       child: SizedBox(
         key: _mapBoxKey,
         height: widget.height,
@@ -481,11 +481,14 @@ class _MapChipButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.white,
-      elevation: 1,
-      borderRadius: BorderRadius.circular(8),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+        side: const BorderSide(color: AppTheme.hairline),
+      ),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           child: Row(
@@ -498,7 +501,7 @@ class _MapChipButton extends StatelessWidget {
                 label,
                 style: const TextStyle(
                   fontSize: 11.5,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w500,
                   color: AppTheme.slateDark,
                 ),
               ),

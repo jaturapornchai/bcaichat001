@@ -168,7 +168,7 @@ export default function MapPreview({
       style={height === "fill" ? undefined : { height }}
       // isolate: กันชั้น z-index ภายในแผนที่ลอยทับแถบหัวห้องแชท
       className={`relative isolate z-0 w-full overflow-hidden bg-[var(--bc-panel)] ${
-        height === "fill" ? "h-full" : "rounded-lg border border-[var(--bc-border)]"
+        height === "fill" ? "h-full" : "rounded-2xl border border-[var(--bc-line)] shadow-[var(--bc-elev-1)]"
       }`}
     >
       <div
@@ -184,7 +184,7 @@ export default function MapPreview({
           data-testid={`${testId}-layer-btn`}
           aria-pressed={satellite}
           onClick={() => setSatellite((v) => !v)}
-          className="absolute right-2 top-2 z-[1001] inline-flex h-8 items-center gap-1 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-card)] px-2 text-[11px] font-bold text-[var(--bc-text)] shadow-sm"
+          className="bc-btn bc-btn-secondary bc-btn-sm absolute right-2 top-2 z-[1001] shadow-[var(--bc-elev-2)]"
         >
           {satellite ? <MapIcon className="h-3.5 w-3.5" /> : <Satellite className="h-3.5 w-3.5" />}
           <span>{satellite ? "แผนที่" : "ดาวเทียม"}</span>

@@ -304,20 +304,20 @@ export function RoomSideModal({
       className="flex min-h-0 flex-1 flex-col bg-[var(--bc-surface)]"
     >
       {/* Inline Workspace Header */}
-      <div className="flex shrink-0 items-center justify-between gap-1.5 border-b border-[var(--bc-border)] bg-[var(--bc-card)] px-2.5 py-1.5 sm:px-3">
+      <div className="bc-appbar flex shrink-0 items-center justify-between gap-1.5 px-2.5 py-1.5 sm:px-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <button
             type="button"
             onClick={onClose}
             aria-label="ปิดหน้าต่างเครื่องมือ"
             data-testid="close-room-side-panel"
-            className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2.5 text-xs font-bold text-[var(--bc-primary)] hover:bg-[var(--bc-soft)]"
+            className="bc-btn bc-btn-soft shrink-0"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             <span>กลับไปแชท</span>
           </button>
           <div className="min-w-0">
-            <h3 className="truncate text-sm font-bold text-[var(--bc-text)]">
+            <h3 className="bc-title truncate text-sm font-semibold text-[var(--bc-text)]">
               {conversation.name}
             </h3>
             <p className="truncate text-[11px] text-[var(--bc-muted)]">
@@ -328,7 +328,7 @@ export function RoomSideModal({
       </div>
 
       {/* Sub Tabs: ตัดบรรทัดเมื่อไม่พอ ไม่เลื่อนซ้ายขวา */}
-      <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-[var(--bc-border)] bg-[var(--bc-panel)] px-2 py-1.5">
+      <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-[var(--bc-line)] bg-[var(--bc-panel)] px-2 py-1.5">
         {tabs.map((t) => {
           const active = t.id === openTab;
           return (
@@ -337,11 +337,7 @@ export function RoomSideModal({
               type="button"
               data-testid={`side-tab-${t.id}`}
               onClick={() => onSwitchTab(t.id)}
-              className={`inline-flex h-8 shrink-0 items-center gap-1 rounded-lg px-2.5 text-[11px] font-semibold transition ${
-                active
-                  ? "bg-[var(--bc-primary)] text-white shadow-xs"
-                  : "border border-[var(--bc-border)] bg-[var(--bc-card)] text-[var(--bc-text)] hover:bg-[var(--bc-soft)]"
-              }`}
+              className={`bc-chip shrink-0 ${active ? "is-active" : ""}`}
             >
               {t.icon}
               <span>{t.label}</span>
@@ -353,7 +349,7 @@ export function RoomSideModal({
       {/* Inline Content Area */}
       <div className="flex-1 space-y-2.5 overflow-y-auto p-2 sm:p-2.5">
         {loading && (
-          <div className="rounded-xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-4 text-center text-xs text-[var(--bc-muted)]">
+          <div className="bc-empty rounded-xl p-4 text-center text-xs text-[var(--bc-muted)]">
             กำลังโหลดข้อมูล...
           </div>
         )}
@@ -363,9 +359,9 @@ export function RoomSideModal({
           <div className="mx-auto max-w-2xl space-y-2.5">
             <form
               onSubmit={handleCreateAlbum}
-              className="space-y-1.5 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-2.5"
+              className="bc-card space-y-1.5 p-2.5"
             >
-              <div className="flex items-center gap-2 text-xs font-bold text-[var(--bc-primary)]">
+              <div className="flex items-center gap-2 text-xs font-semibold text-[var(--bc-primary)]">
                 <Plus className="h-4 w-4" />
                 <span>สร้างอัลบั้มรูปใหม่ (เก็บถาวรไม่หมดอายุ)</span>
               </div>
@@ -375,14 +371,14 @@ export function RoomSideModal({
                 value={albumTitle}
                 onChange={(e) => setAlbumTitle(e.target.value)}
                 placeholder="ชื่ออัลบั้ม เช่น ทริปทะเล / มื้ออร่อย"
-                className="w-full rounded-lg border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1.5 text-xs outline-none focus:border-[var(--bc-primary)]"
+                className="bc-input w-full"
               />
               <input
                 type="text"
                 value={albumDesc}
                 onChange={(e) => setAlbumDesc(e.target.value)}
                 placeholder="คำอธิบายอัลบั้ม (ไม่บังคับ)"
-                className="w-full rounded-lg border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1 text-xs outline-none focus:border-[var(--bc-primary)]"
+                className="bc-input w-full"
               />
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <input
@@ -394,7 +390,7 @@ export function RoomSideModal({
                 <button
                   type="submit"
                   data-testid="create-album-submit"
-                  className="inline-flex items-center gap-1 rounded-lg bg-[var(--bc-primary)] px-3 py-1.5 text-xs font-bold text-white hover:brightness-95"
+                  className="bc-btn bc-btn-primary"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   <span>สร้างอัลบั้ม</span>
@@ -410,11 +406,11 @@ export function RoomSideModal({
               albums.map((alb) => (
                 <div
                   key={alb.id}
-                  className="rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-2.5 shadow-2xs"
+                  className="bc-card p-2.5"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <h4 className="text-sm font-bold text-[var(--bc-text)]">{alb.title}</h4>
+                      <h4 className="text-sm font-semibold text-[var(--bc-text)]">{alb.title}</h4>
                       {alb.description && (
                         <p className="text-xs text-[var(--bc-muted)]">{alb.description}</p>
                       )}
@@ -423,7 +419,7 @@ export function RoomSideModal({
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5">
-                      <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2.5 py-1 text-[11px] font-semibold text-[var(--bc-primary)] hover:bg-[var(--bc-soft)]">
+                      <label className="bc-btn bc-btn-secondary bc-btn-sm cursor-pointer">
                         <Plus className="h-3 w-3" />
                         <span>เพิ่มรูป</span>
                         <input
@@ -446,7 +442,7 @@ export function RoomSideModal({
                             onNotify(err instanceof Error ? err.message : "ลบอัลบั้มไม่สำเร็จ");
                           }
                         }}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
+                        className="bc-iconbtn h-8 w-8 text-red-600"
                         title="ลบอัลบั้ม"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -461,7 +457,7 @@ export function RoomSideModal({
                           href={resolveMediaUrl(p.url)}
                           target="_blank"
                           rel="noreferrer"
-                          className="block overflow-hidden rounded-xl border border-[var(--bc-border)]"
+                          className="block overflow-hidden rounded-xl border border-[var(--bc-line)]"
                         >
                           <img
                             src={resolveMediaUrl(p.url)}
@@ -483,9 +479,9 @@ export function RoomSideModal({
           <div className="mx-auto max-w-2xl space-y-2.5">
             <form
               onSubmit={handleCreateNote}
-              className="space-y-1.5 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-2.5"
+              className="bc-card space-y-1.5 p-2.5"
             >
-              <div className="flex items-center gap-2 text-xs font-bold text-[var(--bc-primary)]">
+              <div className="flex items-center gap-2 text-xs font-semibold text-[var(--bc-primary)]">
                 <StickyNote className="h-4 w-4" />
                 <span>เขียนโน้ตกลุ่มใหม่</span>
               </div>
@@ -494,20 +490,20 @@ export function RoomSideModal({
                 value={noteTitle}
                 onChange={(e) => setNoteTitle(e.target.value)}
                 placeholder="หัวข้อโน้ตกลุ่ม..."
-                className="w-full rounded-lg border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1.5 text-xs outline-none focus:border-[var(--bc-primary)]"
+                className="bc-input w-full"
               />
               <textarea
                 rows={3}
                 value={noteContent}
                 onChange={(e) => setNoteContent(e.target.value)}
                 placeholder="รายละเอียดบันทึกประจำกลุ่ม..."
-                className="w-full rounded-lg border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1 text-xs outline-none focus:border-[var(--bc-primary)]"
+                className="bc-input w-full"
               />
               <div className="flex justify-end">
                 <button
                   type="submit"
                   data-testid="create-group-note-submit"
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-[var(--bc-primary)] px-3.5 py-2 text-xs font-bold text-white hover:brightness-95"
+                  className="bc-btn bc-btn-primary"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   <span>โพสต์โน้ตกลุ่ม</span>
@@ -520,13 +516,13 @@ export function RoomSideModal({
               return (
                 <div
                   key={n.id}
-                  className="space-y-1.5 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-2.5"
+                  className="bc-card space-y-1.5 p-2.5"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
                         {n.is_pinned && <Pin className="h-3.5 w-3.5 shrink-0 text-[var(--bc-primary)]" />}
-                        <h4 className="text-sm font-bold text-[var(--bc-text)]">{n.title}</h4>
+                        <h4 className="text-sm font-semibold text-[var(--bc-text)]">{n.title}</h4>
                       </div>
                       <p className="text-[11px] text-[var(--bc-muted)]">
                         โดย {n.owner_name} • {formatThaiTime(n.updated_at)}
@@ -543,7 +539,7 @@ export function RoomSideModal({
                             onNotify(err instanceof Error ? err.message : "ปักหมุดโน้ตไม่สำเร็จ");
                           }
                         }}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--bc-border)] text-[var(--bc-muted)] hover:bg-[var(--bc-soft)]"
+                        className="bc-iconbtn h-8 w-8 text-[var(--bc-muted)]"
                         title="ปักหมุดโน้ต"
                       >
                         <Pin className="h-3.5 w-3.5" />
@@ -558,7 +554,7 @@ export function RoomSideModal({
                             onNotify(err instanceof Error ? err.message : "ลบโน้ตไม่สำเร็จ");
                           }
                         }}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
+                        className="bc-iconbtn h-8 w-8 text-red-600"
                         title="ลบโน้ต"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -568,16 +564,12 @@ export function RoomSideModal({
                   <p className="whitespace-pre-wrap text-xs leading-relaxed text-[var(--bc-text)]">
                     {n.content}
                   </p>
-                  <div className="flex items-center gap-3 border-t border-[var(--bc-border)] pt-2">
+                  <div className="flex items-center gap-3 border-t border-[var(--bc-line)] pt-2">
                     <button
                       type="button"
                       data-testid={`like-note-${n.id}`}
                       onClick={() => handleLikeNote(n.id)}
-                      className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold ${
-                        liked
-                          ? "bg-[var(--bc-soft)] text-[var(--bc-primary)]"
-                          : "bg-[var(--bc-panel)] text-[var(--bc-muted)]"
-                      }`}
+                      className={`bc-chip ${liked ? "is-active" : ""}`}
                     >
                       <Heart className="h-3.5 w-3.5" />
                       <span>ถูกใจ ({n.liked_by.length})</span>
@@ -588,10 +580,10 @@ export function RoomSideModal({
                     </span>
                   </div>
                   {n.comments.length > 0 && (
-                    <div className="space-y-1.5 rounded-xl bg-[var(--bc-panel)] p-2.5">
+                    <div className="bc-well space-y-1.5 rounded-xl p-2.5">
                       {n.comments.map((c) => (
                         <div key={c.id} className="text-xs">
-                          <span className="font-bold text-[var(--bc-text)]">{c.user_name}: </span>
+                          <span className="font-semibold text-[var(--bc-text)]">{c.user_name}: </span>
                           <span className="text-[var(--bc-muted)]">{c.content}</span>
                         </div>
                       ))}
@@ -605,12 +597,12 @@ export function RoomSideModal({
                         setCommentDrafts((prev) => ({ ...prev, [n.id]: e.target.value }))
                       }
                       placeholder="แสดงความคิดเห็น..."
-                      className="min-w-0 flex-1 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-3 py-1.5 text-xs outline-none focus:border-[var(--bc-primary)]"
+                      className="bc-input min-w-0 flex-1"
                     />
                     <button
                       type="button"
                       onClick={() => handleCommentNote(n.id)}
-                      className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-[var(--bc-primary)] px-3 py-1.5 text-xs font-semibold text-white"
+                      className="bc-btn bc-btn-primary shrink-0"
                     >
                       <Send className="h-3 w-3" />
                       <span>ส่ง</span>
@@ -627,9 +619,9 @@ export function RoomSideModal({
           <div className="mx-auto max-w-2xl space-y-2.5">
             <form
               onSubmit={handleCreatePoll}
-              className="space-y-1.5 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-2.5"
+              className="bc-card space-y-1.5 p-2.5"
             >
-              <div className="flex items-center gap-2 text-xs font-bold text-[var(--bc-primary)]">
+              <div className="flex items-center gap-2 text-xs font-semibold text-[var(--bc-primary)]">
                 <BarChart3 className="h-4 w-4" />
                 <span>สร้างโพลโหวตสดในห้องแชท</span>
               </div>
@@ -639,7 +631,7 @@ export function RoomSideModal({
                 value={pollQuestion}
                 onChange={(e) => setPollQuestion(e.target.value)}
                 placeholder="คำถามโพล เช่น เสาร์นี้ไปกินร้านไหนดี?"
-                className="w-full rounded-lg border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1.5 text-xs outline-none focus:border-[var(--bc-primary)]"
+                className="bc-input w-full"
               />
               <div className="space-y-1.5">
                 {pollOptions.map((opt, idx) => (
@@ -653,7 +645,7 @@ export function RoomSideModal({
                         )
                       }
                       placeholder={`ตัวเลือกที่ ${idx + 1}`}
-                      className="min-w-0 flex-1 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-3 py-1.5 text-xs outline-none focus:border-[var(--bc-primary)]"
+                      className="bc-input min-w-0 flex-1"
                     />
                     {pollOptions.length > 2 && (
                       <button
@@ -661,7 +653,7 @@ export function RoomSideModal({
                         onClick={() =>
                           setPollOptions((prev) => prev.filter((_, i) => i !== idx))
                         }
-                        className="shrink-0 text-xs text-red-600"
+                        className="bc-btn bc-btn-ghost bc-btn-sm shrink-0 text-red-600"
                       >
                         ลบ
                       </button>
@@ -674,7 +666,7 @@ export function RoomSideModal({
                   <button
                     type="button"
                     onClick={() => setPollOptions((prev) => [...prev, ""])}
-                    className="text-xs font-semibold text-[var(--bc-primary)]"
+                    className="bc-btn bc-btn-ghost bc-btn-sm"
                   >
                     + เพิ่มตัวเลือก
                   </button>
@@ -690,7 +682,7 @@ export function RoomSideModal({
                 <button
                   type="submit"
                   data-testid="create-poll-submit"
-                  className="inline-flex items-center gap-1 rounded-lg bg-[var(--bc-primary)] px-3 py-1.5 text-xs font-bold text-white"
+                  className="bc-btn bc-btn-primary"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   <span>ส่งโพลเข้าห้องแชท</span>
@@ -704,11 +696,11 @@ export function RoomSideModal({
               return (
                 <div
                   key={pm.id}
-                  className="space-y-1.5 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-2.5"
+                  className="bc-card space-y-1.5 p-2.5"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <h4 className="text-sm font-bold text-[var(--bc-text)]">{poll.question}</h4>
-                    <span className="shrink-0 rounded-full bg-[var(--bc-panel)] px-2 py-0.5 text-[10px] font-semibold text-[var(--bc-muted)]">
+                    <h4 className="text-sm font-semibold text-[var(--bc-text)]">{poll.question}</h4>
+                    <span className="bc-tag shrink-0">
                       {poll.is_closed ? "ปิดโหวตแล้ว" : "เปิดโหวต"}
                     </span>
                   </div>
@@ -724,8 +716,8 @@ export function RoomSideModal({
                           onClick={() => onVotePoll(pm.id, [opt.id])}
                           className={`relative w-full overflow-hidden rounded-xl border px-3 py-2 text-left text-xs transition ${
                             voted
-                              ? "border-[var(--bc-primary)] bg-[var(--bc-soft)]/60 font-bold"
-                              : "border-[var(--bc-border)] bg-[var(--bc-surface)] hover:bg-[var(--bc-panel)]"
+                              ? "border-[var(--bc-primary)] bg-[var(--bc-tint-strong)] font-semibold"
+                              : "border-[var(--bc-line)] bg-[var(--bc-panel)] hover:bg-[var(--bc-tint)]"
                           }`}
                         >
                           <div
@@ -746,7 +738,7 @@ export function RoomSideModal({
                     <button
                       type="button"
                       onClick={() => onClosePoll(pm.id)}
-                      className="text-xs font-semibold text-[var(--bc-primary)] underline"
+                      className="bc-btn bc-btn-ghost bc-btn-sm"
                     >
                       ปิดการโหวตโพลนี้
                     </button>
@@ -762,9 +754,9 @@ export function RoomSideModal({
           <div className="mx-auto max-w-2xl space-y-2.5">
             <form
               onSubmit={handleCreateEvent}
-              className="space-y-1.5 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-2.5"
+              className="bc-card space-y-1.5 p-2.5"
             >
-              <div className="flex items-center gap-2 text-xs font-bold text-[var(--bc-primary)]">
+              <div className="flex items-center gap-2 text-xs font-semibold text-[var(--bc-primary)]">
                 <Calendar className="h-4 w-4" />
                 <span>สร้างนัดหมาย</span>
               </div>
@@ -774,21 +766,21 @@ export function RoomSideModal({
                 value={eventTitle}
                 onChange={(e) => setEventTitle(e.target.value)}
                 placeholder="ชื่อนัดหมาย เช่น นัดกินหมูกระทะเสาร์นี้"
-                className="w-full rounded-lg border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1.5 text-xs outline-none focus:border-[var(--bc-primary)]"
+                className="bc-input w-full"
               />
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <input
                   type="datetime-local"
                   value={eventStartsAt}
                   onChange={(e) => setEventStartsAt(e.target.value)}
-                  className="w-full rounded-lg border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1 text-xs outline-none focus:border-[var(--bc-primary)]"
+                  className="bc-input w-full"
                 />
                 <input
                   type="text"
                   value={eventLocation}
                   onChange={(e) => setEventLocation(e.target.value)}
                   placeholder="สถานที่นัดเจอ / ลิงก์วิดีโอคอล"
-                  className="w-full rounded-lg border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1 text-xs outline-none focus:border-[var(--bc-primary)]"
+                  className="bc-input w-full"
                 />
               </div>
               <input
@@ -796,13 +788,13 @@ export function RoomSideModal({
                 value={eventDesc}
                 onChange={(e) => setEventDesc(e.target.value)}
                 placeholder="รายละเอียดนัดหมาย..."
-                className="w-full rounded-lg border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1 text-xs outline-none focus:border-[var(--bc-primary)]"
+                className="bc-input w-full"
               />
               <div className="flex justify-end">
                 <button
                   type="submit"
                   data-testid="create-event-submit"
-                  className="inline-flex items-center gap-1 rounded-lg bg-[var(--bc-primary)] px-3 py-1.5 text-xs font-bold text-white"
+                  className="bc-btn bc-btn-primary"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   <span>ส่งนัดหมายเข้าห้องแชท</span>
@@ -815,9 +807,9 @@ export function RoomSideModal({
               return (
                 <div
                   key={em.id}
-                  className="space-y-1.5 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-2.5"
+                  className="bc-card space-y-1.5 p-2.5"
                 >
-                  <h4 className="text-sm font-bold text-[var(--bc-text)]">{ev.title}</h4>
+                  <h4 className="text-sm font-semibold text-[var(--bc-text)]">{ev.title}</h4>
                   {ev.description && (
                     <p className="text-xs text-[var(--bc-muted)]">{ev.description}</p>
                   )}
@@ -839,7 +831,7 @@ export function RoomSideModal({
                           await onRsvpEvent(em.id, st);
                           await loadTabData("events");
                         }}
-                        className="rounded-lg border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2.5 py-1 text-xs font-semibold text-[var(--bc-text)] hover:bg-[var(--bc-soft)]"
+                        className="bc-btn bc-btn-secondary bc-btn-sm"
                       >
                         {label}
                       </button>
@@ -855,7 +847,7 @@ export function RoomSideModal({
         {openTab === "vault" && vault && (
           <div className="mx-auto max-w-2xl space-y-2.5">
             <div>
-              <h4 className="mb-2 text-xs font-bold text-[var(--bc-primary)]">
+              <h4 className="bc-overline mb-2">
                 รูปภาพถาวร ({vault.images.length})
               </h4>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -865,7 +857,7 @@ export function RoomSideModal({
                     href={resolveMediaUrl(img.url)}
                     target="_blank"
                     rel="noreferrer"
-                    className="overflow-hidden rounded-xl border border-[var(--bc-border)] bg-[var(--bc-card)]"
+                    className="bc-card overflow-hidden rounded-xl"
                   >
                     <img
                       src={resolveMediaUrl(img.url)}
@@ -878,21 +870,21 @@ export function RoomSideModal({
             </div>
 
             <div>
-              <h4 className="mb-2 text-xs font-bold text-[var(--bc-primary)]">
+              <h4 className="bc-overline mb-2">
                 เอกสารและไฟล์เสียง ({vault.files.length})
               </h4>
-              <div className="space-y-1.5">
+              <div className="bc-card divide-y divide-[var(--bc-line)]">
                 {vault.files.map((f) => (
                   <a
                     key={f.id}
                     href={resolveMediaUrl(f.url)}
                     target="_blank"
                     rel="noreferrer"
-                    className="flex items-center justify-between gap-2 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-card)] px-2.5 py-1.5 text-xs hover:bg-[var(--bc-soft)]/50"
+                    className="bc-row justify-between gap-2 px-2.5 py-1.5 text-xs"
                   >
                     <div className="flex min-w-0 items-center gap-2">
                       <FileText className="h-4 w-4 shrink-0 text-[var(--bc-primary)]" />
-                      <span className="truncate font-semibold">{f.file_name}</span>
+                      <span className="truncate font-medium">{f.file_name}</span>
                     </div>
                     <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-[var(--bc-muted)]">
                       {formatFileSize(f.file_size)}
@@ -904,17 +896,17 @@ export function RoomSideModal({
             </div>
 
             <div>
-              <h4 className="mb-2 text-xs font-bold text-[var(--bc-primary)]">
+              <h4 className="bc-overline mb-2">
                 ลิงก์ในห้องแชท ({vault.links.length})
               </h4>
-              <div className="space-y-1.5">
+              <div className="bc-card divide-y divide-[var(--bc-line)]">
                 {vault.links.map((lk) => (
                   <a
                     key={lk.id}
                     href={lk.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="flex items-center gap-2 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-card)] px-2.5 py-1.5 text-xs text-[var(--bc-primary)] underline"
+                    className="bc-row gap-2 px-2.5 py-1.5 text-xs text-[var(--bc-primary)] underline"
                   >
                     <Link2 className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate">{lk.url}</span>
@@ -930,10 +922,10 @@ export function RoomSideModal({
           <div className="mx-auto max-w-2xl space-y-2.5">
             {/* Group Invite Controls */}
             {conversation.type === "group" && (
-              <div className="space-y-2 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-2.5">
+              <div className="bc-card space-y-2 p-2.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <span className="text-xs font-bold text-[var(--bc-primary)]">
+                    <span className="text-xs font-semibold text-[var(--bc-primary)]">
                       รหัสเชิญ
                     </span>
                     {conversation.invite_token && (
@@ -951,7 +943,7 @@ export function RoomSideModal({
                         onNotify("คัดลอกรหัสเชิญเข้ากลุ่มแล้ว");
                       }
                     }}
-                    className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg bg-[var(--bc-soft)] px-2.5 text-xs font-bold text-[var(--bc-primary)] hover:brightness-95"
+                    className="bc-btn bc-btn-soft bc-btn-sm shrink-0"
                   >
                     <Copy className="h-3.5 w-3.5" />
                     <span>{conversation.invite_token ? "คัดลอก" : "ไม่มีรหัส"}</span>
@@ -971,7 +963,7 @@ export function RoomSideModal({
                         onNotify(err instanceof Error ? err.message : "เชิญ 🤖 BC AI เข้ากลุ่มไม่สำเร็จ");
                       }
                     }}
-                    className="flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-3 text-xs font-bold text-white hover:bg-indigo-700"
+                    className="bc-btn bc-btn-primary w-full"
                   >
                     <Bot className="h-4 w-4" />
                     <span>เชิญ 🤖 BC AI เข้ากลุ่ม</span>
@@ -980,7 +972,7 @@ export function RoomSideModal({
 
                 {invitableFriends.length > 0 && (
                   <div>
-                    <p className="mb-1.5 text-xs font-semibold text-[var(--bc-muted)]">
+                    <p className="mb-1.5 text-xs font-medium text-[var(--bc-muted)]">
                       เชิญเพื่อนเข้ากลุ่มนี้:
                     </p>
                     <div className="flex flex-wrap gap-1.5">
@@ -997,7 +989,7 @@ export function RoomSideModal({
                               onNotify(err instanceof Error ? err.message : "เชิญเพื่อนเข้ากลุ่มไม่สำเร็จ");
                             }
                           }}
-                          className="inline-flex h-8 items-center gap-1 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2.5 text-xs font-medium hover:bg-[var(--bc-soft)]"
+                          className="bc-chip"
                         >
                           <UserPlus className="h-3 w-3 text-[var(--bc-primary)]" />
                           <span>{f.display_name}</span>
@@ -1010,14 +1002,14 @@ export function RoomSideModal({
             )}
 
             {/* Member List */}
-            <div className="space-y-1.5 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-2.5">
-              <h4 className="text-xs font-bold text-[var(--bc-primary)]">
+            <div className="bc-card divide-y divide-[var(--bc-line)] p-2.5">
+              <h4 className="bc-overline pb-1.5">
                 รายชื่อสมาชิก ({conversation.members.length})
               </h4>
               {conversation.members.map((m) => (
                 <div
                   key={m.id}
-                  className="flex items-center justify-between gap-2 rounded-lg bg-[var(--bc-panel)] px-2.5 py-1.5"
+                  className="bc-row justify-between gap-2 px-1 py-1.5"
                 >
                   <div className="flex min-w-0 items-center gap-2.5">
                     <UserAvatar
@@ -1027,7 +1019,7 @@ export function RoomSideModal({
                       isAi={m.id === "user_ai"}
                     />
                     <div className="min-w-0">
-                      <div className="truncate text-xs font-bold text-[var(--bc-text)]">
+                      <div className="truncate text-xs font-semibold text-[var(--bc-text)]">
                         {m.display_name}
                       </div>
                       <div className="truncate text-[11px] text-[var(--bc-muted)]">
@@ -1050,7 +1042,7 @@ export function RoomSideModal({
                             onNotify(err instanceof Error ? err.message : "ดำเนินการกับสมาชิกไม่สำเร็จ");
                           }
                         }}
-                        className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-red-200 bg-white px-2 text-[11px] font-semibold text-red-600 hover:bg-red-50"
+                        className="bc-btn bc-btn-danger bc-btn-sm shrink-0"
                       >
                         <LogOut className="h-3 w-3" />
                         <span>{m.id === currentUser.id ? "ออกจากกลุ่ม" : "ลบออก"}</span>
@@ -1061,8 +1053,8 @@ export function RoomSideModal({
             </div>
 
             {/* Room Meta Controls: Pin / Archive / Timed Mute / Room Tone */}
-            <div className="space-y-2 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-2.5">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--bc-primary)]">
+            <div className="bc-card space-y-2 p-2.5">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--bc-primary)]">
                 <Settings className="h-4 w-4" />
                 <span>ตั้งค่าห้องแชท</span>
               </div>
@@ -1075,7 +1067,7 @@ export function RoomSideModal({
                       value={editRoomName}
                       onChange={(e) => setEditRoomName(e.target.value)}
                       placeholder="ชื่อกลุ่ม"
-                      className="h-9 min-w-0 flex-1 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-3 text-xs outline-none focus:border-[var(--bc-primary)]"
+                      className="bc-input min-w-0 flex-1"
                     />
                     <button
                       type="button"
@@ -1091,7 +1083,7 @@ export function RoomSideModal({
                           onNotify(err instanceof Error ? err.message : "บันทึกชื่อกลุ่มไม่สำเร็จ");
                         }
                       }}
-                      className="inline-flex h-9 shrink-0 items-center gap-1 rounded-xl bg-[var(--bc-primary)] px-3 text-xs font-bold text-white"
+                      className="bc-btn bc-btn-primary shrink-0"
                     >
                       <Check className="h-3.5 w-3.5" />
                       <span>บันทึก</span>
@@ -1102,7 +1094,7 @@ export function RoomSideModal({
                     value={editRoomAvatar}
                     onChange={(e) => setEditRoomAvatar(e.target.value)}
                     placeholder="ลิงก์รูปกลุ่ม (ไม่บังคับ)"
-                    className="h-8 w-full rounded-lg border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 text-xs outline-none focus:border-[var(--bc-primary)]"
+                    className="bc-input w-full"
                   />
                 </div>
               )}
@@ -1120,11 +1112,7 @@ export function RoomSideModal({
                       onNotify(err instanceof Error ? err.message : "อัปเดตสถานะปักหมุดไม่สำเร็จ");
                     }
                   }}
-                  className={`inline-flex h-8 items-center gap-1 rounded-lg border px-2.5 text-xs font-semibold ${
-                    conversation.is_pinned
-                      ? "border-[var(--bc-primary)] bg-[var(--bc-soft)] text-[var(--bc-primary)]"
-                      : "border-[var(--bc-border)] bg-[var(--bc-panel)]"
-                  }`}
+                  className={`bc-chip ${conversation.is_pinned ? "is-active" : ""}`}
                 >
                   <Pin className="h-3.5 w-3.5" />
                   <span>{conversation.is_pinned ? "เลิกปักหมุดห้อง" : "ปักหมุดห้อง"}</span>
@@ -1142,11 +1130,7 @@ export function RoomSideModal({
                       onNotify(err instanceof Error ? err.message : "อัปเดตสถานะเก็บถาวรไม่สำเร็จ");
                     }
                   }}
-                  className={`inline-flex h-8 items-center gap-1 rounded-lg border px-2.5 text-xs font-semibold ${
-                    conversation.is_archived
-                      ? "border-[var(--bc-primary)] bg-[var(--bc-soft)] text-[var(--bc-primary)]"
-                      : "border-[var(--bc-border)] bg-[var(--bc-panel)]"
-                  }`}
+                  className={`bc-chip ${conversation.is_archived ? "is-active" : ""}`}
                 >
                   <Archive className="h-3.5 w-3.5" />
                   <span>{conversation.is_archived ? "นำออกจากเก็บถาวร" : "เก็บถาวร"}</span>
@@ -1154,9 +1138,9 @@ export function RoomSideModal({
               </div>
 
               {/* Timed Mute Duration Inline Selector */}
-              <div className="space-y-1.5 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2">
+              <div className="bc-well space-y-1.5 rounded-xl p-2">
                 <div className="flex flex-wrap items-center justify-between gap-1 text-[11px]">
-                  <span className="inline-flex items-center gap-1 font-bold text-[var(--bc-text)]">
+                  <span className="inline-flex items-center gap-1 font-semibold text-[var(--bc-text)]">
                     {isConversationMutedNow(conversation) ? (
                       <BellOff className="h-3.5 w-3.5 text-[var(--bc-primary)]" />
                     ) : (
@@ -1166,7 +1150,7 @@ export function RoomSideModal({
                   </span>
                   <span
                     data-testid="room-mute-status"
-                    className="inline-flex items-center gap-1 font-semibold text-[var(--bc-primary)]"
+                    className="inline-flex items-center gap-1 font-medium text-[var(--bc-primary)]"
                   >
                     {isConversationMutedNow(conversation) ? (
                       <>
@@ -1216,11 +1200,7 @@ export function RoomSideModal({
                             );
                           }
                         }}
-                        className={`inline-flex h-8 items-center gap-1 rounded-lg border px-2.5 text-[11px] font-semibold transition ${
-                          active
-                            ? "border-[var(--bc-primary)] bg-[var(--bc-soft)] text-[var(--bc-primary)]"
-                            : "border-[var(--bc-border)] bg-[var(--bc-card)] text-[var(--bc-text)] hover:border-[var(--bc-primary)]"
-                        }`}
+                        className={`bc-chip ${active ? "is-active" : ""}`}
                       >
                         <span>{label}</span>
                       </button>
@@ -1231,9 +1211,9 @@ export function RoomSideModal({
 
               {/* Room Tone & Watermark Selector */}
               {onChangeRoomTone && (
-                <div className="space-y-1.5 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2">
+                <div className="bc-well space-y-1.5 rounded-xl p-2">
                   <div className="flex items-center justify-between gap-2 text-[11px]">
-                    <span className="inline-flex items-center gap-1 font-bold text-[var(--bc-text)]">
+                    <span className="inline-flex items-center gap-1 font-semibold text-[var(--bc-text)]">
                       <Palette className="h-3.5 w-3.5 text-[var(--bc-primary)]" />
                       <span>โทนสีห้องแชท</span>
                     </span>
@@ -1242,11 +1222,7 @@ export function RoomSideModal({
                         type="button"
                         data-testid="room-side-watermark-toggle"
                         onClick={onToggleWatermark}
-                        className={`inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-[11px] font-semibold ${
-                          showWatermark
-                            ? "border-[var(--bc-primary)] bg-[var(--bc-soft)] text-[var(--bc-primary)]"
-                            : "border-[var(--bc-border)] bg-[var(--bc-card)] text-[var(--bc-muted)]"
-                        }`}
+                        className={`bc-chip ${showWatermark ? "is-active" : ""}`}
                       >
                         <Shield className="h-3 w-3" />
                         <span>ลายน้ำ: {showWatermark ? "เปิด" : "ปิด"}</span>
@@ -1260,15 +1236,11 @@ export function RoomSideModal({
                         type="button"
                         data-testid={`room-side-tone-${t.id}`}
                         onClick={() => onChangeRoomTone(t.id)}
-                        className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-semibold ${
-                          roomTone === t.id
-                            ? "border-[var(--bc-primary)] bg-[var(--bc-soft)] text-[var(--bc-primary)]"
-                            : "border-[var(--bc-border)] bg-[var(--bc-card)] text-[var(--bc-text)]"
-                        }`}
+                        className={`bc-chip shrink-0 gap-1.5 ${roomTone === t.id ? "is-active" : ""}`}
                       >
                         <span
                           style={{ backgroundColor: t.swatch }}
-                          className="h-3 w-3 rounded-full border border-[var(--bc-border)]"
+                          className="h-3 w-3 rounded-2xl ring-1 ring-inset ring-[var(--bc-line-strong)]"
                         />
                         <span>{t.label}</span>
                         {roomTone === t.id && <Check className="h-3 w-3" />}
@@ -1290,13 +1262,13 @@ export function RoomSideModal({
                 conversation.is_blocked_by_me || peerFriend?.is_blocked
               );
               return (
-                <div className="space-y-1.5 rounded-2xl border border-red-200 bg-red-50/50 p-2.5">
+                <div className="bc-note bc-note-danger space-y-1.5 rounded-2xl p-2.5">
                   <div className="flex items-center justify-between gap-2 text-[11px]">
-                    <span className="font-bold text-red-800">
+                    <span className="font-semibold text-red-800">
                       จัดการเพื่อน: {peer.display_name}
                     </span>
                     {isBlocked && (
-                      <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">
+                      <span className="bc-tag">
                         บล็อกอยู่
                       </span>
                     )}
@@ -1316,7 +1288,7 @@ export function RoomSideModal({
                           onNotify(err instanceof Error ? err.message : "อัปเดตไม่สำเร็จ");
                         }
                       }}
-                      className="inline-flex h-8 items-center gap-1 rounded-lg border border-[var(--bc-border)] bg-white px-2.5 text-[11px] font-semibold text-[var(--bc-text)] hover:border-[var(--bc-primary)]"
+                      className="bc-btn bc-btn-secondary bc-btn-sm"
                     >
                       {isHidden ? (
                         <Eye className="h-3.5 w-3.5 text-[var(--bc-primary)]" />
@@ -1342,11 +1314,7 @@ export function RoomSideModal({
                           onNotify(err instanceof Error ? err.message : "อัปเดตไม่สำเร็จ");
                         }
                       }}
-                      className={`inline-flex h-8 items-center gap-1 rounded-lg border px-2.5 text-[11px] font-semibold ${
-                        isBlocked
-                          ? "border-[var(--bc-primary)] bg-[var(--bc-soft)] text-[var(--bc-primary)]"
-                          : "border-red-300 bg-white text-red-700 hover:bg-red-50"
-                      }`}
+                      className={`bc-btn bc-btn-sm ${isBlocked ? "bc-btn-soft" : "bc-btn-danger"}`}
                     >
                       <Ban className="h-3.5 w-3.5" />
                       <span>{isBlocked ? "ปลดบล็อก" : "บล็อก"}</span>
@@ -1364,7 +1332,7 @@ export function RoomSideModal({
                           onNotify(err instanceof Error ? err.message : "ลบเพื่อนไม่สำเร็จ");
                         }
                       }}
-                      className="inline-flex h-8 items-center gap-1 rounded-lg border border-red-300 bg-white px-2.5 text-[11px] font-semibold text-red-700 hover:bg-red-50"
+                      className="bc-btn bc-btn-danger bc-btn-sm"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                       <span>ลบเพื่อน</span>

@@ -384,22 +384,22 @@ export function LoginView({
     <div className="bc-spiral-bg flex min-h-[100dvh] flex-col items-center justify-center overflow-x-hidden px-3 py-5 sm:px-4 sm:py-8">
       <main className="mx-auto w-full max-w-md space-y-3">
         {/* Single Centered Login Card */}
-        <section className="rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-4 shadow-md sm:p-5">
+        <section className="bc-card bc-card-raised p-4 sm:p-5">
           {/* Card Brand Header (Single <h1> on page) */}
-          <div className="mb-3.5 flex items-center gap-3">
+          <div className="bc-hero mb-3.5 flex items-center gap-3 rounded-2xl p-3">
             <img
               src="/icons/logo.png"
               alt={`โลโก้ ${siteName}`}
               width={48}
               height={48}
               data-testid="brand-logo-img"
-              className="h-12 w-12 shrink-0 rounded-full object-cover shadow-xs"
+              className="h-12 w-12 shrink-0 rounded-full object-cover shadow-md ring-2 ring-white/50"
             />
             <div className="min-w-0 flex-1">
-              <h1 className="text-lg font-bold leading-tight tracking-tight text-[var(--bc-text)]">
+              <h1 className="text-lg font-bold leading-tight tracking-tight text-white">
                 {siteName}
               </h1>
-              <p className="mt-0.5 truncate text-xs text-[var(--bc-muted)]">
+              <p className="mt-0.5 truncate text-xs text-white/80">
                 {site === "oa"
                   ? "จัดการแชทลูกค้า คูปอง และข่าวสารของร้านคุณ"
                   : "แชทกับครอบครัว เพื่อน ผู้ช่วย AI และร้านค้า"}
@@ -410,14 +410,14 @@ export function LoginView({
           {errorMsg && (
             <div
               role="alert"
-              className="mb-3 rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-xs font-medium text-red-800"
+              className="bc-note bc-note-danger mb-3 rounded-xl font-medium"
             >
               {errorMsg}
             </div>
           )}
 
           {infoMsg && (
-            <div className="mb-3 rounded-xl border border-[var(--bc-primary)]/30 bg-[var(--bc-soft)]/50 px-3 py-2 text-xs font-medium text-[var(--bc-deep)]">
+            <div className="bc-note mb-3 rounded-xl font-medium">
               {infoMsg}
             </div>
           )}
@@ -428,7 +428,7 @@ export function LoginView({
               <div>
                 <label
                   htmlFor="login-phone-field"
-                  className="mb-1 block text-xs font-semibold text-[var(--bc-text)]"
+                  className="bc-label mb-1 block"
                 >
                   เบอร์มือถือ
                 </label>
@@ -442,13 +442,13 @@ export function LoginView({
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="081-234-5678"
                     data-testid="login-phone-input"
-                    className="min-h-[38px] w-full rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] py-2 pl-9 pr-3 text-sm text-[var(--bc-text)] outline-none focus:border-[var(--bc-primary)]"
+                    className="bc-input bc-input-lg bc-num w-full pl-9"
                   />
                 </div>
               </div>
 
               {authConfig && !authConfig.phone_otp_ready && (
-                <p className="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800">
+                <p className="bc-note bc-note-warn text-[11px]">
                   ระบบส่งรหัส OTP ยังไม่พร้อมใช้งาน (ผู้ดูแลระบบยังไม่ได้ตั้งค่า)
                 </p>
               )}
@@ -457,10 +457,7 @@ export function LoginView({
                 type="submit"
                 disabled={busy || googleWaiting}
                 data-testid="request-otp-btn"
-                className="flex min-h-[40px] w-full items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:brightness-95 disabled:opacity-60"
-                style={{
-                  background: "linear-gradient(135deg, var(--bc-deep), var(--bc-primary))",
-                }}
+                className="bc-btn bc-btn-primary bc-btn-lg w-full gap-2"
               >
                 <Phone className="h-4 w-4 shrink-0" />
                 <span>{busy ? "กำลังส่งรหัส OTP..." : "รับรหัส OTP"}</span>
@@ -469,13 +466,13 @@ export function LoginView({
           ) : (
             <form
               onSubmit={handleVerifyOtp}
-              className="space-y-2.5 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-3"
+              className="bc-well space-y-2.5 rounded-xl p-3"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs font-bold text-[var(--bc-text)]">
+                <span className="text-xs font-semibold text-[var(--bc-text)]">
                   ยืนยันรหัส OTP ({challenge.masked_phone})
                 </span>
-                <span className="inline-flex items-center rounded-full bg-[var(--bc-soft)] px-2.5 py-0.5 text-[11px] font-bold text-[var(--bc-deep)]">
+                <span className="bc-tag bc-num">
                   Ref: {challenge.ref_code}
                 </span>
               </div>
@@ -483,7 +480,7 @@ export function LoginView({
               <div>
                 <label
                   htmlFor="login-otp-field"
-                  className="mb-1 block text-xs font-semibold text-[var(--bc-text)]"
+                  className="bc-label mb-1 block"
                 >
                   รหัส OTP 6 หลัก
                 </label>
@@ -497,14 +494,14 @@ export function LoginView({
                   onChange={(e) => setOtpCode(e.target.value)}
                   placeholder="กรอกรหัส 6 หลัก"
                   data-testid="login-otp-code-input"
-                  className="min-h-[38px] w-full rounded-xl border border-[var(--bc-border)] bg-[var(--bc-card)] px-3 py-1.5 text-center text-sm font-bold tracking-widest text-[var(--bc-text)] outline-none focus:border-[var(--bc-primary)]"
+                  className="bc-input bc-input-lg bc-num w-full text-center font-semibold tracking-widest"
                 />
               </div>
 
               <div>
                 <label
                   htmlFor="login-name-field"
-                  className="mb-1 block text-xs font-semibold text-[var(--bc-text)]"
+                  className="bc-label mb-1 block"
                 >
                   ชื่อเล่น (สำหรับผู้ใช้ใหม่)
                 </label>
@@ -515,7 +512,7 @@ export function LoginView({
                   onChange={(e) => setDisplayName(e.target.value)}
                   placeholder="เช่น นิดา หรือ ก้อง"
                   data-testid="login-display-name-input"
-                  className="min-h-[38px] w-full rounded-xl border border-[var(--bc-border)] bg-[var(--bc-card)] px-3 py-1.5 text-xs text-[var(--bc-text)] outline-none focus:border-[var(--bc-primary)]"
+                  className="bc-input w-full"
                 />
               </div>
 
@@ -523,10 +520,7 @@ export function LoginView({
                 type="submit"
                 disabled={busy}
                 data-testid="verify-otp-btn"
-                className="flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:brightness-95 disabled:opacity-60"
-                style={{
-                  background: "linear-gradient(135deg, var(--bc-deep), var(--bc-primary))",
-                }}
+                className="bc-btn bc-btn-primary bc-btn-lg w-full gap-1.5"
               >
                 <span>{busy ? "กำลังตรวจสอบ..." : "ยืนยันเข้าสู่ระบบ"}</span>
               </button>
@@ -536,7 +530,7 @@ export function LoginView({
                   type="button"
                   disabled={busy || countdown > 0}
                   onClick={() => void handleRequestOtp()}
-                  className="inline-flex min-h-[32px] items-center gap-1 font-semibold text-[var(--bc-primary)] disabled:text-[var(--bc-muted)]"
+                  className="bc-btn bc-btn-ghost bc-btn-sm gap-1 bc-num"
                 >
                   <RefreshCw className="h-3.5 w-3.5 shrink-0" />
                   <span>
@@ -551,7 +545,7 @@ export function LoginView({
                     setOtpCode("");
                     setInfoMsg(null);
                   }}
-                  className="min-h-[32px] font-semibold text-[var(--bc-muted)] hover:text-[var(--bc-text)]"
+                  className="bc-btn bc-btn-ghost bc-btn-sm"
                 >
                   เปลี่ยนเบอร์โทร
                 </button>
@@ -560,9 +554,9 @@ export function LoginView({
           )}
 
           <div className="my-3 flex items-center gap-2.5">
-            <div className="h-px flex-1 bg-[var(--bc-border)]" />
-            <span className="text-xs font-medium text-[var(--bc-muted)]">หรือ</span>
-            <div className="h-px flex-1 bg-[var(--bc-border)]" />
+            <div className="h-px flex-1 bg-[var(--bc-line)]" />
+            <span className="text-[11px] text-[var(--bc-muted)]">หรือ</span>
+            <div className="h-px flex-1 bg-[var(--bc-line)]" />
           </div>
 
           {/* Primary Google OAuth Login */}
@@ -572,7 +566,7 @@ export function LoginView({
               disabled={busy || googleWaiting || (authConfig !== null && !authConfig.google_enabled)}
               onClick={handleGoogleLogin}
               data-testid="google-login-btn"
-              className="flex min-h-[40px] w-full items-center justify-center gap-2 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] px-4 py-2 text-sm font-bold text-[var(--bc-text)] transition hover:border-[var(--bc-primary)] hover:bg-[var(--bc-soft)]/50 disabled:opacity-60"
+              className="bc-btn bc-btn-secondary bc-btn-lg w-full gap-2"
             >
               <Mail className="h-4 w-4 shrink-0 text-[var(--bc-primary)]" />
               <span>
@@ -584,7 +578,7 @@ export function LoginView({
               <button
                 type="button"
                 onClick={() => oauthCleanupRef.current?.()}
-                className="min-h-[32px] w-full rounded-lg border border-[var(--bc-border)] bg-[var(--bc-surface)] px-3 py-1 text-xs font-semibold text-[var(--bc-muted)] hover:text-[var(--bc-text)]"
+                className="bc-btn bc-btn-ghost bc-btn-sm w-full"
               >
                 ยกเลิก
               </button>
@@ -604,7 +598,7 @@ export function LoginView({
               onClick={() => void handlePwaInstallClick()}
               data-testid="pwa-install-btn"
               aria-expanded={showPwaGuide}
-              className="flex w-full items-center gap-3 rounded-xl border border-[var(--bc-primary)]/35 bg-[var(--bc-soft)]/45 px-3.5 py-2.5 text-left transition hover:border-[var(--bc-primary)] hover:bg-[var(--bc-soft)]/75"
+              className="bc-well flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-[var(--bc-tint)]"
             >
               {pwaInstalled ? (
                 <CheckCircle2 className="h-6 w-6 shrink-0 text-[var(--bc-primary)]" />
@@ -612,7 +606,7 @@ export function LoginView({
                 <MonitorDown className="h-6 w-6 shrink-0 text-[var(--bc-primary)]" />
               )}
               <span className="min-w-0 flex-1">
-                <span className="block text-sm font-bold leading-snug text-[var(--bc-deep)]">
+                <span className="block text-sm font-semibold leading-snug text-[var(--bc-deep)]">
                   {pwaInstalled
                     ? `ติดตั้งแอป ${siteName} แล้ว (PWA)`
                     : "ติดตั้งจากเบราว์เซอร์ (PWA)"}
@@ -628,9 +622,9 @@ export function LoginView({
             {showPwaGuide && !pwaInstalled && (
               <div
                 data-testid="pwa-install-inline-guide"
-                className="space-y-1 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] px-3 py-2 text-[11px] leading-relaxed text-[var(--bc-text)]"
+                className="bc-well space-y-1 rounded-xl px-3 py-2 text-[11px] leading-relaxed text-[var(--bc-text)]"
               >
-                <div className="font-bold text-[var(--bc-deep)]">
+                <div className="font-semibold text-[var(--bc-deep)]">
                   วิธีติดตั้ง {siteName} บน{isIos ? " iPhone / iPad (Safari)" : " Chrome / Edge / มือถือ"}
                 </div>
                 {isIos ? (
@@ -656,44 +650,44 @@ export function LoginView({
           {authConfig?.test_users_enabled && (authConfig.test_users?.length ?? 0) > 0 && (
             <div
               data-testid="quick-test-users-box"
-              className="mt-3.5 space-y-2 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)]/70 p-2.5"
+              className="mt-3.5 space-y-1.5 border-t border-[var(--bc-line)] pt-2.5"
             >
               <div>
-                <div className="text-xs font-bold text-[var(--bc-text)]">
+                <div className="bc-overline">
                   เข้าทดสอบด่วน (คลิกเข้าใช้งานทันที)
                 </div>
                 <p className="text-[11px] text-[var(--bc-muted)]">
                   คลิกเพื่อเข้าสู่ระบบทันที หรือเปิดแท็บใหม่เพื่อคุยข้ามบัญชี
                 </p>
               </div>
-              <div className="space-y-1.5">
+              <div className="divide-y divide-[var(--bc-line)]">
                 {authConfig.test_users!.map((u) => {
                   const formattedBcId = u.bc_id.startsWith("@") ? u.bc_id : `@${u.bc_id}`;
                   return (
                     <div
                       key={u.slot}
-                      className="flex items-center gap-1.5 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-1.5"
+                      className="bc-row flex items-center gap-1.5 p-1"
                     >
                       <button
                         type="button"
                         disabled={busy || googleWaiting}
                         data-testid={`quick-test-user-${u.slot}`}
                         onClick={() => void handleQuickTestLogin(u.slot)}
-                        className="flex min-h-[40px] min-w-0 flex-1 items-center gap-2 rounded-lg px-1.5 py-1 text-left transition hover:bg-[var(--bc-soft)]/50 disabled:opacity-60"
+                        className="flex min-h-[36px] min-w-0 flex-1 items-center gap-2 rounded-lg px-1.5 py-0.5 text-left disabled:opacity-60"
                       >
                         <UserAvatar name={u.display_name} size={32} />
                         <span className="min-w-0 flex-1">
                           <span className="flex items-center gap-1.5">
-                            <span className="truncate text-xs font-bold text-[var(--bc-text)]">
+                            <span className="truncate text-xs font-semibold text-[var(--bc-text)]">
                               {u.display_name}
                             </span>
                             {u.badge && (
-                              <span className="truncate rounded-full bg-[var(--bc-soft)] px-1.5 py-0.2 text-[10px] font-semibold text-[var(--bc-deep)]">
+                              <span className="bc-tag truncate">
                                 {u.badge}
                               </span>
                             )}
                           </span>
-                          <span className="block truncate text-[11px] text-[var(--bc-muted)]">
+                          <span className="block truncate text-[11px] text-[var(--bc-muted)] bc-num">
                             {formattedBcId} • {u.phone}
                           </span>
                         </span>
@@ -704,7 +698,7 @@ export function LoginView({
                         rel="noopener noreferrer"
                         data-testid={`quick-test-newtab-${u.slot}`}
                         title={`เปิด ${u.display_name} ในแท็บใหม่`}
-                        className="inline-flex min-h-[32px] shrink-0 items-center rounded-lg border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2 py-1 text-[11px] font-semibold text-[var(--bc-primary)] hover:border-[var(--bc-primary)] hover:bg-[var(--bc-soft)]/50"
+                        className="bc-btn bc-btn-ghost bc-btn-sm shrink-0"
                       >
                         ↗ แท็บใหม่
                       </a>
@@ -716,14 +710,14 @@ export function LoginView({
           )}
 
           {/* Footer Accordion Links (Recovery & Admin) */}
-          <div className="mt-3.5 border-t border-[var(--bc-border)] pt-2.5">
+          <div className="mt-3.5 border-t border-[var(--bc-line)] pt-2.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <button
                 type="button"
                 aria-expanded={showRecovery}
                 onClick={() => setShowRecovery((v) => !v)}
                 data-testid="login-recovery-toggle"
-                className="inline-flex min-h-[32px] items-center gap-1 rounded-lg px-1.5 text-xs font-semibold text-[var(--bc-primary)] hover:bg-[var(--bc-panel)]"
+                className="bc-btn bc-btn-ghost bc-btn-sm gap-1"
               >
                 <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
                 <span>เปลี่ยนเบอร์ / กู้คืนบัญชี</span>
@@ -740,7 +734,7 @@ export function LoginView({
                   aria-expanded={showBootstrap}
                   onClick={() => setShowBootstrap((v) => !v)}
                   data-testid="toggle-admin-bootstrap-btn"
-                  className="inline-flex min-h-[32px] items-center gap-1 rounded-lg px-1.5 text-xs font-semibold text-[var(--bc-ochre)] hover:bg-[var(--bc-panel)]"
+                  className="bc-btn bc-btn-ghost bc-btn-sm gap-1"
                 >
                   <KeyRound className="h-3.5 w-3.5 shrink-0" />
                   <span>สำหรับผู้ดูแลระบบ</span>
@@ -756,18 +750,14 @@ export function LoginView({
             {showRecovery && (
               <div
                 data-testid="login-recovery-panel"
-                className="mt-2.5 space-y-2 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2.5"
+                className="bc-well mt-2.5 space-y-2 rounded-xl p-2.5"
               >
-                <div className="grid grid-cols-2 gap-1.5">
+                <div className="bc-segment grid grid-cols-2">
                   <button
                     type="button"
                     data-testid="recovery-tab-change-phone"
                     onClick={() => setRecoveryTab("change_phone")}
-                    className={`inline-flex min-h-[34px] items-center justify-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-bold transition ${
-                      recoveryTab === "change_phone"
-                        ? "border-[var(--bc-primary)] bg-[var(--bc-primary)] text-white"
-                        : "border-[var(--bc-border)] bg-[var(--bc-card)] text-[var(--bc-text)]"
-                    }`}
+                    className={`bc-segment-item gap-1 ${recoveryTab === "change_phone" ? "is-active" : ""}`}
                   >
                     <Phone className="h-3 w-3 shrink-0" />
                     <span>เปลี่ยนเบอร์ใหม่</span>
@@ -776,11 +766,7 @@ export function LoginView({
                     type="button"
                     data-testid="recovery-tab-change-google"
                     onClick={() => setRecoveryTab("change_google")}
-                    className={`inline-flex min-h-[34px] items-center justify-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-bold transition ${
-                      recoveryTab === "change_google"
-                        ? "border-[var(--bc-primary)] bg-[var(--bc-primary)] text-white"
-                        : "border-[var(--bc-border)] bg-[var(--bc-card)] text-[var(--bc-text)]"
-                    }`}
+                    className={`bc-segment-item gap-1 ${recoveryTab === "change_google" ? "is-active" : ""}`}
                   >
                     <Mail className="h-3 w-3 shrink-0" />
                     <span>เปลี่ยน Gmail ใหม่</span>
@@ -790,17 +776,13 @@ export function LoginView({
                 {recoveryTab === "change_phone" ? (
                   <form onSubmit={handleSubmitRecoverChangePhone} className="space-y-2">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-[11px] font-semibold text-[var(--bc-muted)]">
+                      <span className="bc-label">
                         1. ยืนยันบัญชีเดิม:
                       </span>
                       <button
                         type="button"
                         onClick={() => setRecPhoneVerifyMethod("google")}
-                        className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold ${
-                          recPhoneVerifyMethod === "google"
-                            ? "border-[var(--bc-primary)] bg-[var(--bc-soft)] text-[var(--bc-primary)]"
-                            : "border-[var(--bc-border)] bg-[var(--bc-card)] text-[var(--bc-muted)]"
-                        }`}
+                        className={`bc-chip ${recPhoneVerifyMethod === "google" ? "is-active" : ""}`}
                       >
                         ผ่าน Gmail เดิม
                       </button>
@@ -808,11 +790,7 @@ export function LoginView({
                         type="button"
                         data-testid="recovery-phone-method-pin"
                         onClick={() => setRecPhoneVerifyMethod("pin_or_code")}
-                        className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold ${
-                          recPhoneVerifyMethod === "pin_or_code"
-                            ? "border-[var(--bc-primary)] bg-[var(--bc-soft)] text-[var(--bc-primary)]"
-                            : "border-[var(--bc-border)] bg-[var(--bc-card)] text-[var(--bc-muted)]"
-                        }`}
+                        className={`bc-chip ${recPhoneVerifyMethod === "pin_or_code" ? "is-active" : ""}`}
                       >
                         PIN 6 หลัก / รหัสสำรอง
                       </button>
@@ -824,7 +802,7 @@ export function LoginView({
                         disabled={busy || googleWaiting}
                         data-testid="recovery-old-google-btn"
                         onClick={() => handleRecoveryGoogleVerify("old_google")}
-                        className="flex min-h-[36px] w-full items-center justify-center gap-1.5 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-card)] px-2.5 py-1.5 text-xs font-bold text-[var(--bc-text)] hover:border-[var(--bc-primary)] disabled:opacity-60"
+                        className="bc-btn bc-btn-secondary w-full gap-1.5"
                       >
                         <Mail className="h-3.5 w-3.5 shrink-0 text-[var(--bc-primary)]" />
                         <span>
@@ -841,7 +819,7 @@ export function LoginView({
                           onChange={(e) => setRecIdentifier(e.target.value)}
                           placeholder="เบอร์เดิม อีเมลเดิม หรือ @BC ID"
                           data-testid="recovery-identifier-input"
-                          className="min-h-[36px] w-full rounded-xl border border-[var(--bc-border)] bg-[var(--bc-card)] px-2.5 py-1.5 text-xs outline-none focus:border-[var(--bc-primary)]"
+                          className="bc-input w-full"
                         />
                         <input
                           type="text"
@@ -849,13 +827,13 @@ export function LoginView({
                           onChange={(e) => setRecSecret(e.target.value)}
                           placeholder="PIN 6 หลัก หรือ รหัสสำรอง"
                           data-testid="recovery-secret-input"
-                          className="min-h-[36px] w-full rounded-xl border border-[var(--bc-border)] bg-[var(--bc-card)] px-2.5 py-1.5 text-xs outline-none focus:border-[var(--bc-primary)]"
+                          className="bc-input w-full"
                         />
                       </div>
                     )}
 
-                    <div className="space-y-1.5 border-t border-[var(--bc-border)] pt-2">
-                      <div className="text-[11px] font-semibold text-[var(--bc-muted)]">
+                    <div className="space-y-1.5 border-t border-[var(--bc-line)] pt-2">
+                      <div className="bc-label">
                         2. ยืนยันเบอร์มือถือใหม่ด้วย OTP:
                       </div>
                       <div className="flex items-center gap-1.5">
@@ -865,14 +843,14 @@ export function LoginView({
                           onChange={(e) => setRecNewPhone(e.target.value)}
                           placeholder="เบอร์มือถือใหม่"
                           data-testid="recovery-new-phone-input"
-                          className="min-h-[36px] min-w-0 flex-1 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-card)] px-2.5 py-1.5 text-xs outline-none focus:border-[var(--bc-primary)]"
+                          className="bc-input min-w-0 flex-1"
                         />
                         <button
                           type="button"
                           disabled={busy}
                           data-testid="recovery-request-new-phone-otp-btn"
                           onClick={() => void handleRequestRecoveryOtp("new_phone")}
-                          className="min-h-[36px] shrink-0 rounded-xl border border-[var(--bc-primary)] bg-[var(--bc-soft)] px-2.5 py-1.5 text-[11px] font-bold text-[var(--bc-deep)] disabled:opacity-60"
+                          className="bc-btn bc-btn-soft shrink-0"
                         >
                           ส่ง OTP
                         </button>
@@ -886,7 +864,7 @@ export function LoginView({
                           onChange={(e) => setRecNewPhoneOtp(e.target.value)}
                           placeholder={`รหัส OTP เบอร์ใหม่ (Ref: ${recNewPhoneChallenge.ref_code})`}
                           data-testid="recovery-new-phone-otp-input"
-                          className="min-h-[36px] w-full rounded-xl border border-[var(--bc-border)] bg-[var(--bc-card)] px-2.5 py-1.5 text-xs outline-none focus:border-[var(--bc-primary)]"
+                          className="bc-input w-full"
                         />
                       )}
                     </div>
@@ -905,7 +883,7 @@ export function LoginView({
                       type="submit"
                       disabled={busy || !recNewPhoneChallenge}
                       data-testid="recovery-submit-change-phone-btn"
-                      className="flex min-h-[36px] w-full items-center justify-center gap-1.5 rounded-xl bg-[var(--bc-primary)] px-3 py-1.5 text-xs font-bold text-white hover:brightness-95 disabled:opacity-60"
+                      className="bc-btn bc-btn-primary w-full gap-1.5"
                     >
                       <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
                       <span>{busy ? "กำลังกู้คืนบัญชี..." : "ยืนยันเปลี่ยนเบอร์"}</span>
@@ -914,17 +892,13 @@ export function LoginView({
                 ) : (
                   <form onSubmit={handleSubmitRecoverChangeGoogle} className="space-y-2">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-[11px] font-semibold text-[var(--bc-muted)]">
+                      <span className="bc-label">
                         1. ยืนยันบัญชีเดิม:
                       </span>
                       <button
                         type="button"
                         onClick={() => setRecGoogleVerifyMethod("phone_otp")}
-                        className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold ${
-                          recGoogleVerifyMethod === "phone_otp"
-                            ? "border-[var(--bc-primary)] bg-[var(--bc-soft)] text-[var(--bc-primary)]"
-                            : "border-[var(--bc-border)] bg-[var(--bc-card)] text-[var(--bc-muted)]"
-                        }`}
+                        className={`bc-chip ${recGoogleVerifyMethod === "phone_otp" ? "is-active" : ""}`}
                       >
                         OTP เบอร์ที่ผูกไว้
                       </button>
@@ -932,11 +906,7 @@ export function LoginView({
                         type="button"
                         data-testid="recovery-google-method-pin"
                         onClick={() => setRecGoogleVerifyMethod("pin_or_code")}
-                        className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold ${
-                          recGoogleVerifyMethod === "pin_or_code"
-                            ? "border-[var(--bc-primary)] bg-[var(--bc-soft)] text-[var(--bc-primary)]"
-                            : "border-[var(--bc-border)] bg-[var(--bc-card)] text-[var(--bc-muted)]"
-                        }`}
+                        className={`bc-chip ${recGoogleVerifyMethod === "pin_or_code" ? "is-active" : ""}`}
                       >
                         PIN 6 หลัก / รหัสสำรอง
                       </button>
@@ -951,14 +921,14 @@ export function LoginView({
                             onChange={(e) => setRecOldPhone(e.target.value)}
                             placeholder="เบอร์มือถือที่ผูกไว้"
                             data-testid="recovery-old-phone-input"
-                            className="min-h-[36px] min-w-0 flex-1 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-card)] px-2.5 py-1.5 text-xs outline-none focus:border-[var(--bc-primary)]"
+                            className="bc-input min-w-0 flex-1"
                           />
                           <button
                             type="button"
                             disabled={busy}
                             data-testid="recovery-request-old-phone-otp-btn"
                             onClick={() => void handleRequestRecoveryOtp("old_phone")}
-                            className="min-h-[36px] shrink-0 rounded-xl border border-[var(--bc-primary)] bg-[var(--bc-soft)] px-2.5 py-1.5 text-[11px] font-bold text-[var(--bc-deep)] disabled:opacity-60"
+                            className="bc-btn bc-btn-soft shrink-0"
                           >
                             ส่ง OTP
                           </button>
@@ -971,7 +941,7 @@ export function LoginView({
                             onChange={(e) => setRecOldPhoneOtp(e.target.value)}
                             placeholder={`รหัส OTP เบอร์เดิม (Ref: ${recOldPhoneChallenge.ref_code})`}
                             data-testid="recovery-old-phone-otp-input"
-                            className="min-h-[36px] w-full rounded-xl border border-[var(--bc-border)] bg-[var(--bc-card)] px-2.5 py-1.5 text-xs outline-none focus:border-[var(--bc-primary)]"
+                            className="bc-input w-full"
                           />
                         )}
                       </div>
@@ -983,7 +953,7 @@ export function LoginView({
                           onChange={(e) => setRecIdentifier(e.target.value)}
                           placeholder="เบอร์เดิม อีเมลเดิม หรือ @BC ID"
                           data-testid="recovery-identifier-input"
-                          className="min-h-[36px] w-full rounded-xl border border-[var(--bc-border)] bg-[var(--bc-card)] px-2.5 py-1.5 text-xs outline-none focus:border-[var(--bc-primary)]"
+                          className="bc-input w-full"
                         />
                         <input
                           type="text"
@@ -991,13 +961,13 @@ export function LoginView({
                           onChange={(e) => setRecSecret(e.target.value)}
                           placeholder="PIN 6 หลัก หรือ รหัสสำรอง"
                           data-testid="recovery-secret-input"
-                          className="min-h-[36px] w-full rounded-xl border border-[var(--bc-border)] bg-[var(--bc-card)] px-2.5 py-1.5 text-xs outline-none focus:border-[var(--bc-primary)]"
+                          className="bc-input w-full"
                         />
                       </div>
                     )}
 
-                    <div className="space-y-1.5 border-t border-[var(--bc-border)] pt-2">
-                      <div className="text-[11px] font-semibold text-[var(--bc-muted)]">
+                    <div className="space-y-1.5 border-t border-[var(--bc-line)] pt-2">
+                      <div className="bc-label">
                         2. ยืนยันบัญชี Gmail ใหม่:
                       </div>
                       <button
@@ -1005,7 +975,7 @@ export function LoginView({
                         disabled={busy || googleWaiting}
                         data-testid="recovery-new-google-btn"
                         onClick={() => handleRecoveryGoogleVerify("new_google")}
-                        className="flex min-h-[36px] w-full items-center justify-center gap-1.5 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-card)] px-2.5 py-1.5 text-xs font-bold text-[var(--bc-text)] hover:border-[var(--bc-primary)] disabled:opacity-60"
+                        className="bc-btn bc-btn-secondary w-full gap-1.5"
                       >
                         <Mail className="h-3.5 w-3.5 shrink-0 text-[var(--bc-primary)]" />
                         <span>
@@ -1030,7 +1000,7 @@ export function LoginView({
                       type="submit"
                       disabled={busy || !recNewGoogle}
                       data-testid="recovery-submit-change-google-btn"
-                      className="flex min-h-[36px] w-full items-center justify-center gap-1.5 rounded-xl bg-[var(--bc-primary)] px-3 py-1.5 text-xs font-bold text-white hover:brightness-95 disabled:opacity-60"
+                      className="bc-btn bc-btn-primary w-full gap-1.5"
                     >
                       <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
                       <span>{busy ? "กำลังกู้คืนบัญชี..." : "ยืนยันเปลี่ยน Gmail"}</span>
@@ -1043,12 +1013,12 @@ export function LoginView({
             {showBootstrap && authConfig?.admin_bootstrap_enabled && (
               <form
                 onSubmit={handleBootstrapAdmin}
-                className="mt-2.5 space-y-2 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2.5"
+                className="bc-well mt-2.5 space-y-2 rounded-xl p-2.5"
               >
                 <div>
                   <label
                     htmlFor="bootstrap-code-field"
-                    className="mb-1 block text-[11px] font-semibold text-[var(--bc-text)]"
+                    className="bc-label mb-1 block"
                   >
                     รหัสผู้ดูแลระบบ
                   </label>
@@ -1060,13 +1030,13 @@ export function LoginView({
                     onChange={(e) => setBootstrapCode(e.target.value)}
                     placeholder="กรอกรหัสลับผู้ดูแลระบบ"
                     data-testid="bootstrap-code-input"
-                    className="min-h-[36px] w-full rounded-xl border border-[var(--bc-border)] bg-[var(--bc-card)] px-2.5 py-1.5 text-xs text-[var(--bc-text)] outline-none focus:border-[var(--bc-primary)]"
+                    className="bc-input w-full"
                   />
                 </div>
                 <div>
                   <label
                     htmlFor="bootstrap-name-field"
-                    className="mb-1 block text-[11px] font-semibold text-[var(--bc-text)]"
+                    className="bc-label mb-1 block"
                   >
                     ชื่อที่แสดง (ไม่บังคับ)
                   </label>
@@ -1076,14 +1046,14 @@ export function LoginView({
                     value={bootstrapName}
                     onChange={(e) => setBootstrapName(e.target.value)}
                     placeholder="เช่น ลุงจืด"
-                    className="min-h-[36px] w-full rounded-xl border border-[var(--bc-border)] bg-[var(--bc-card)] px-2.5 py-1.5 text-xs text-[var(--bc-text)] outline-none focus:border-[var(--bc-primary)]"
+                    className="bc-input w-full"
                   />
                 </div>
                 <button
                   type="submit"
                   disabled={busy}
                   data-testid="bootstrap-submit-btn"
-                  className="flex min-h-[36px] w-full items-center justify-center gap-1.5 rounded-xl bg-[var(--bc-deep)] px-3 py-1.5 text-xs font-bold text-white hover:brightness-95 disabled:opacity-60"
+                  className="bc-btn bc-btn-primary w-full gap-1.5"
                 >
                   <KeyRound className="h-3.5 w-3.5 shrink-0" />
                   <span>{busy ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบผู้ดูแล"}</span>
@@ -1095,8 +1065,8 @@ export function LoginView({
 
         {/* Collapsible SEO / GEO Details below the card */}
         {site === "chat" && (
-          <details className="group rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)]/90 px-3.5 py-2.5 text-xs shadow-xs">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 font-semibold text-[var(--bc-primary)] [&::-webkit-details-marker]:hidden">
+          <details className="bc-card group px-3.5 py-2.5 text-xs">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 font-medium text-[var(--bc-primary)] [&::-webkit-details-marker]:hidden">
               <span className="inline-flex items-center gap-1.5">
                 <Sparkles className="h-3.5 w-3.5 shrink-0" />
                 <span>รู้จัก BC Ai Chat</span>
@@ -1104,18 +1074,18 @@ export function LoginView({
               <ChevronDown className="h-3.5 w-3.5 shrink-0 transition-transform group-open:rotate-180" />
             </summary>
 
-            <div className="mt-3 space-y-3 border-t border-[var(--bc-border)] pt-3">
+            <div className="mt-3 space-y-3 border-t border-[var(--bc-line)] pt-3">
               <p className="leading-relaxed text-[var(--bc-muted)]">
                 BC Ai Chat ออกแบบด้วยโทนสีดินเผาบ้านเชียงร่วมสมัย ใช้งานลื่นไหลบนมือถือและคอมพิวเตอร์
-                พร้อมผู้ช่วย <strong className="font-semibold text-[var(--bc-primary)]">@bc.ai</strong>{" "}
+                พร้อมผู้ช่วย <strong className="font-medium text-[var(--bc-primary)]">@bc.ai</strong>{" "}
                 โทรเสียงและวิดีโอคอล อัลบั้มรูปถาวร และร้านค้าในแอปเดียว
               </p>
 
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <div className="flex items-start gap-2 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2.5">
+                <div className="bc-well flex items-start gap-2 rounded-xl p-2.5">
                   <Video className="mt-0.5 h-4 w-4 shrink-0 text-[var(--bc-primary)]" />
                   <div>
-                    <h2 className="text-xs font-bold text-[var(--bc-text)]">
+                    <h2 className="text-xs font-semibold text-[var(--bc-text)]">
                       โทรเสียง &amp; วิดีโอคอล
                     </h2>
                     <p className="mt-0.5 text-[11px] text-[var(--bc-muted)]">
@@ -1124,30 +1094,30 @@ export function LoginView({
                   </div>
                 </div>
 
-                <div className="flex items-start gap-2 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2.5">
+                <div className="bc-well flex items-start gap-2 rounded-xl p-2.5">
                   <Store className="mt-0.5 h-4 w-4 shrink-0 text-[var(--bc-primary)]" />
                   <div>
-                    <h2 className="text-xs font-bold text-[var(--bc-text)]">ร้านค้า</h2>
+                    <h2 className="text-xs font-semibold text-[var(--bc-text)]">ร้านค้า</h2>
                     <p className="mt-0.5 text-[11px] text-[var(--bc-muted)]">
                       ติดตามร้านค้า เก็บคูปองส่วนลด และคุยสอบถามได้ทันที
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-start gap-2 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2.5">
+                <div className="bc-well flex items-start gap-2 rounded-xl p-2.5">
                   <Bot className="mt-0.5 h-4 w-4 shrink-0 text-[var(--bc-primary)]" />
                   <div>
-                    <h2 className="text-xs font-bold text-[var(--bc-text)]">ผู้ช่วย AI ประจำแชท</h2>
+                    <h2 className="text-xs font-semibold text-[var(--bc-text)]">ผู้ช่วย AI ประจำแชท</h2>
                     <p className="mt-0.5 text-[11px] text-[var(--bc-muted)]">
                       พิมพ์ @ai ถามได้ทุกเรื่อง ช่วยเกลาข้อความและสรุปนัดหมาย
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-start gap-2 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2.5">
+                <div className="bc-well flex items-start gap-2 rounded-xl p-2.5">
                   <Lock className="mt-0.5 h-4 w-4 shrink-0 text-[var(--bc-primary)]" />
                   <div>
-                    <h2 className="text-xs font-bold text-[var(--bc-text)]">
+                    <h2 className="text-xs font-semibold text-[var(--bc-text)]">
                       ข้อความลับ &amp; สมุดบันทึก
                     </h2>
                     <p className="mt-0.5 text-[11px] text-[var(--bc-muted)]">
@@ -1157,8 +1127,8 @@ export function LoginView({
                 </div>
               </div>
 
-              <div className="space-y-1.5 border-t border-[var(--bc-border)] pt-2.5 text-[11px] text-[var(--bc-muted)]">
-                <h3 className="flex items-center gap-1.5 text-xs font-bold text-[var(--bc-text)]">
+              <div className="space-y-1.5 border-t border-[var(--bc-line)] pt-2.5 text-[11px] text-[var(--bc-muted)]">
+                <h3 className="flex items-center gap-1.5 text-xs font-semibold text-[var(--bc-text)]">
                   <MessageSquareText className="h-3.5 w-3.5 shrink-0 text-[var(--bc-primary)]" />
                   <span>คำถามที่พบบ่อย</span>
                 </h3>

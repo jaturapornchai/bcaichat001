@@ -900,7 +900,7 @@ export function ChatRoomView({
       {/* ระหว่างเลือกตำแหน่งเต็มพื้นที่ ซ่อนเนื้อหาห้องไว้ (ไม่ถอดออก เพื่อคงตำแหน่งเลื่อนและข้อความที่พิมพ์ค้าง) */}
       <div className={locFullMapOpen ? "hidden" : "contents"}>
       {/* Compact Single-Row Top Room Header */}
-      <header className="shrink-0 border-b border-[var(--bc-border)] bg-[var(--bc-card)]">
+      <header className="bc-appbar shrink-0">
         <div className="flex items-center justify-between gap-1.5 px-2 py-1.5 sm:px-2.5">
           <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
             {onBackMobile && (
@@ -910,7 +910,7 @@ export function ChatRoomView({
                 aria-label="กลับหน้ารายการแชท"
                 title="กลับหน้ารายการแชท"
                 onClick={onBackMobile}
-                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--bc-border)] bg-[var(--bc-panel)] text-[var(--bc-text)]"
+                className="bc-iconbtn h-9 w-9 shrink-0"
               >
                 <ArrowLeft className="h-4 w-4" />
               </button>
@@ -925,7 +925,7 @@ export function ChatRoomView({
             <div className="flex min-w-0 flex-1 items-center gap-1">
               <h2
                 data-testid="active-room-title"
-                className="min-w-0 truncate text-xs font-bold leading-tight text-[var(--bc-text)] sm:text-sm"
+                className="min-w-0 truncate text-sm font-semibold leading-tight text-[var(--bc-text)]"
               >
                 {conversation.name}
               </h2>
@@ -933,13 +933,13 @@ export function ChatRoomView({
                 <span
                   data-testid="active-room-member-count"
                   title="จำนวนสมาชิก"
-                  className="shrink-0 text-xs font-semibold leading-tight text-[var(--bc-muted)] sm:text-sm"
+                  className="bc-num shrink-0 text-xs leading-tight text-[var(--bc-muted)] sm:text-sm"
                 >
                   ({conversation.members.length})
                 </span>
               )}
               {isShopRoom && (
-                <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-[var(--bc-soft)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--bc-deep)]">
+                <span className="bc-tag bc-tag-gold inline-flex shrink-0 items-center gap-0.5">
                   <BadgeCheck className="h-3 w-3 text-[var(--bc-primary)]" />
                   <span>ร้านค้า</span>
                 </span>
@@ -952,7 +952,7 @@ export function ChatRoomView({
                       ? `ปิดแจ้งเตือน (${formatThaiUntil(conversation.muted_until)})`
                       : "ปิดเสียงห้องนี้"
                   }
-                  className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-[var(--bc-panel)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--bc-muted)]"
+                  className="bc-tag inline-flex shrink-0 items-center gap-0.5"
                 >
                   <BellOff className="h-3 w-3 shrink-0" />
                   {conversation.muted_until && (
@@ -983,10 +983,8 @@ export function ChatRoomView({
                   setShowOaCoupons(next);
                   if (next) void loadOaCoupons();
                 }}
-                className={`inline-flex h-8 w-7 shrink-0 items-center justify-center gap-1 rounded-lg border text-xs font-semibold transition sm:w-auto sm:px-2 ${
-                  showOaCoupons
-                    ? "border-[var(--bc-primary)] bg-[var(--bc-primary)] text-white"
-                    : "border-[var(--bc-primary)]/40 bg-[var(--bc-soft)] text-[var(--bc-deep)] hover:brightness-95"
+                className={`bc-btn bc-btn-sm h-9 w-8 shrink-0 gap-1 px-0 sm:w-auto sm:px-2.5 ${
+                  showOaCoupons ? "bc-btn-primary" : "bc-btn-soft"
                 }`}
               >
                 <Ticket className="h-4 w-4 shrink-0" />
@@ -1005,7 +1003,7 @@ export function ChatRoomView({
                     onClick={() => void onStartCall(conversation.id, "audio")}
                     title="โทร"
                     aria-label="โทร"
-                    className="inline-flex h-8 w-7 shrink-0 items-center justify-center rounded-lg border border-[var(--bc-border)] bg-[var(--bc-panel)] text-[var(--bc-primary)] hover:bg-[var(--bc-soft)] sm:w-8"
+                    className="bc-iconbtn h-9 w-8 shrink-0 text-[var(--bc-primary)] sm:w-9"
                   >
                     <Phone className="h-4 w-4" />
                   </button>
@@ -1015,7 +1013,7 @@ export function ChatRoomView({
                     onClick={() => void onStartCall(conversation.id, "video")}
                     title="วิดีโอคอล"
                     aria-label="วิดีโอคอล"
-                    className="inline-flex h-8 w-7 shrink-0 items-center justify-center rounded-lg border border-[var(--bc-border)] bg-[var(--bc-panel)] text-[var(--bc-primary)] hover:bg-[var(--bc-soft)] sm:w-8"
+                    className="bc-iconbtn h-9 w-8 shrink-0 text-[var(--bc-primary)] sm:w-9"
                   >
                     <Video className="h-4 w-4" />
                   </button>
@@ -1028,11 +1026,7 @@ export function ChatRoomView({
               title="ค้นหาในห้อง"
               aria-label="ค้นหาในห้อง"
               aria-expanded={showRoomSearch}
-              className={`inline-flex h-8 w-7 shrink-0 items-center justify-center rounded-lg border text-xs font-semibold sm:w-8 ${
-                showRoomSearch
-                  ? "border-[var(--bc-primary)] bg-[var(--bc-soft)] text-[var(--bc-primary)]"
-                  : "border-[var(--bc-border)] bg-[var(--bc-panel)] text-[var(--bc-text)] hover:bg-[var(--bc-soft)]"
-              }`}
+              className={`bc-iconbtn h-9 w-8 shrink-0 sm:w-9 ${showRoomSearch ? "bc-iconbtn-soft" : ""}`}
             >
               <Search className="h-4 w-4" />
             </button>
@@ -1044,11 +1038,7 @@ export function ChatRoomView({
               title="ปิดเสียง"
               aria-label="ปิดเสียง"
               aria-expanded={showMuteMenu}
-              className={`inline-flex h-8 w-7 shrink-0 items-center justify-center rounded-lg border text-xs font-semibold sm:w-8 ${
-                showMuteMenu || roomMutedNow
-                  ? "border-[var(--bc-primary)] bg-[var(--bc-soft)] text-[var(--bc-primary)]"
-                  : "border-[var(--bc-border)] bg-[var(--bc-panel)] text-[var(--bc-text)] hover:bg-[var(--bc-soft)]"
-              }`}
+              className={`bc-iconbtn h-9 w-8 shrink-0 sm:w-9 ${showMuteMenu || roomMutedNow ? "bc-iconbtn-soft" : ""}`}
             >
               {roomMutedNow ? (
                 <BellOff className="h-4 w-4" />
@@ -1063,7 +1053,7 @@ export function ChatRoomView({
               onClick={() => void handleOpenAiSummary(false)}
               title="AI สรุปแชท"
               aria-label="AI สรุปแชท"
-              className="inline-flex h-8 w-7 shrink-0 items-center justify-center gap-1 rounded-lg bg-[var(--bc-primary)] text-xs font-bold text-white shadow-2xs hover:brightness-95 sm:w-auto sm:px-2.5"
+              className="bc-btn bc-btn-soft bc-btn-sm h-9 w-8 shrink-0 gap-1 px-0 sm:w-auto sm:px-2.5"
             >
               <Sparkles className="h-4 w-4 shrink-0" />
               <span className="hidden sm:inline">AI</span>
@@ -1076,11 +1066,7 @@ export function ChatRoomView({
               title="เมนูห้อง"
               aria-label="เมนูห้อง"
               aria-expanded={Boolean(sideTab)}
-              className={`inline-flex h-8 w-7 shrink-0 items-center justify-center rounded-lg border text-xs font-semibold sm:w-8 ${
-                sideTab
-                  ? "border-[var(--bc-primary)] bg-[var(--bc-primary)] text-white"
-                  : "border-[var(--bc-border)] bg-[var(--bc-panel)] text-[var(--bc-text)] hover:bg-[var(--bc-soft)]"
-              }`}
+              className={`bc-iconbtn h-9 w-8 shrink-0 sm:w-9 ${sideTab ? "bc-iconbtn-soft" : ""}`}
             >
               <Menu className="h-4 w-4" />
             </button>
@@ -1092,10 +1078,10 @@ export function ChatRoomView({
       {showMuteMenu && (
         <div
           data-testid="room-mute-strip"
-          className="flex shrink-0 flex-wrap items-center justify-between gap-1.5 border-b border-[var(--bc-border)] bg-[var(--bc-panel)] px-2.5 py-1 text-xs"
+          className="bc-glass bc-rise-in flex shrink-0 flex-wrap items-center justify-between gap-1.5 border-b border-[var(--bc-line)] px-2.5 py-1 text-xs"
         >
           <div className="flex flex-wrap items-center gap-1">
-            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[var(--bc-primary)]">
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--bc-primary)]">
               <Clock className="h-3.5 w-3.5" />
               <span>แจ้งเตือน:</span>
             </span>
@@ -1126,11 +1112,7 @@ export function ChatRoomView({
                     onNotify(err instanceof Error ? err.message : "ตั้งค่าปิดเสียงไม่สำเร็จ");
                   }
                 }}
-                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
-                  dur === "off" && !roomMutedNow
-                    ? "border-[var(--bc-primary)] bg-[var(--bc-soft)] text-[var(--bc-primary)]"
-                    : "border-[var(--bc-border)] bg-[var(--bc-card)] text-[var(--bc-text)] hover:border-[var(--bc-primary)]"
-                }`}
+                className={`bc-chip ${dur === "off" && !roomMutedNow ? "is-active" : ""}`}
               >
                 <span>{label}</span>
               </button>
@@ -1138,7 +1120,7 @@ export function ChatRoomView({
           </div>
           <div className="flex items-center gap-1.5">
             {roomMutedNow && (
-              <span className="text-[11px] font-semibold text-[var(--bc-muted)]">
+              <span className="text-[11px] font-medium text-[var(--bc-muted)]">
                 {conversation.muted_until
                   ? formatThaiUntil(conversation.muted_until)
                   : "ปิดเสียงถาวร"}
@@ -1148,7 +1130,7 @@ export function ChatRoomView({
               type="button"
               onClick={() => setShowMuteMenu(false)}
               aria-label="ปิดแถบตั้งค่าแจ้งเตือน"
-              className="rounded-lg p-1 text-[var(--bc-muted)] hover:bg-[var(--bc-card)]"
+              className="bc-iconbtn h-8 w-8 text-[var(--bc-muted)]"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -1158,20 +1140,20 @@ export function ChatRoomView({
 
       {/* Optional Room Search Bar */}
       {showRoomSearch && (
-        <div className="flex shrink-0 items-center gap-1.5 border-b border-[var(--bc-border)] bg-[var(--bc-panel)] px-2.5 py-1">
+        <div className="bc-glass bc-rise-in flex shrink-0 items-center gap-1.5 border-b border-[var(--bc-line)] px-2.5 py-1">
           <Search className="h-4 w-4 text-[var(--bc-muted)]" />
           <input
             type="text"
             value={roomSearchQuery}
             onChange={(e) => setRoomSearchQuery(e.target.value)}
             placeholder="ค้นหาข้อความหรือชื่อไฟล์ในห้องนี้..."
-            className="min-w-0 flex-1 bg-transparent text-xs text-[var(--bc-text)] outline-none"
+            className="bc-input bc-search min-w-0 flex-1"
           />
           {roomSearchQuery && (
             <button
               type="button"
               onClick={() => setRoomSearchQuery("")}
-              className="text-xs text-[var(--bc-muted)]"
+              className="bc-btn bc-btn-ghost bc-btn-sm"
             >
               ล้าง
             </button>
@@ -1181,10 +1163,10 @@ export function ChatRoomView({
 
       {/* Pinned Announcement Banner */}
       {conversation.pinned_message && !sideTab && !runningMiniApp && (
-        <div className="flex shrink-0 items-center justify-between gap-1.5 border-b border-[var(--bc-border)] bg-[var(--bc-soft)]/70 px-2.5 py-1 text-xs">
+        <div className="bc-glass flex shrink-0 items-center justify-between gap-1.5 border-b border-[var(--bc-line)] px-2.5 py-1 text-xs">
           <div className="flex min-w-0 items-center gap-1.5">
             <Pin className="h-3.5 w-3.5 shrink-0 text-[var(--bc-primary)]" />
-            <span className="shrink-0 font-bold text-[var(--bc-deep)]">
+            <span className="shrink-0 font-semibold text-[var(--bc-deep)]">
               ปักหมุด ({conversation.pinned_message.sender_name}):
             </span>
             <span className="truncate text-[var(--bc-text)]">
@@ -1201,7 +1183,7 @@ export function ChatRoomView({
                 onNotify(err instanceof Error ? err.message : "เลิกปักหมุดไม่สำเร็จ");
               }
             }}
-            className="shrink-0 text-[11px] font-semibold text-[var(--bc-primary)] hover:underline"
+            className="shrink-0 text-[11px] font-medium text-[var(--bc-primary)] hover:underline"
           >
             เลิกปักหมุด
           </button>
@@ -1214,16 +1196,16 @@ export function ChatRoomView({
           data-testid="inline-miniapp-runner"
           className="flex min-h-0 flex-1 flex-col bg-[var(--bc-surface)]"
         >
-          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--bc-border)] bg-[var(--bc-card)] px-3 py-2">
+          <div className="bc-appbar flex shrink-0 items-center justify-between gap-2 px-3 py-2">
             <button
               type="button"
               onClick={onCloseMiniApp}
-              className="inline-flex items-center gap-1 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2.5 py-1 text-xs font-bold text-[var(--bc-primary)]"
+              className="bc-btn bc-btn-secondary bc-btn-sm gap-1"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
               <span>กลับไปแชท</span>
             </button>
-            <span className="truncate text-sm font-bold text-[var(--bc-text)]">
+            <span className="truncate text-sm font-semibold text-[var(--bc-text)]">
               {runningMiniApp.title}
             </span>
           </div>
@@ -1269,7 +1251,7 @@ export function ChatRoomView({
                 className="pointer-events-none sticky top-3 z-0 flex h-0 justify-end overflow-visible opacity-20 select-none"
               >
                 <div
-                  className={`rotate-[-12deg] rounded-lg border px-2 py-0.5 text-[10px] font-semibold ${
+                  className={`rotate-[-12deg] rounded-lg border px-2 py-0.5 text-[10px] font-medium ${
                     isDarkRoom
                       ? "border-amber-200/30 text-amber-200"
                       : "border-[var(--bc-primary)]/30 text-[var(--bc-primary)]"
@@ -1283,10 +1265,10 @@ export function ChatRoomView({
             <div className="relative z-10 space-y-1.5">
               {filteredMessages.length === 0 ? (
                 <div
-                  className={`mx-auto max-w-md rounded-2xl border p-6 text-center text-xs ${
+                  className={`bc-empty mx-auto max-w-md rounded-2xl border p-6 text-center text-xs ${
                     isDarkRoom
                       ? "border-stone-700 bg-stone-900/70 text-stone-300"
-                      : "border-[var(--bc-border)] bg-white/90 text-[var(--bc-muted)]"
+                      : "border-[var(--bc-line)] bg-white/90 text-[var(--bc-muted)]"
                   }`}
                 >
                   ยังไม่มีข้อความในห้องนี้ เริ่มพิมพ์ทักทายหรือเรียก{" "}
@@ -1304,10 +1286,10 @@ export function ChatRoomView({
                       {startsNewDay && (
                         <div data-testid="chat-day-separator" className="flex justify-center py-1">
                           <span
-                            className={`rounded-full px-3 py-0.5 text-[10px] font-semibold ${
+                            className={`bc-num rounded-full px-2.5 py-0.5 text-[10px] font-medium ${
                               isDarkRoom
                                 ? "bg-stone-800/90 text-stone-200"
-                                : "bg-[var(--bc-sand)]/90 text-[var(--bc-text)]"
+                                : "bg-[var(--bc-tint)] text-[var(--bc-muted)]"
                             }`}
                           >
                             {formatThaiDay(msg.created_at)}
@@ -1322,10 +1304,10 @@ export function ChatRoomView({
                     return withDay(
                       <div key={msg.id} className="flex justify-center py-1">
                         <span
-                          className={`rounded-full px-3 py-1 text-[11px] font-medium ${
+                          className={`rounded-full px-2.5 py-0.5 text-[11px] ${
                             isDarkRoom
                               ? "bg-stone-800/90 text-stone-200"
-                              : "bg-[var(--bc-sand)]/90 text-[var(--bc-text)]"
+                              : "bg-[var(--bc-tint)] text-[var(--bc-muted)]"
                           }`}
                         >
                           {msg.content}
@@ -1340,10 +1322,10 @@ export function ChatRoomView({
                     return withDay(
                       <div key={msg.id} className="flex justify-center py-1">
                         <div
-                          className={`inline-flex flex-wrap items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold shadow-2xs ${
+                          className={`inline-flex flex-wrap items-center gap-2 rounded-full border px-3 py-1 text-[11px] shadow-2xs ${
                             isDarkRoom
                               ? "border-stone-700 bg-stone-800/95 text-stone-100"
-                              : "border-[var(--bc-border)] bg-[var(--bc-card)] text-[var(--bc-text)]"
+                              : "border-[var(--bc-line)] bg-[var(--bc-card)] text-[var(--bc-text)]"
                           }`}
                         >
                           {cType === "video" ? (
@@ -1353,11 +1335,11 @@ export function ChatRoomView({
                           )}
                           <span>{msg.content}</span>
                           {dur > 0 && (
-                            <span className="rounded-full bg-[var(--bc-soft)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--bc-deep)]">
+                            <span className="bc-tag bc-num">
                               {formatCallDuration(dur)}
                             </span>
                           )}
-                          <span className="text-[10px] text-[var(--bc-muted)]">
+                          <span className="bc-num text-[10px] text-[var(--bc-muted)]">
                             {formatThaiTime(msg.created_at)}
                           </span>
                           {onStartCall && (
@@ -1369,7 +1351,7 @@ export function ChatRoomView({
                                   cType === "video" ? "video" : "audio"
                                 )
                               }
-                              className="rounded-full bg-[var(--bc-primary)] px-2 py-0.5 text-[10px] font-bold text-white hover:brightness-95"
+                              className="bc-btn bc-btn-soft bc-btn-sm"
                             >
                               โทรกลับ
                             </button>
@@ -1410,7 +1392,7 @@ export function ChatRoomView({
                         {!isMe && (
                           <div className="mb-0.5 flex items-center gap-1.5 px-1">
                             <span
-                              className={`text-[11px] font-bold ${
+                              className={`text-[11px] font-medium ${
                                 isAi
                                   ? "text-indigo-500"
                                   : isDarkRoom
@@ -1421,7 +1403,7 @@ export function ChatRoomView({
                               {msg.sender_name}
                             </span>
                             {isAi && (
-                              <span className="rounded bg-indigo-600 px-1.5 py-0.2 text-[9px] font-bold text-white">
+                              <span className="rounded-full bg-indigo-600 px-1.5 py-0.5 text-[9px] font-semibold text-white">
                                 BC AI
                               </span>
                             )}
@@ -1460,12 +1442,12 @@ export function ChatRoomView({
                                       color: "#1B1C1C",
                                     }
                           }
-                          className={`group relative rounded-xl px-2.5 py-1.5 shadow-2xs ${
+                          className={`group relative px-2.5 py-1.5 ${
                             msg.is_unsent
-                              ? "border border-dashed border-[var(--bc-border)] bg-white/70 text-xs italic text-[var(--bc-muted)]"
+                              ? "rounded-xl border border-dashed border-[var(--bc-line)] bg-white/70 text-xs italic text-[var(--bc-muted)]"
                               : isMe
-                                ? "cursor-pointer rounded-br-sm border border-[var(--bc-border)]"
-                                : "cursor-pointer rounded-bl-sm border border-[var(--bc-border)]"
+                                ? "bc-bubble bc-bubble-sent cursor-pointer"
+                                : "bc-bubble bc-bubble-recv cursor-pointer"
                           }${
                             selectedActionMsgId === msg.id && !msg.is_unsent
                               ? " ring-2 ring-[var(--bc-primary)]/40"
@@ -1481,31 +1463,31 @@ export function ChatRoomView({
                               Boolean(msg.expire_at)) && (
                               <div className="mb-1 flex flex-wrap items-center gap-1">
                                 {msg.forwarded_from && (
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-black/10 px-2 py-0.5 text-[10px] font-semibold">
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-black/10 px-2 py-0.5 text-[10px] font-medium">
                                     <Forward className="h-2.5 w-2.5" />
                                     <span>ส่งต่อจาก {msg.forwarded_from}</span>
                                   </span>
                                 )}
                                 {msg.is_confidential && (
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-[var(--bc-deep)] px-2 py-0.5 text-[10px] font-bold text-white">
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-[var(--bc-deep)] px-2 py-0.5 text-[10px] font-semibold text-white">
                                     <Lock className="h-2.5 w-2.5" />
                                     <span>ข้อความลับ{msg.confidential_pin ? " (PIN)" : ""}</span>
                                   </span>
                                 )}
                                 {msg.priority === "urgent" && (
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-600 px-2 py-0.5 text-[10px] font-semibold text-white">
                                     <AlertTriangle className="h-2.5 w-2.5" />
                                     <span>เรื่องด่วน</span>
                                   </span>
                                 )}
                                 {msg.priority === "silent" && (
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-stone-700 px-2 py-0.5 text-[10px] font-semibold text-white">
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-stone-700 px-2 py-0.5 text-[10px] font-medium text-white">
                                     <VolumeX className="h-2.5 w-2.5" />
                                     <span>ส่งไร้เสียง</span>
                                   </span>
                                 )}
                                 {msg.expire_at && (
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-900">
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-900">
                                     <Timer className="h-2.5 w-2.5" />
                                     <span>ลบอัตโนมัติ {formatThaiTime(msg.expire_at)}</span>
                                   </span>
@@ -1516,7 +1498,7 @@ export function ChatRoomView({
                           {/* Reply Quote */}
                           {!msg.is_unsent && msg.reply_to && (
                             <div className="mb-1 rounded-lg border-l-4 border-[var(--bc-primary)] bg-black/5 px-2 py-1 text-[10px]">
-                              <div className="font-bold text-[var(--bc-primary)]">
+                              <div className="font-semibold text-[var(--bc-primary)]">
                                 ตอบกลับ {msg.reply_to.sender_name}
                               </div>
                               <div className="line-clamp-2 opacity-80">{msg.reply_to.content}</div>
@@ -1528,7 +1510,7 @@ export function ChatRoomView({
                             <span>{msg.content}</span>
                           ) : isLocked ? (
                             <div className="space-y-2 py-1">
-                              <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--bc-deep)]">
+                              <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--bc-deep)]">
                                 <Lock className="h-4 w-4" />
                                 <span>ข้อความลับส่วนตัวล็อกด้วย PIN</span>
                               </div>
@@ -1540,12 +1522,12 @@ export function ChatRoomView({
                                     value={pinAttempt}
                                     onChange={(e) => setPinAttempt(e.target.value)}
                                     placeholder="กรอก PIN"
-                                    className="w-24 rounded-lg border border-[var(--bc-border)] bg-white px-2 py-1 text-xs outline-none"
+                                    className="bc-input w-24"
                                   />
                                   <button
                                     type="button"
                                     onClick={() => tryUnlockConfidential(msg)}
-                                    className="rounded-lg bg-[var(--bc-primary)] px-2.5 py-1 text-xs font-bold text-white"
+                                    className="bc-btn bc-btn-primary bc-btn-sm"
                                   >
                                     เปิดดู
                                   </button>
@@ -1557,7 +1539,7 @@ export function ChatRoomView({
                                     setPinPromptMsgId(msg.id);
                                     setPinAttempt("");
                                   }}
-                                  className="inline-flex items-center gap-1 rounded-lg bg-[var(--bc-primary)] px-2.5 py-1 text-xs font-bold text-white"
+                                  className="bc-btn bc-btn-primary bc-btn-sm gap-1"
                                 >
                                   <Unlock className="h-3 w-3" />
                                   <span>ใส่รหัส PIN เพื่อเปิดอ่าน</span>
@@ -1579,7 +1561,7 @@ export function ChatRoomView({
                                     href={resolveMediaUrl(msg.attachment.url)}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="block overflow-hidden rounded-xl border border-[var(--bc-border)]"
+                                    className="block overflow-hidden rounded-xl border border-[var(--bc-line)]"
                                   >
                                     <img
                                       src={resolveMediaUrl(msg.attachment.url)}
@@ -1596,11 +1578,11 @@ export function ChatRoomView({
                                   href={resolveMediaUrl(msg.attachment.url)}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="flex items-center gap-2.5 rounded-xl border border-[var(--bc-border)] bg-white/80 px-3 py-2 text-xs hover:bg-white"
+                                  className="bc-well flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs"
                                 >
                                   <FileText className="h-5 w-5 shrink-0 text-[var(--bc-primary)]" />
                                   <div className="min-w-0">
-                                    <div className="truncate font-bold text-[var(--bc-text)]">
+                                    <div className="truncate font-semibold text-[var(--bc-text)]">
                                       {msg.attachment.file_name}
                                     </div>
                                     <div className="text-[10px] text-[var(--bc-muted)]">
@@ -1612,7 +1594,7 @@ export function ChatRoomView({
 
                               {msg.type === "audio" && msg.attachment && (
                                 <div className="space-y-1">
-                                  <div className="flex items-center justify-between gap-2 text-xs font-bold">
+                                  <div className="flex items-center justify-between gap-2 text-xs font-semibold">
                                     <div className="flex items-center gap-1">
                                       <Mic className="h-3.5 w-3.5 text-[var(--bc-primary)]" />
                                       <span>
@@ -1629,10 +1611,8 @@ export function ChatRoomView({
                                             type="button"
                                             data-testid={`audio-rate-${rate}-${msg.id}`}
                                             onClick={() => handleAudioRateChange(msg.id, rate)}
-                                            className={`rounded px-1.5 py-0.5 text-[10px] font-bold transition ${
-                                              activeRate
-                                                ? "bg-[var(--bc-primary)] text-white"
-                                                : "border border-[var(--bc-border)] bg-white text-[var(--bc-text)]"
+                                            className={`bc-chip bc-num !min-h-0 !px-2 !py-0.5 text-[10px] ${
+                                              activeRate ? "is-active" : ""
                                             }`}
                                           >
                                             {rate}x
@@ -1658,24 +1638,24 @@ export function ChatRoomView({
 
                               {msg.type === "rich_card" && msg.card_payload && (
                                 msg.card_payload.kind === "oa_coupon" ? (
-                                  <div className="w-full min-w-[210px] max-w-[280px] overflow-hidden rounded-xl border border-[var(--bc-primary)]/40 bg-white text-[var(--bc-text)] shadow-xs">
-                                    <div className="flex items-center justify-between gap-2 bg-[var(--bc-primary)] px-3 py-1.5 text-xs font-bold text-white">
+                                  <div className="w-full min-w-[210px] max-w-[280px] overflow-hidden rounded-xl border border-[var(--bc-line-strong)] bg-white text-[var(--bc-text)] shadow-[var(--bc-elev-1)]">
+                                    <div className="flex items-center justify-between gap-2 bg-[image:var(--bc-grad-primary)] px-3 py-1.5 text-xs font-semibold text-white">
                                       <span className="inline-flex items-center gap-1 truncate">
                                         <Ticket className="h-3.5 w-3.5 shrink-0" />
                                         <span className="truncate">
                                           คูปองจาก {String(msg.card_payload.oa_name || conversation.name)}
                                         </span>
                                       </span>
-                                      <span className="shrink-0 rounded bg-white/20 px-1.5 py-0.5 text-[10px]">
+                                      <span className="bc-num shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[10px]">
                                         {String(msg.card_payload.code || "")}
                                       </span>
                                     </div>
                                     <div className="space-y-1 p-2.5 text-xs">
-                                      <div className="font-bold text-[var(--bc-text)]">
+                                      <div className="font-semibold text-[var(--bc-text)]">
                                         {String(msg.card_payload.title || "คูปองส่วนลด")}
                                       </div>
                                       {Boolean(msg.card_payload.discount_text) && (
-                                        <div className="text-sm font-extrabold text-[var(--bc-primary)]">
+                                        <div className="text-sm font-bold text-[var(--bc-primary)]">
                                           {String(msg.card_payload.discount_text)}
                                         </div>
                                       )}
@@ -1702,7 +1682,7 @@ export function ChatRoomView({
                                             );
                                           }
                                         }}
-                                        className="mt-1 flex w-full items-center justify-center gap-1 rounded-lg bg-[var(--bc-primary)] px-2.5 py-1 text-[11px] font-bold text-white hover:brightness-95"
+                                        className="bc-btn bc-btn-primary bc-btn-sm mt-1 w-full gap-1"
                                       >
                                         <Ticket className="h-3.5 w-3.5" />
                                         <span>เก็บคูปองลงกระเป๋า</span>
@@ -1710,18 +1690,18 @@ export function ChatRoomView({
                                     </div>
                                   </div>
                                 ) : (
-                                <div className="w-full min-w-[200px] max-w-[270px] overflow-hidden rounded-xl border border-[var(--bc-border)] bg-white text-[var(--bc-text)] shadow-xs">
+                                <div className="w-full min-w-[200px] max-w-[270px] overflow-hidden rounded-xl border border-[var(--bc-line)] bg-white text-[var(--bc-text)] shadow-[var(--bc-elev-1)]">
                                   <div
                                     style={{
                                       backgroundColor: String(msg.card_payload.color_hex || "#812920"),
                                     }}
-                                    className="px-3 py-2 text-xs font-bold text-white"
+                                    className="px-3 py-2 text-xs font-semibold text-white"
                                   >
                                     {String(msg.card_payload.title || "การ์ดโต้ตอบ BC Ai Chat")}
                                   </div>
                                   <div className="space-y-1 p-2 text-xs">
                                     {msg.card_payload.heading && (
-                                      <div className="font-bold text-[var(--bc-text)]">
+                                      <div className="font-semibold text-[var(--bc-text)]">
                                         {String(msg.card_payload.heading)}
                                       </div>
                                     )}
@@ -1731,12 +1711,12 @@ export function ChatRoomView({
                                       </div>
                                     )}
                                     {msg.card_payload.highlight_value && (
-                                      <div className="text-sm font-extrabold text-[var(--bc-primary)]">
+                                      <div className="text-sm font-bold text-[var(--bc-primary)]">
                                         {String(msg.card_payload.highlight_value)}
                                       </div>
                                     )}
                                     <div className="flex items-center justify-between pt-1">
-                                      <span className="rounded-full bg-[var(--bc-soft)] px-2 py-0.5 text-[10px] font-bold text-[var(--bc-deep)]">
+                                      <span className="bc-tag">
                                         {String(
                                           msg.card_payload.status_label ||
                                             msg.card_payload.status ||
@@ -1753,14 +1733,14 @@ export function ChatRoomView({
                                       <button
                                         type="button"
                                         onClick={() => api.approveCard(msg.id, "ตกลง / ไปด้วย").then(onRefreshMessages)}
-                                        className="flex-1 rounded-lg bg-[var(--bc-primary)] px-2 py-1 text-[11px] font-bold text-white"
+                                        className="bc-btn bc-btn-primary bc-btn-sm flex-1 whitespace-nowrap px-1.5"
                                       >
                                         ตกลง / ไปด้วย
                                       </button>
                                       <button
                                         type="button"
                                         onClick={() => api.approveCard(msg.id, "ขอผ่าน").then(onRefreshMessages)}
-                                        className="flex-1 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2 py-1 text-[11px] font-bold text-[var(--bc-text)]"
+                                        className="bc-btn bc-btn-secondary bc-btn-sm flex-1 whitespace-nowrap px-1.5"
                                       >
                                         ขอผ่าน
                                       </button>
@@ -1771,17 +1751,17 @@ export function ChatRoomView({
                               )}
 
                               {msg.type === "poll" && msg.poll && (
-                                <div className="w-full min-w-[210px] max-w-[280px] space-y-1.5 rounded-xl border border-[var(--bc-border)] bg-white p-2 text-[var(--bc-text)]">
+                                <div className="bc-well w-full min-w-[210px] max-w-[280px] space-y-1.5 rounded-xl !bg-white p-2 text-[var(--bc-text)]">
                                   <div className="flex items-center justify-between gap-2">
-                                    <span className="inline-flex items-center gap-1 text-xs font-bold text-[var(--bc-primary)]">
+                                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--bc-primary)]">
                                       <BarChart3 className="h-3.5 w-3.5" />
                                       <span>โพลโหวต</span>
                                     </span>
-                                    <span className="text-[10px] font-semibold text-[var(--bc-muted)]">
+                                    <span className="text-[10px] font-medium text-[var(--bc-muted)]">
                                       {msg.poll.is_closed ? "ปิดโหวตแล้ว" : "กำลังโหวต"}
                                     </span>
                                   </div>
-                                  <div className="text-sm font-bold">{msg.poll.question}</div>
+                                  <div className="text-sm font-semibold">{msg.poll.question}</div>
                                   <div className="space-y-1.5">
                                     {(() => {
                                       const total = msg.poll!.options.reduce(
@@ -1801,10 +1781,10 @@ export function ChatRoomView({
                                             data-testid={`poll-opt-${msg.id}-${opt.id}`}
                                             disabled={msg.poll!.is_closed}
                                             onClick={() => handleVotePoll(msg.id, [opt.id])}
-                                            className={`relative w-full overflow-hidden rounded-lg border px-2.5 py-1.5 text-left text-xs ${
+                                            className={`relative w-full overflow-hidden rounded-xl border px-2.5 py-1.5 text-left text-xs ${
                                               picked
-                                                ? "border-[var(--bc-primary)] bg-[var(--bc-soft)]/50 font-bold"
-                                                : "border-[var(--bc-border)] bg-[var(--bc-surface)] hover:bg-[var(--bc-panel)]"
+                                                ? "border-[var(--bc-primary)] bg-[var(--bc-tint-strong)] font-semibold"
+                                                : "border-[var(--bc-line)] bg-[var(--bc-surface)] hover:bg-[var(--bc-panel)]"
                                             }`}
                                           >
                                             <div
@@ -1826,12 +1806,12 @@ export function ChatRoomView({
                               )}
 
                               {msg.type === "event" && msg.event_data && (
-                                <div className="w-full min-w-[210px] max-w-[280px] space-y-1.5 rounded-xl border border-[var(--bc-border)] bg-white p-2 text-[var(--bc-text)]">
-                                  <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--bc-primary)]">
+                                <div className="bc-well w-full min-w-[210px] max-w-[280px] space-y-1.5 rounded-xl !bg-white p-2 text-[var(--bc-text)]">
+                                  <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--bc-primary)]">
                                     <Calendar className="h-3.5 w-3.5" />
                                     <span>นัดหมาย</span>
                                   </div>
-                                  <div className="text-sm font-bold">{msg.event_data.title}</div>
+                                  <div className="text-sm font-semibold">{msg.event_data.title}</div>
                                   {msg.event_data.description && (
                                     <div className="text-xs text-[var(--bc-muted)]">
                                       {msg.event_data.description}
@@ -1846,10 +1826,8 @@ export function ChatRoomView({
                                       type="button"
                                       data-testid={`rsvp-going-${msg.id}`}
                                       onClick={() => handleRsvpEvent(msg.id, "going")}
-                                      className={`rounded-lg border px-2 py-1 text-[11px] font-bold ${
-                                        msg.event_data.going_ids.includes(currentUser.id)
-                                          ? "border-[var(--bc-primary)] bg-[var(--bc-primary)] text-white"
-                                          : "border-[var(--bc-border)] bg-[var(--bc-panel)]"
+                                      className={`bc-chip ${
+                                        msg.event_data.going_ids.includes(currentUser.id) ? "is-active" : ""
                                       }`}
                                     >
                                       เข้าร่วม ({msg.event_data.going_ids.length})
@@ -1857,10 +1835,8 @@ export function ChatRoomView({
                                     <button
                                       type="button"
                                       onClick={() => handleRsvpEvent(msg.id, "maybe")}
-                                      className={`rounded-lg border px-2 py-1 text-[11px] font-bold ${
-                                        msg.event_data.maybe_ids.includes(currentUser.id)
-                                          ? "border-amber-600 bg-amber-600 text-white"
-                                          : "border-[var(--bc-border)] bg-[var(--bc-panel)]"
+                                      className={`bc-chip ${
+                                        msg.event_data.maybe_ids.includes(currentUser.id) ? "is-active" : ""
                                       }`}
                                     >
                                       อาจจะ ({msg.event_data.maybe_ids.length})
@@ -1868,10 +1844,8 @@ export function ChatRoomView({
                                     <button
                                       type="button"
                                       onClick={() => handleRsvpEvent(msg.id, "not_going")}
-                                      className={`rounded-lg border px-2 py-1 text-[11px] font-bold ${
-                                        msg.event_data.not_going_ids.includes(currentUser.id)
-                                          ? "border-red-600 bg-red-600 text-white"
-                                          : "border-[var(--bc-border)] bg-[var(--bc-panel)]"
+                                      className={`bc-chip ${
+                                        msg.event_data.not_going_ids.includes(currentUser.id) ? "is-active" : ""
                                       }`}
                                     >
                                       ไม่สะดวก ({msg.event_data.not_going_ids.length})
@@ -1889,9 +1863,9 @@ export function ChatRoomView({
                                 return (
                                   <div
                                     data-testid={`location-card-${msg.id}`}
-                                    className="w-full min-w-0 max-w-[280px] space-y-1.5 rounded-xl border border-[var(--bc-border)] bg-white p-2 text-[var(--bc-text)] shadow-2xs"
+                                    className="bc-well w-full min-w-0 max-w-[280px] space-y-1.5 rounded-xl !bg-white p-2 text-[var(--bc-text)]"
                                   >
-                                    <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--bc-primary)]">
+                                    <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--bc-primary)]">
                                       <MapPin className="h-3.5 w-3.5 shrink-0" />
                                       <span className="truncate">{loc.title || "ตำแหน่งที่ตั้ง"}</span>
                                     </div>
@@ -1908,7 +1882,7 @@ export function ChatRoomView({
                                         height={130}
                                       />
                                     )}
-                                    <div className="rounded-lg bg-[var(--bc-panel)] px-2 py-1 text-[10px] font-semibold tabular-nums text-[var(--bc-deep)]">
+                                    <div className="bc-num rounded-lg bg-[var(--bc-panel)] px-2 py-1 text-[10px] text-[var(--bc-deep)]">
                                       พิกัด: {coordText}
                                     </div>
                                     <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
@@ -1916,7 +1890,7 @@ export function ChatRoomView({
                                         href={mapsHref}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-1 rounded-lg bg-[var(--bc-primary)] px-2 py-1 text-[11px] font-bold text-white hover:brightness-95"
+                                        className="bc-btn bc-btn-soft bc-btn-sm gap-1"
                                       >
                                         <Navigation className="h-3 w-3" />
                                         <span>นำทาง Google Maps</span>
@@ -1929,7 +1903,7 @@ export function ChatRoomView({
                                             .then(() => onNotify("คัดลอกพิกัดแล้ว"))
                                             .catch(() => onNotify(coordText));
                                         }}
-                                        className="inline-flex items-center gap-1 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2 py-1 text-[11px] font-semibold text-[var(--bc-text)] hover:bg-[var(--bc-soft)]"
+                                        className="bc-btn bc-btn-secondary bc-btn-sm gap-1"
                                       >
                                         <Copy className="h-3 w-3" />
                                         <span>คัดลอกพิกัด</span>
@@ -1942,7 +1916,7 @@ export function ChatRoomView({
                               {msg.type === "contact" && msg.contact_data && (
                                 <div
                                   data-testid={`contact-card-${msg.id}`}
-                                  className="w-full min-w-0 max-w-[270px] space-y-1.5 rounded-xl border border-[var(--bc-border)] bg-white p-2 text-[var(--bc-text)] shadow-2xs"
+                                  className="bc-well w-full min-w-0 max-w-[270px] space-y-1.5 rounded-xl !bg-white p-2 text-[var(--bc-text)]"
                                 >
                                   <div className="flex items-center gap-2">
                                     <UserAvatar
@@ -1952,7 +1926,7 @@ export function ChatRoomView({
                                       isAi={msg.contact_data.user_id === "user_ai"}
                                     />
                                     <div className="min-w-0 flex-1">
-                                      <div className="truncate text-xs font-bold">
+                                      <div className="truncate text-xs font-semibold">
                                         {msg.contact_data.display_name}
                                       </div>
                                       {msg.contact_data.bc_id && (
@@ -1972,7 +1946,7 @@ export function ChatRoomView({
                                       type="button"
                                       data-testid={`contact-card-chat-${msg.id}`}
                                       onClick={() => void handleOpenContactUser(msg.contact_data!)}
-                                      className="inline-flex w-full items-center justify-center gap-1 rounded-lg bg-[var(--bc-primary)] px-2.5 py-1 text-[11px] font-bold text-white hover:brightness-95"
+                                      className="bc-btn bc-btn-primary bc-btn-sm w-full gap-1"
                                     >
                                       <UserPlus className="h-3 w-3" />
                                       <span>เพิ่มเพื่อน / ทักแชท</span>
@@ -1987,10 +1961,10 @@ export function ChatRoomView({
                                 return (
                                   <div
                                     data-testid={`ladder-card-${msg.id}`}
-                                    className="w-full min-w-0 max-w-[280px] space-y-1.5 rounded-xl border border-[var(--bc-border)] bg-white p-2 text-[var(--bc-text)] shadow-2xs"
+                                    className="bc-well w-full min-w-0 max-w-[280px] space-y-1.5 rounded-xl !bg-white p-2 text-[var(--bc-text)]"
                                   >
                                     <div className="flex items-center justify-between gap-2">
-                                      <div className="flex min-w-0 items-center gap-1 text-xs font-bold text-[var(--bc-primary)]">
+                                      <div className="flex min-w-0 items-center gap-1 text-xs font-semibold text-[var(--bc-primary)]">
                                         <Dices className="h-3.5 w-3.5 shrink-0" />
                                         <span className="truncate">{ladder.title}</span>
                                       </div>
@@ -2002,7 +1976,7 @@ export function ChatRoomView({
                                             [msg.id]: !isExpanded,
                                           }))
                                         }
-                                        className="shrink-0 rounded border border-[var(--bc-border)] bg-[var(--bc-panel)] px-1.5 py-0.5 text-[10px] font-semibold"
+                                        className="bc-btn bc-btn-secondary bc-btn-sm shrink-0 !px-2 !text-[10px]"
                                       >
                                         {isExpanded ? "ซ่อนผล" : `ดูผล (${ladder.entries.length})`}
                                       </button>
@@ -2014,8 +1988,8 @@ export function ChatRoomView({
                                             key={idx}
                                             className="flex items-center justify-between gap-2 rounded-lg bg-[var(--bc-panel)] px-2 py-1 text-[11px]"
                                           >
-                                            <span className="truncate font-semibold">{entry.player}</span>
-                                            <span className="shrink-0 rounded bg-[var(--bc-soft)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--bc-deep)]">
+                                            <span className="truncate font-medium">{entry.player}</span>
+                                            <span className="bc-tag shrink-0">
                                               {entry.result}
                                             </span>
                                           </div>
@@ -2040,7 +2014,7 @@ export function ChatRoomView({
                                       data-testid={`edit-msg-input-${msg.id}`}
                                       value={editDraft}
                                       onChange={(e) => setEditDraft(e.target.value)}
-                                      className="rounded-lg border border-[var(--bc-primary)] bg-white px-2 py-1 text-xs text-[var(--bc-text)] outline-none"
+                                      className="bc-input"
                                     />
                                     <div className="flex items-center justify-end gap-1">
                                       <button
@@ -2049,7 +2023,7 @@ export function ChatRoomView({
                                           setEditingMsgId(null);
                                           setEditDraft("");
                                         }}
-                                        className="rounded-lg border border-[var(--bc-border)] bg-white px-2 py-0.5 text-[10px] font-semibold text-[var(--bc-text)]"
+                                        className="bc-btn bc-btn-secondary bc-btn-sm"
                                       >
                                         ยกเลิก
                                       </button>
@@ -2057,7 +2031,7 @@ export function ChatRoomView({
                                         type="submit"
                                         data-testid={`save-edit-msg-btn-${msg.id}`}
                                         disabled={editSaving || !editDraft.trim()}
-                                        className="rounded-lg bg-[var(--bc-primary)] px-2 py-0.5 text-[10px] font-bold text-white disabled:opacity-50"
+                                        className="bc-btn bc-btn-primary bc-btn-sm"
                                       >
                                         {editSaving ? "กำลังบันทึก..." : "บันทึก"}
                                       </button>
@@ -2076,21 +2050,21 @@ export function ChatRoomView({
                               {/* Urgent Topic Action Controls */}
                               {msg.priority === "urgent" && (
                                 <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-black/10 pt-1.5 text-[11px]">
-                                  <span className="font-semibold">
+                                  <span className="font-medium">
                                     สถานะ: {msg.task_status || "open"}
                                     {msg.accepted_by ? ` (${msg.accepted_by})` : ""}
                                   </span>
                                   <button
                                     type="button"
                                     onClick={() => api.taskAction(msg.id, "accept").then(onRefreshMessages)}
-                                    className="rounded bg-[var(--bc-primary)] px-2 py-0.5 font-bold text-white"
+                                    className="bc-btn bc-btn-primary bc-btn-sm"
                                   >
                                     รับทราบ
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => api.taskAction(msg.id, "done").then(onRefreshMessages)}
-                                    className="rounded bg-emerald-700 px-2 py-0.5 font-bold text-white"
+                                    className="bc-btn bc-btn-secondary bc-btn-sm"
                                   >
                                     เรียบร้อย
                                   </button>
@@ -2110,10 +2084,10 @@ export function ChatRoomView({
                                   key={emoji}
                                   type="button"
                                   onClick={() => handleReact(msg.id, emoji)}
-                                  className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0 text-[10px] font-semibold shadow-2xs ${
+                                  className={`bc-num inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] shadow-2xs ${
                                     mine
-                                      ? "border-[var(--bc-primary)] bg-[var(--bc-soft)] text-[var(--bc-deep)]"
-                                      : "border-[var(--bc-border)] bg-white text-[var(--bc-text)]"
+                                      ? "border-[var(--bc-primary)] bg-[var(--bc-tint-strong)] text-[var(--bc-deep)]"
+                                      : "border-[var(--bc-line)] bg-white text-[var(--bc-text)]"
                                   }`}
                                 >
                                   <span>{emoji}</span>
@@ -2130,7 +2104,7 @@ export function ChatRoomView({
                             isDarkRoom ? "text-stone-300" : "text-[var(--bc-muted)]"
                           }`}
                         >
-                          <span>{formatThaiTime(msg.created_at)}</span>
+                          <span className="bc-num">{formatThaiTime(msg.created_at)}</span>
                           {msg.edited_at && msg.type !== "text" && (
                             <span className="opacity-80">(แก้ไขแล้ว)</span>
                           )}
@@ -2142,14 +2116,14 @@ export function ChatRoomView({
                                 onClick={() =>
                                   setExpandedReadById((prev) => (prev === msg.id ? null : msg.id))
                                 }
-                                className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 font-semibold text-[var(--bc-primary)] hover:bg-black/10"
+                                className="bc-num inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[var(--bc-primary)] hover:bg-black/10"
                                 title="ดูรายชื่อคนที่อ่านแล้ว"
                               >
                                 <CheckCheck className="h-3 w-3" />
                                 <span>อ่านแล้ว {msg.read_count}</span>
                               </button>
                             ) : (
-                              <span className="inline-flex items-center gap-0.5 font-semibold text-[var(--bc-primary)]">
+                              <span className="inline-flex items-center gap-0.5 text-[var(--bc-primary)]">
                                 <CheckCheck className="h-3 w-3" />
                                 <span>อ่านแล้ว</span>
                               </span>
@@ -2184,7 +2158,7 @@ export function ChatRoomView({
                         {selectedActionMsgId === msg.id && !msg.is_unsent && (
                           <div
                             data-testid={`msg-action-bar-${msg.id}`}
-                            className="mt-1 flex max-w-full flex-wrap items-center gap-1 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-1 text-[11px] text-[var(--bc-text)] shadow-xs"
+                            className="bc-glass bc-rise-in mt-1 flex max-w-full flex-wrap items-center gap-1 rounded-xl border border-[var(--bc-line)] p-1 text-[11px] text-[var(--bc-text)] shadow-[var(--bc-elev-2)]"
                           >
                             {REACTION_EMOJIS.slice(0, 3).map((em) => (
                               <button
@@ -2195,14 +2169,14 @@ export function ChatRoomView({
                                   void handleReact(msg.id, em);
                                   setSelectedActionMsgId(null);
                                 }}
-                                className="inline-flex h-7 min-w-7 items-center justify-center rounded-lg px-1.5 hover:bg-[var(--bc-soft)]"
+                                className="bc-iconbtn h-8 min-w-8 px-1.5"
                                 title={`แสดงความรู้สึก ${em}`}
                               >
                                 {em}
                               </button>
                             ))}
 
-                            <span className="mx-0.5 h-4 w-px bg-[var(--bc-border)]" />
+                            <span className="mx-0.5 h-4 w-px bg-[var(--bc-line-strong)]" />
 
                             <button
                               type="button"
@@ -2211,7 +2185,7 @@ export function ChatRoomView({
                                 setSelectedActionMsgId(null);
                                 inputRef.current?.focus();
                               }}
-                              className="inline-flex h-7 items-center gap-1 rounded-lg px-2 hover:bg-[var(--bc-soft)]"
+                              className="bc-btn bc-btn-ghost bc-btn-sm gap-1 !px-2 !text-[11px]"
                               title="ตอบกลับ"
                             >
                               <Reply className="h-3 w-3" />
@@ -2229,7 +2203,7 @@ export function ChatRoomView({
                                     .catch(() => onNotify("คัดลอกข้อความไม่สำเร็จ"));
                                   setSelectedActionMsgId(null);
                                 }}
-                                className="inline-flex h-7 items-center gap-1 rounded-lg px-2 hover:bg-[var(--bc-soft)]"
+                                className="bc-btn bc-btn-ghost bc-btn-sm gap-1 !px-2 !text-[11px]"
                                 title="คัดลอกข้อความ"
                               >
                                 <Copy className="h-3 w-3" />
@@ -2245,7 +2219,7 @@ export function ChatRoomView({
                                   handleStartEditMessage(msg);
                                   setSelectedActionMsgId(null);
                                 }}
-                                className="inline-flex h-7 items-center gap-1 rounded-lg px-2 hover:bg-[var(--bc-soft)]"
+                                className="bc-btn bc-btn-ghost bc-btn-sm gap-1 !px-2 !text-[11px]"
                                 title="แก้ไขข้อความ"
                               >
                                 <Pencil className="h-3 w-3" />
@@ -2264,7 +2238,7 @@ export function ChatRoomView({
                                   setForwardTargetIds([]);
                                   setSelectedActionMsgId(null);
                                 }}
-                                className="inline-flex h-7 items-center gap-1 rounded-lg px-2 hover:bg-[var(--bc-soft)]"
+                                className="bc-btn bc-btn-ghost bc-btn-sm gap-1 !px-2 !text-[11px]"
                                 title="ส่งต่อข้อความ"
                               >
                                 <Forward className="h-3 w-3" />
@@ -2280,7 +2254,7 @@ export function ChatRoomView({
                                   void handleSaveToKeep(msg.id);
                                   setSelectedActionMsgId(null);
                                 }}
-                                className="inline-flex h-7 items-center gap-1 rounded-lg px-2 hover:bg-[var(--bc-soft)]"
+                                className="bc-btn bc-btn-ghost bc-btn-sm gap-1 !px-2 !text-[11px]"
                                 title="เก็บเข้า Keep ส่วนตัว"
                               >
                                 <Bookmark className="h-3 w-3" />
@@ -2296,14 +2270,14 @@ export function ChatRoomView({
                                   .then(onConversationUpdated);
                                 setSelectedActionMsgId(null);
                               }}
-                              className="inline-flex h-7 items-center gap-1 rounded-lg px-2 hover:bg-[var(--bc-soft)]"
+                              className="bc-btn bc-btn-ghost bc-btn-sm gap-1 !px-2 !text-[11px]"
                               title="ปักหมุดหัวห้อง"
                             >
                               <Pin className="h-3 w-3" />
                               <span>ปักหมุด</span>
                             </button>
 
-                            <span className="mx-0.5 h-4 w-px bg-[var(--bc-border)]" />
+                            <span className="mx-0.5 h-4 w-px bg-[var(--bc-line-strong)]" />
 
                             <button
                               type="button"
@@ -2313,7 +2287,7 @@ export function ChatRoomView({
                                   .then(onRefreshMessages);
                                 setSelectedActionMsgId(null);
                               }}
-                              className="inline-flex h-7 items-center rounded-lg px-2 hover:bg-[var(--bc-panel)]"
+                              className="bc-btn bc-btn-ghost bc-btn-sm !px-2 !text-[11px]"
                               title="ลบเฉพาะฝั่งฉัน"
                             >
                               ลบ
@@ -2328,7 +2302,7 @@ export function ChatRoomView({
                                     .then(onRefreshMessages);
                                   setSelectedActionMsgId(null);
                                 }}
-                                className="inline-flex h-7 items-center rounded-lg px-2 font-semibold text-red-600 hover:bg-red-50"
+                                className="bc-btn bc-btn-ghost bc-btn-sm !px-2 !text-[11px] !text-red-600"
                                 title="ยกเลิกการส่ง (ลบออกจากทุกคนในห้อง)"
                               >
                                 ยกเลิกการส่ง
@@ -2341,9 +2315,9 @@ export function ChatRoomView({
                         {expandedReadById === msg.id && (
                           <div
                             data-testid={`read-by-list-${msg.id}`}
-                            className="mt-1 rounded-lg border border-[var(--bc-border)] bg-white px-2 py-1 text-[10px] text-[var(--bc-text)] shadow-2xs"
+                            className="bc-well mt-1 !bg-white px-2 py-1 text-[10px] text-[var(--bc-text)]"
                           >
-                            <span className="font-bold text-[var(--bc-primary)]">อ่านแล้วโดย: </span>
+                            <span className="font-semibold text-[var(--bc-primary)]">อ่านแล้วโดย: </span>
                             <span>
                               {(() => {
                                 const readers = (msg.read_by || [])
@@ -2363,10 +2337,10 @@ export function ChatRoomView({
                         {forwardingMsgId === msg.id && (
                           <div
                             data-testid={`forward-picker-${msg.id}`}
-                            className="mt-1 w-full max-w-[290px] space-y-1.5 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2 text-[11px] text-[var(--bc-text)] shadow-xs"
+                            className="bc-well bc-rise-in mt-1 w-full max-w-[290px] space-y-1.5 rounded-xl p-2 text-[11px] text-[var(--bc-text)]"
                           >
                             <div className="flex items-center justify-between gap-2">
-                              <span className="font-bold text-[var(--bc-primary)]">
+                              <span className="font-semibold text-[var(--bc-primary)]">
                                 เลือกห้องที่จะส่งต่อ
                               </span>
                               <button
@@ -2375,7 +2349,7 @@ export function ChatRoomView({
                                   setForwardingMsgId(null);
                                   setForwardTargetIds([]);
                                 }}
-                                className="rounded p-0.5 text-[var(--bc-muted)] hover:text-[var(--bc-text)]"
+                                className="bc-iconbtn h-8 w-8 text-[var(--bc-muted)]"
                               >
                                 <X className="h-3.5 w-3.5" />
                               </button>
@@ -2389,11 +2363,7 @@ export function ChatRoomView({
                                     type="button"
                                     data-testid={`forward-target-${c.id}`}
                                     onClick={() => handleToggleForwardTarget(c.id)}
-                                    className={`rounded-lg border px-2 py-0.5 text-[10px] font-semibold ${
-                                      picked
-                                        ? "border-[var(--bc-primary)] bg-[var(--bc-primary)] text-white"
-                                        : "border-[var(--bc-border)] bg-white text-[var(--bc-text)]"
-                                    }`}
+                                    className={`bc-chip ${picked ? "is-active" : ""}`}
                                   >
                                     {c.name}
                                   </button>
@@ -2407,7 +2377,7 @@ export function ChatRoomView({
                                   setForwardingMsgId(null);
                                   setForwardTargetIds([]);
                                 }}
-                                className="rounded-lg border border-[var(--bc-border)] bg-white px-2 py-0.5 text-[10px] font-semibold"
+                                className="bc-btn bc-btn-secondary bc-btn-sm"
                               >
                                 ยกเลิก
                               </button>
@@ -2416,7 +2386,7 @@ export function ChatRoomView({
                                 data-testid={`forward-submit-${msg.id}`}
                                 disabled={forwardTargetIds.length === 0 || forwardSending}
                                 onClick={() => void handleSubmitForward(msg.id)}
-                                className="rounded-lg bg-[var(--bc-primary)] px-2.5 py-0.5 text-[10px] font-bold text-white disabled:opacity-50"
+                                className="bc-btn bc-btn-primary bc-btn-sm"
                               >
                                 {forwardSending
                                   ? "กำลังส่งต่อ..."
@@ -2436,15 +2406,15 @@ export function ChatRoomView({
 
           {/* Inline Sticker Picker */}
           {showStickerPicker && (
-            <div className="shrink-0 border-t border-[var(--bc-border)] bg-[var(--bc-panel)] p-2">
+            <div className="bc-tray bc-rise-in shrink-0 p-2">
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-bold text-[var(--bc-primary)]">
+                <span className="text-xs font-semibold text-[var(--bc-primary)]">
                   ชุดสติกเกอร์ &quot;อารมณ์ดีดินเผาไทย&quot;
                 </span>
                 <button
                   type="button"
                   onClick={() => setShowStickerPicker(false)}
-                  className="text-xs text-[var(--bc-muted)]"
+                  className="bc-btn bc-btn-ghost bc-btn-sm"
                 >
                   ปิด
                 </button>
@@ -2455,7 +2425,7 @@ export function ChatRoomView({
                     key={st.code}
                     type="button"
                     onClick={() => handleSendSticker(st.code, st.label)}
-                    className="flex flex-col items-center rounded-xl border border-[var(--bc-border)] bg-white p-1 transition hover:border-[var(--bc-primary)]"
+                    className="bc-tile !p-1"
                   >
                     <StickerArt code={st.code} fallbackLabel={st.label} size={52} />
                   </button>
@@ -2469,17 +2439,17 @@ export function ChatRoomView({
             <form
               data-testid="rich-card-inline-tray"
               onSubmit={handleSendRichCard}
-              className="shrink-0 space-y-1.5 border-t border-[var(--bc-border)] bg-[var(--bc-panel)] p-2"
+              className="bc-tray bc-rise-in shrink-0 space-y-1.5 p-2"
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-[var(--bc-primary)]">
+                <span className="text-xs font-semibold text-[var(--bc-primary)]">
                   ส่งการ์ดโต้ตอบ
                 </span>
                 <button
                   type="button"
                   onClick={() => setShowCardModal(false)}
                   aria-label="ปิดการ์ดโต้ตอบ"
-                  className="rounded-lg p-1 text-[var(--bc-muted)] hover:bg-[var(--bc-card)]"
+                  className="bc-iconbtn h-8 w-8 text-[var(--bc-muted)]"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -2491,41 +2461,41 @@ export function ChatRoomView({
                   value={cardTitle}
                   onChange={(e) => setCardTitle(e.target.value)}
                   placeholder="หัวข้อการ์ด"
-                  className="w-full rounded-xl border border-[var(--bc-border)] bg-[var(--bc-card)] px-3 py-1.5 text-xs outline-none focus:border-[var(--bc-primary)]"
+                  className="bc-input w-full"
                 />
                 <input
                   type="text"
                   value={cardHeading}
                   onChange={(e) => setCardHeading(e.target.value)}
                   placeholder="รายละเอียดหลัก"
-                  className="w-full rounded-xl border border-[var(--bc-border)] bg-[var(--bc-card)] px-3 py-1.5 text-xs outline-none focus:border-[var(--bc-primary)]"
+                  className="bc-input w-full"
                 />
                 <input
                   type="text"
                   value={cardSubtitle}
                   onChange={(e) => setCardSubtitle(e.target.value)}
                   placeholder="หมายเหตุ / เวลา"
-                  className="w-full rounded-xl border border-[var(--bc-border)] bg-[var(--bc-card)] px-3 py-1.5 text-xs outline-none focus:border-[var(--bc-primary)]"
+                  className="bc-input w-full"
                 />
                 <input
                   type="text"
                   value={cardAmount}
                   onChange={(e) => setCardAmount(e.target.value)}
                   placeholder="ค่าใช้จ่าย / ข้อความเด่น"
-                  className="w-full rounded-xl border border-[var(--bc-border)] bg-[var(--bc-card)] px-3 py-1.5 text-xs outline-none focus:border-[var(--bc-primary)]"
+                  className="bc-input w-full"
                 />
               </div>
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setShowCardModal(false)}
-                  className="rounded-xl border border-[var(--bc-border)] bg-[var(--bc-card)] px-3 py-1.5 text-xs font-semibold"
+                  className="bc-btn bc-btn-secondary"
                 >
                   ปิด
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-[var(--bc-primary)] px-3.5 py-1.5 text-xs font-bold text-white"
+                  className="bc-btn bc-btn-primary"
                 >
                   ส่งการ์ดเข้าห้องแชท
                 </button>
@@ -2537,10 +2507,10 @@ export function ChatRoomView({
           {aiModalMode && (
             <div
               data-testid="ai-inline-tray"
-              className="max-h-[38dvh] shrink-0 space-y-1.5 overflow-y-auto border-t border-[var(--bc-border)] bg-[var(--bc-panel)] p-2"
+              className="bc-tray bc-rise-in max-h-[38dvh] shrink-0 space-y-1.5 overflow-y-auto p-2"
             >
               <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--bc-primary)]">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--bc-primary)]">
                   <Sparkles className="h-4 w-4 shrink-0" />
                   <span>
                     {aiModalMode === "summary"
@@ -2552,7 +2522,7 @@ export function ChatRoomView({
                   type="button"
                   onClick={() => setAiModalMode(null)}
                   aria-label="ปิดแถบผู้ช่วย AI"
-                  className="rounded-lg p-1 text-[var(--bc-muted)] hover:bg-[var(--bc-card)]"
+                  className="bc-iconbtn h-8 w-8 text-[var(--bc-muted)]"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -2573,11 +2543,7 @@ export function ChatRoomView({
                       key={m}
                       type="button"
                       onClick={() => void handleOpenAiAssist(m)}
-                      className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                        assistMode === m
-                          ? "bg-[var(--bc-primary)] text-white"
-                          : "border border-[var(--bc-border)] bg-[var(--bc-card)] text-[var(--bc-text)]"
-                      }`}
+                      className={`bc-chip shrink-0 ${assistMode === m ? "is-active" : ""}`}
                     >
                       {label}
                     </button>
@@ -2590,13 +2556,13 @@ export function ChatRoomView({
                   กำลังประมวลผลด้วยสมองกล BC AI...
                 </div>
               ) : aiModalMode === "summary" && aiSummary ? (
-                <div className="space-y-2 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-3 text-xs">
+                <div className="bc-card space-y-2 p-3 text-xs">
                   <p className="whitespace-pre-wrap leading-relaxed text-[var(--bc-text)]">
                     {aiSummary.summary}
                   </p>
                   {aiSummary.action_items.length > 0 && (
                     <div>
-                      <div className="font-bold text-[var(--bc-primary)]">สิ่งที่นัดกันต่อ:</div>
+                      <div className="font-semibold text-[var(--bc-primary)]">สิ่งที่นัดกันต่อ:</div>
                       <ul className="list-disc pl-4">
                         {aiSummary.action_items.map((a, i) => (
                           <li key={i}>{a}</li>
@@ -2608,14 +2574,14 @@ export function ChatRoomView({
                     <button
                       type="button"
                       onClick={() => void handleOpenAiSummary(true)}
-                      className="rounded-xl bg-[var(--bc-primary)] px-3 py-1.5 text-xs font-bold text-white"
+                      className="bc-btn bc-btn-primary"
                     >
                       โพสต์สรุปเข้าห้องแชท
                     </button>
                   </div>
                 </div>
               ) : aiModalMode === "assist" && aiAssist ? (
-                <div className="space-y-2 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-3 text-xs">
+                <div className="bc-card space-y-2 p-3 text-xs">
                   <div className="whitespace-pre-wrap leading-relaxed text-[var(--bc-text)]">
                     {aiAssist.result}
                   </div>
@@ -2626,7 +2592,7 @@ export function ChatRoomView({
                         setDraft(aiAssist.result);
                         setAiModalMode(null);
                       }}
-                      className="rounded-xl bg-[var(--bc-primary)] px-3 py-1.5 text-xs font-bold text-white"
+                      className="bc-btn bc-btn-primary"
                     >
                       นำไปใช้ในช่องแชท
                     </button>
@@ -2638,7 +2604,7 @@ export function ChatRoomView({
                           setDraft(sg);
                           setAiModalMode(null);
                         }}
-                        className="rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2.5 py-1.5 text-left text-xs hover:bg-[var(--bc-soft)]"
+                        className="bc-btn bc-btn-secondary text-left"
                       >
                         ตัวเลือก {idx + 1}: {sg.slice(0, 50)}
                         {sg.length > 50 ? "..." : ""}
@@ -2651,11 +2617,11 @@ export function ChatRoomView({
           )}
 
           {/* Composer Area */}
-          <div className="relative shrink-0 border-t border-[var(--bc-border)] bg-[var(--bc-card)] px-2 py-1 sm:px-2.5 sm:py-1.5">
+          <div className="bc-glass relative shrink-0 border-t border-[var(--bc-line)] px-2 py-1 sm:px-2.5 sm:py-1.5">
             {/* @Mention Autocomplete */}
             {mentionQuery !== null && mentionCandidates.length > 0 && (
-              <div className="absolute bottom-full left-3 z-30 mb-1 w-72 max-w-[calc(100vw-1.5rem)] rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-1.5 shadow-xl">
-                <div className="px-2 py-1 text-[10px] font-bold text-[var(--bc-muted)]">
+              <div className="bc-card bc-rise-in absolute bottom-full left-3 z-30 mb-1 w-72 max-w-[calc(100vw-1.5rem)] p-1.5 shadow-[var(--bc-elev-3)]">
+                <div className="bc-overline px-2 py-1">
                   แท็กเพื่อนหรือ @ai
                 </div>
                 {mentionCandidates.map((c) => (
@@ -2663,9 +2629,9 @@ export function ChatRoomView({
                     key={c.id}
                     type="button"
                     onClick={() => insertMention(c)}
-                    className="flex w-full items-center justify-between gap-2 rounded-xl px-2.5 py-1.5 text-left text-xs hover:bg-[var(--bc-soft)]"
+                    className="bc-row w-full justify-between gap-2 rounded-xl px-2.5 py-1.5 text-left text-xs"
                   >
-                    <span className="font-bold text-[var(--bc-primary)]">{c.label}</span>
+                    <span className="font-semibold text-[var(--bc-primary)]">{c.label}</span>
                     <span className="truncate text-[11px] text-[var(--bc-muted)]">{c.name}</span>
                   </button>
                 ))}
@@ -2676,17 +2642,17 @@ export function ChatRoomView({
             {showOaCoupons && conversation.oa_id && (
               <div
                 data-testid="oa-coupon-tray"
-                className="mb-2 space-y-1.5 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2"
+                className="bc-well bc-rise-in mb-2 space-y-1.5 rounded-xl p-2"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="inline-flex items-center gap-1 text-xs font-bold text-[var(--bc-primary)]">
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--bc-primary)]">
                     <Ticket className="h-3.5 w-3.5" />
                     <span>คูปองส่วนลดจาก {conversation.name}</span>
                   </span>
                   <button
                     type="button"
                     onClick={() => setShowOaCoupons(false)}
-                    className="rounded p-0.5 text-[var(--bc-muted)] hover:text-[var(--bc-text)]"
+                    className="bc-iconbtn h-8 w-8 text-[var(--bc-muted)]"
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>
@@ -2703,19 +2669,19 @@ export function ChatRoomView({
                     {oaCoupons.map((cp) => (
                       <div
                         key={cp.id}
-                        className="flex items-center justify-between gap-2 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-2 text-xs"
+                        className="bc-card flex items-center justify-between gap-2 rounded-xl p-2 text-xs"
                       >
                         <div className="min-w-0">
                           <div className="flex items-center gap-1">
-                            <span className="rounded bg-[var(--bc-primary)] px-1.5 py-0.5 text-[10px] font-bold text-white">
+                            <span className="bc-num rounded-full bg-[var(--bc-primary)] px-2 py-0.5 text-[10px] font-semibold text-white">
                               {cp.code}
                             </span>
-                            <span className="truncate font-bold text-[var(--bc-text)]">
+                            <span className="truncate font-semibold text-[var(--bc-text)]">
                               {cp.title}
                             </span>
                           </div>
                           {cp.discount_text && (
-                            <div className="text-[11px] font-bold text-[var(--bc-ochre)]">
+                            <div className="text-[11px] font-semibold text-[var(--bc-ochre)]">
                               {cp.discount_text}
                             </div>
                           )}
@@ -2735,7 +2701,7 @@ export function ChatRoomView({
                                   );
                                 }
                               }}
-                              className="rounded-lg bg-[var(--bc-primary)] px-2 py-1 text-[11px] font-bold text-white"
+                              className="bc-btn bc-btn-primary bc-btn-sm"
                             >
                               เก็บคูปอง
                             </button>
@@ -2753,12 +2719,12 @@ export function ChatRoomView({
                                   );
                                 }
                               }}
-                              className="rounded-lg border border-[var(--bc-primary)] bg-[var(--bc-soft)] px-2 py-1 text-[11px] font-bold text-[var(--bc-deep)]"
+                              className="bc-btn bc-btn-soft bc-btn-sm"
                             >
                               ใช้คูปอง
                             </button>
                           ) : (
-                            <span className="rounded-lg bg-[var(--bc-panel)] px-2 py-1 text-[10px] font-semibold text-[var(--bc-muted)]">
+                            <span className="bc-tag">
                               ใช้แล้ว
                             </span>
                           )}
@@ -2774,17 +2740,17 @@ export function ChatRoomView({
             {conversation.oa_id && (conversation.rich_menu?.length ?? 0) > 0 && (
               <div
                 data-testid="oa-rich-menu-bar"
-                className="mb-1.5 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2 py-1.5"
+                className="bc-well mb-1.5 rounded-xl px-2 py-1.5"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[var(--bc-primary)]">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--bc-primary)]">
                     <Store className="h-3.5 w-3.5" />
                     <span>เมนูลัดใต้แชท</span>
                   </span>
                   <button
                     type="button"
                     onClick={() => setShowRichMenu((v) => !v)}
-                    className="text-[11px] font-semibold text-[var(--bc-muted)] hover:text-[var(--bc-text)]"
+                    className="bc-btn bc-btn-ghost bc-btn-sm"
                   >
                     {showRichMenu ? "ซ่อนเมนู" : "แสดงเมนู"}
                   </button>
@@ -2824,10 +2790,10 @@ export function ChatRoomView({
                             onNotify(err instanceof Error ? err.message : "ส่งคำสั่งไม่สำเร็จ");
                           }
                         }}
-                        className="flex items-center justify-between gap-1.5 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-card)] px-2 py-1 text-left transition hover:border-[var(--bc-primary)] hover:bg-[var(--bc-soft)]/50"
+                        className="bc-btn bc-btn-secondary justify-between gap-1.5 px-2 text-left"
                       >
                         <div className="min-w-0">
-                          <div className="truncate text-[11px] font-bold text-[var(--bc-text)]">
+                          <div className="truncate text-[11px] font-semibold text-[var(--bc-text)]">
                             {item.label}
                           </div>
                           {item.subtitle && (
@@ -2853,11 +2819,11 @@ export function ChatRoomView({
             {isDirectBlockedByMe && directPeer ? (
               <div
                 data-testid="room-blocked-banner"
-                className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800"
+                className="bc-note bc-note-danger flex flex-wrap items-center justify-between gap-2 rounded-xl"
               >
                 <div className="flex min-w-0 items-center gap-2">
                   <Ban className="h-4 w-4 shrink-0 text-red-600" />
-                  <span className="font-semibold">
+                  <span className="font-medium">
                     คุณได้บล็อกผู้ใช้นี้ ({directPeer.display_name})
                   </span>
                 </div>
@@ -2873,7 +2839,7 @@ export function ChatRoomView({
                       onNotify(err instanceof Error ? err.message : "ปลดบล็อกไม่สำเร็จ");
                     }
                   }}
-                  className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-[var(--bc-primary)] px-3 py-1 text-xs font-bold text-white hover:brightness-95"
+                  className="bc-btn bc-btn-primary bc-btn-sm shrink-0 gap-1"
                 >
                   <Check className="h-3.5 w-3.5" />
                   <span>ปลดบล็อก</span>
@@ -2885,7 +2851,7 @@ export function ChatRoomView({
             {showPlusTray && (
               <div
                 data-testid="plus-attach-tray"
-                className="mb-1.5 max-h-[46dvh] space-y-2 overflow-y-auto rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2 text-xs"
+                className="bc-tray bc-rise-in mb-1.5 max-h-[46dvh] space-y-2 overflow-y-auto rounded-xl p-2 text-xs"
               >
                 <div className="flex items-start justify-between gap-1.5">
                   <div className="grid flex-1 grid-cols-3 gap-1.5 sm:grid-cols-6">
@@ -2893,9 +2859,9 @@ export function ChatRoomView({
                       type="button"
                       data-testid="attach-tab-location"
                       onClick={() => setLocFullMapOpen(true)}
-                      className="flex flex-col items-center justify-center gap-0.5 rounded-xl border border-[var(--bc-border)] bg-white px-1.5 py-2 text-[11px] font-bold text-[var(--bc-text)] transition hover:bg-[var(--bc-soft)]/50"
+                      className="bc-tile"
                     >
-                      <MapPin className="h-4 w-4 shrink-0" />
+                      <MapPin className="bc-tile-icon !h-9 !w-9 shrink-0 !p-2" />
                       <span className="truncate">ตำแหน่ง</span>
                     </button>
 
@@ -2903,13 +2869,9 @@ export function ChatRoomView({
                       type="button"
                       data-testid="attach-tab-contact"
                       onClick={() => setPlusTab("contact")}
-                      className={`flex flex-col items-center justify-center gap-0.5 rounded-xl border px-1.5 py-2 text-[11px] font-bold transition ${
-                        plusTab === "contact"
-                          ? "border-[var(--bc-primary)] bg-[var(--bc-primary)] text-white"
-                          : "border-[var(--bc-border)] bg-white text-[var(--bc-text)] hover:bg-[var(--bc-soft)]/50"
-                      }`}
+                      className={`bc-tile ${plusTab === "contact" ? "bg-[var(--bc-tint)]" : ""}`}
                     >
-                      <UserPlus className="h-4 w-4 shrink-0" />
+                      <UserPlus className="bc-tile-icon !h-9 !w-9 shrink-0 !p-2" />
                       <span className="truncate">แนะนำเพื่อน</span>
                     </button>
 
@@ -2922,13 +2884,9 @@ export function ChatRoomView({
                         setShowStickerPicker(false);
                         setShowCardModal(true);
                       }}
-                      className={`flex flex-col items-center justify-center gap-0.5 rounded-xl border px-1.5 py-2 text-[11px] font-bold transition ${
-                        showCardModal
-                          ? "border-[var(--bc-primary)] bg-[var(--bc-primary)] text-white"
-                          : "border-[var(--bc-border)] bg-white text-[var(--bc-text)] hover:bg-[var(--bc-soft)]/50"
-                      }`}
+                      className={`bc-tile ${showCardModal ? "bg-[var(--bc-tint)]" : ""}`}
                     >
-                      <Layers className="h-4 w-4 shrink-0" />
+                      <Layers className="bc-tile-icon !h-9 !w-9 shrink-0 !p-2" />
                       <span className="truncate">การ์ดโต้ตอบ</span>
                     </button>
 
@@ -2936,13 +2894,9 @@ export function ChatRoomView({
                       type="button"
                       data-testid="attach-tab-ladder"
                       onClick={() => setPlusTab("ladder")}
-                      className={`flex flex-col items-center justify-center gap-0.5 rounded-xl border px-1.5 py-2 text-[11px] font-bold transition ${
-                        plusTab === "ladder"
-                          ? "border-[var(--bc-primary)] bg-[var(--bc-primary)] text-white"
-                          : "border-[var(--bc-border)] bg-white text-[var(--bc-text)] hover:bg-[var(--bc-soft)]/50"
-                      }`}
+                      className={`bc-tile ${plusTab === "ladder" ? "bg-[var(--bc-tint)]" : ""}`}
                     >
-                      <Dices className="h-4 w-4 shrink-0" />
+                      <Dices className="bc-tile-icon !h-9 !w-9 shrink-0 !p-2" />
                       <span className="truncate">สุ่มบันได</span>
                     </button>
 
@@ -2950,13 +2904,9 @@ export function ChatRoomView({
                       type="button"
                       data-testid="attach-tab-miniapps"
                       onClick={() => setPlusTab("miniapps")}
-                      className={`flex flex-col items-center justify-center gap-0.5 rounded-xl border px-1.5 py-2 text-[11px] font-bold transition ${
-                        plusTab === "miniapps"
-                          ? "border-[var(--bc-primary)] bg-[var(--bc-primary)] text-white"
-                          : "border-[var(--bc-border)] bg-white text-[var(--bc-text)] hover:bg-[var(--bc-soft)]/50"
-                      }`}
+                      className={`bc-tile ${plusTab === "miniapps" ? "bg-[var(--bc-tint)]" : ""}`}
                     >
-                      <Wrench className="h-4 w-4 shrink-0" />
+                      <Wrench className="bc-tile-icon !h-9 !w-9 shrink-0 !p-2" />
                       <span className="truncate">เครื่องมือเสริม</span>
                     </button>
 
@@ -2964,13 +2914,9 @@ export function ChatRoomView({
                       type="button"
                       data-testid="attach-tab-options"
                       onClick={() => setPlusTab("options")}
-                      className={`flex flex-col items-center justify-center gap-0.5 rounded-xl border px-1.5 py-2 text-[11px] font-bold transition ${
-                        plusTab === "options"
-                          ? "border-[var(--bc-primary)] bg-[var(--bc-primary)] text-white"
-                          : "border-[var(--bc-border)] bg-white text-[var(--bc-text)] hover:bg-[var(--bc-soft)]/50"
-                      }`}
+                      className={`bc-tile ${plusTab === "options" ? "bg-[var(--bc-tint)]" : ""}`}
                     >
-                      <SlidersHorizontal className="h-4 w-4 shrink-0" />
+                      <SlidersHorizontal className="bc-tile-icon !h-9 !w-9 shrink-0 !p-2" />
                       <span className="truncate">ตัวเลือกการส่ง</span>
                     </button>
                   </div>
@@ -2980,7 +2926,7 @@ export function ChatRoomView({
                     onClick={() => setShowPlusTray(false)}
                     aria-label="ปิดเมนูส่งเพิ่ม"
                     title="ปิดเมนูส่งเพิ่ม"
-                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--bc-muted)] hover:bg-white"
+                    className="bc-iconbtn h-8 w-8 shrink-0 text-[var(--bc-muted)]"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -2988,13 +2934,13 @@ export function ChatRoomView({
 
                 {/* Tab 2: Recommend Contact */}
                 {plusTab === "contact" && (
-                  <div className="space-y-1.5 rounded-xl border border-[var(--bc-border)] bg-white p-2">
+                  <div className="bc-well space-y-1.5 rounded-xl !bg-white p-2">
                     <input
                       type="text"
                       value={contactSearch}
                       onChange={(e) => setContactSearch(e.target.value)}
                       placeholder="ค้นหาชื่อเพื่อนที่ต้องการแนะนำ..."
-                      className="h-8 w-full rounded-lg border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2 text-xs outline-none focus:border-[var(--bc-primary)]"
+                      className="bc-input bc-search w-full"
                     />
                     <div className="max-h-32 space-y-1 overflow-y-auto">
                       {friends
@@ -3010,7 +2956,7 @@ export function ChatRoomView({
                         .map((f) => (
                           <div
                             key={f.id}
-                            className="flex items-center justify-between gap-2 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2 py-1"
+                            className="bc-row justify-between gap-2 rounded-lg px-2 py-1"
                           >
                             <div className="flex min-w-0 items-center gap-2">
                               <UserAvatar
@@ -3020,7 +2966,7 @@ export function ChatRoomView({
                                 isAi={f.id === "user_ai"}
                               />
                               <div className="min-w-0">
-                                <div className="truncate text-xs font-bold">{f.display_name}</div>
+                                <div className="truncate text-xs font-semibold">{f.display_name}</div>
                                 <div className="truncate text-[10px] text-[var(--bc-muted)]">{f.bc_id}</div>
                               </div>
                             </div>
@@ -3028,7 +2974,7 @@ export function ChatRoomView({
                               type="button"
                               data-testid={`send-contact-${f.id}`}
                               onClick={() => void handleSendContact(f)}
-                              className="h-7 shrink-0 rounded-lg bg-[var(--bc-primary)] px-2.5 text-[10px] font-bold text-white"
+                              className="bc-btn bc-btn-primary bc-btn-sm shrink-0"
                             >
                               ส่งแนะนำ
                             </button>
@@ -3045,35 +2991,35 @@ export function ChatRoomView({
 
                 {/* Tab 4: Ladder Random Game */}
                 {plusTab === "ladder" && (
-                  <form onSubmit={handleSendLadder} className="space-y-1.5 rounded-xl border border-[var(--bc-border)] bg-white p-2">
+                  <form onSubmit={handleSendLadder} className="bc-well space-y-1.5 rounded-xl !bg-white p-2">
                     <input
                       type="text"
                       value={ladderTitle}
                       onChange={(e) => setLadderTitle(e.target.value)}
                       placeholder="ชื่อเกมสุ่มบันได (เช่น สุ่มเจ้ามือมื้อนี้)"
-                      className="h-8 w-full rounded-lg border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2 text-xs outline-none focus:border-[var(--bc-primary)]"
+                      className="bc-input w-full"
                     />
                     <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                       <div>
-                        <div className="mb-0.5 text-[10px] font-bold text-[var(--bc-muted)]">
+                        <div className="bc-label mb-0.5">
                           รายชื่อผู้เล่น (คั่นด้วย , หรือขึ้นบรรทัดใหม่)
                         </div>
                         <textarea
                           rows={2}
                           value={ladderPlayersText}
                           onChange={(e) => setLadderPlayersText(e.target.value)}
-                          className="w-full rounded-lg border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2 py-1 text-xs outline-none focus:border-[var(--bc-primary)]"
+                          className="bc-input w-full"
                         />
                       </div>
                       <div>
-                        <div className="mb-0.5 text-[10px] font-bold text-[var(--bc-muted)]">
+                        <div className="bc-label mb-0.5">
                           รางวัล / ผลลัพธ์ (คั่นด้วย , หรือขึ้นบรรทัดใหม่)
                         </div>
                         <textarea
                           rows={2}
                           value={ladderPrizesText}
                           onChange={(e) => setLadderPrizesText(e.target.value)}
-                          className="w-full rounded-lg border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2 py-1 text-xs outline-none focus:border-[var(--bc-primary)]"
+                          className="bc-input w-full"
                         />
                       </div>
                     </div>
@@ -3081,7 +3027,7 @@ export function ChatRoomView({
                       <button
                         type="submit"
                         data-testid="send-ladder-btn"
-                        className="inline-flex h-9 items-center gap-1 rounded-lg bg-[var(--bc-primary)] px-3 text-xs font-bold text-white hover:brightness-95"
+                        className="bc-btn bc-btn-primary gap-1"
                       >
                         <Shuffle className="h-3.5 w-3.5" />
                         <span>สุ่มและส่งผล</span>
@@ -3092,7 +3038,7 @@ export function ChatRoomView({
 
                 {/* Tab 5: Personal Mini-Apps */}
                 {plusTab === "miniapps" && (
-                  <div className="grid grid-cols-1 gap-1.5 rounded-xl border border-[var(--bc-border)] bg-white p-2 sm:grid-cols-2">
+                  <div className="bc-well grid grid-cols-1 gap-1.5 rounded-xl !bg-white p-2 sm:grid-cols-2">
                     {miniApps.map((app) => (
                       <button
                         key={app.id}
@@ -3102,10 +3048,10 @@ export function ChatRoomView({
                           setShowPlusTray(false);
                           onOpenMiniApp(app);
                         }}
-                        className="flex items-center justify-between gap-2 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2.5 py-2 text-left transition hover:border-[var(--bc-primary)] hover:bg-[var(--bc-soft)]/50"
+                        className="bc-btn bc-btn-secondary justify-between gap-2 px-2.5 text-left"
                       >
                         <div className="min-w-0">
-                          <div className="truncate text-xs font-bold text-[var(--bc-text)]">
+                          <div className="truncate text-xs font-semibold text-[var(--bc-text)]">
                             {app.title}
                           </div>
                           {app.subtitle && (
@@ -3127,8 +3073,8 @@ export function ChatRoomView({
 
                 {/* Send Options (เปิดจากเมนู "ตัวเลือกการส่ง"): Silent / Auto-Expire / Urgent / Confidential PIN */}
                 {plusTab === "options" && (
-                  <div className="space-y-1.5 rounded-lg border border-[var(--bc-border)] bg-white p-2">
-                    <div className="text-[11px] font-bold text-[var(--bc-muted)]">
+                  <div className="bc-well space-y-1.5 rounded-xl !bg-white p-2">
+                    <div className="bc-overline">
                       ตัวเลือกการส่ง
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5">
@@ -3143,24 +3089,20 @@ export function ChatRoomView({
                             return next;
                           });
                         }}
-                        className={`inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border px-2 text-[11px] font-semibold ${
-                          isSilentSend
-                            ? "border-stone-700 bg-stone-700 text-white"
-                            : "border-[var(--bc-border)] bg-[var(--bc-panel)] text-[var(--bc-text)]"
-                        }`}
+                        className={`bc-chip shrink-0 gap-1 ${isSilentSend ? "is-active" : ""}`}
                       >
                         <VolumeX className="h-3.5 w-3.5" />
                         <span>ส่งไร้เสียง</span>
                       </button>
 
-                      <label className="inline-flex h-8 items-center gap-1 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2 text-[11px] font-semibold text-[var(--bc-text)]">
+                      <label className="bc-chip gap-1">
                         <Timer className="h-3.5 w-3.5 text-[var(--bc-primary)]" />
                         <span>ลบอัตโนมัติ:</span>
                         <select
                           data-testid="select-expire-timer"
                           value={expireTimer}
                           onChange={(e) => setExpireTimer(e.target.value as ExpireTimerPreset)}
-                          className="h-6 rounded border border-[var(--bc-border)] bg-[var(--bc-surface)] px-1 text-[11px] outline-none"
+                          className="bc-input !min-h-0 !w-auto !px-1.5 !py-0.5"
                         >
                           <option value="off">ปิด</option>
                           <option value="1m">1 นาที</option>
@@ -3181,11 +3123,7 @@ export function ChatRoomView({
                             return next;
                           });
                         }}
-                        className={`inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border px-2 text-[11px] font-semibold ${
-                          isUrgent
-                            ? "border-amber-600 bg-amber-600 text-white"
-                            : "border-[var(--bc-border)] bg-[var(--bc-panel)] text-[var(--bc-text)]"
-                        }`}
+                        className={`bc-chip shrink-0 gap-1 ${isUrgent ? "is-active" : ""}`}
                       >
                         <AlertTriangle className="h-3.5 w-3.5" />
                         <span>เรื่องด่วน</span>
@@ -3196,11 +3134,7 @@ export function ChatRoomView({
                         data-testid="toggle-confidential-pin"
                         aria-pressed={isConfidential}
                         onClick={() => setIsConfidential((v) => !v)}
-                        className={`inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border px-2 text-[11px] font-semibold ${
-                          isConfidential
-                            ? "border-[var(--bc-deep)] bg-[var(--bc-deep)] text-white"
-                            : "border-[var(--bc-border)] bg-[var(--bc-panel)] text-[var(--bc-text)]"
-                        }`}
+                        className={`bc-chip shrink-0 gap-1 ${isConfidential ? "is-active" : ""}`}
                       >
                         {isConfidential ? (
                           <EyeOff className="h-3.5 w-3.5" />
@@ -3217,9 +3151,9 @@ export function ChatRoomView({
 
             {/* Reply Bar */}
             {replyTarget && (
-              <div className="mb-1.5 flex items-center justify-between gap-2 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] px-3 py-1.5 text-xs">
+              <div className="bc-well bc-rise-in mb-1.5 flex items-center justify-between gap-2 rounded-xl px-3 py-1.5 text-xs">
                 <div className="min-w-0">
-                  <span className="font-bold text-[var(--bc-primary)]">
+                  <span className="font-semibold text-[var(--bc-primary)]">
                     กำลังตอบกลับ {replyTarget.sender_name}:{" "}
                   </span>
                   <span className="truncate text-[var(--bc-muted)]">{replyTarget.content}</span>
@@ -3228,7 +3162,7 @@ export function ChatRoomView({
                   type="button"
                   aria-label="ยกเลิกตอบกลับ"
                   onClick={() => setReplyTarget(null)}
-                  className="shrink-0 rounded p-0.5 text-[var(--bc-muted)] hover:bg-white"
+                  className="bc-iconbtn h-8 w-8 shrink-0 text-[var(--bc-muted)]"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
@@ -3239,13 +3173,13 @@ export function ChatRoomView({
             {(isSilentSend || expireTimer !== "off" || isUrgent || isConfidential) && (
               <div
                 data-testid="composer-active-modes"
-                className="mb-1.5 flex flex-wrap items-center gap-1.5 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2 py-1 text-[11px]"
+                className="bc-well bc-rise-in mb-1.5 flex flex-wrap items-center gap-1.5 rounded-xl px-2 py-1 text-[11px]"
               >
                 {isSilentSend && (
                   <button
                     type="button"
                     onClick={() => setIsSilentSend(false)}
-                    className="inline-flex h-6 items-center gap-1 rounded-full bg-stone-700 px-2 font-semibold text-white"
+                    className="bc-chip is-active min-h-0 gap-1 !py-0.5"
                   >
                     <VolumeX className="h-3 w-3" />
                     <span>ส่งแบบไร้เสียง ✕</span>
@@ -3255,7 +3189,7 @@ export function ChatRoomView({
                   <button
                     type="button"
                     onClick={() => setExpireTimer("off")}
-                    className="inline-flex h-6 items-center gap-1 rounded-full bg-amber-100 px-2 font-semibold text-amber-900"
+                    className="bc-chip is-active min-h-0 gap-1 !py-0.5"
                   >
                     <Timer className="h-3 w-3" />
                     <span>
@@ -3275,7 +3209,7 @@ export function ChatRoomView({
                   <button
                     type="button"
                     onClick={() => setIsUrgent(false)}
-                    className="inline-flex h-6 items-center gap-1 rounded-full bg-amber-600 px-2 font-semibold text-white"
+                    className="bc-chip is-active min-h-0 gap-1 !py-0.5"
                   >
                     <AlertTriangle className="h-3 w-3" />
                     <span>เรื่องด่วน ✕</span>
@@ -3286,7 +3220,7 @@ export function ChatRoomView({
                     <button
                       type="button"
                       onClick={() => setIsConfidential(false)}
-                      className="inline-flex h-6 items-center gap-1 rounded-full bg-[var(--bc-deep)] px-2 font-semibold text-white"
+                      className="bc-chip is-active min-h-0 gap-1 !py-0.5"
                     >
                       <Lock className="h-3 w-3" />
                       <span>ข้อความลับ ✕</span>
@@ -3298,7 +3232,7 @@ export function ChatRoomView({
                       onChange={(e) => setConfidentialPin(e.target.value)}
                       placeholder="PIN"
                       aria-label="รหัส PIN ข้อความลับ"
-                      className="h-6 w-14 rounded-lg border border-[var(--bc-primary)] bg-white px-1.5 text-center text-xs font-bold outline-none"
+                      className="bc-input bc-num !min-h-0 !w-14 !px-1.5 !py-0.5 text-center"
                     />
                     <button
                       type="button"
@@ -3311,7 +3245,7 @@ export function ChatRoomView({
                           onNotify(err instanceof Error ? err.message : "ลบข้อความลับไม่สำเร็จ");
                         }
                       }}
-                      className="inline-flex h-6 items-center gap-1 rounded-lg border border-red-300 bg-red-50 px-2 text-[11px] font-semibold text-red-700"
+                      className="bc-btn bc-btn-danger bc-btn-sm gap-1"
                     >
                       <Eraser className="h-3 w-3" />
                       <span>ลบไร้ร่องรอย</span>
@@ -3325,7 +3259,7 @@ export function ChatRoomView({
             {showComposerAi && (
               <div
                 data-testid="composer-ai-popover"
-                className="mb-1.5 flex flex-wrap items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50/70 px-2 py-1"
+                className="bc-well bc-rise-in mb-1.5 flex flex-wrap items-center gap-1.5 rounded-xl px-2 py-1"
               >
                 <button
                   type="button"
@@ -3335,7 +3269,7 @@ export function ChatRoomView({
                     setShowComposerAi(false);
                     inputRef.current?.focus();
                   }}
-                  className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-indigo-200 bg-white px-2.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
+                  className="bc-btn bc-btn-secondary bc-btn-sm shrink-0 gap-1"
                 >
                   <Bot className="h-3.5 w-3.5" />
                   <span>ถาม @ai</span>
@@ -3347,7 +3281,7 @@ export function ChatRoomView({
                     setShowComposerAi(false);
                     void handleOpenAiAssist("suggest_reply");
                   }}
-                  className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-indigo-200 bg-white px-2.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
+                  className="bc-btn bc-btn-secondary bc-btn-sm shrink-0 gap-1"
                 >
                   <Wand2 className="h-3.5 w-3.5" />
                   <span>ช่วยเกลาข้อความ</span>
@@ -3371,11 +3305,7 @@ export function ChatRoomView({
                   setPlusTab(null);
                   setShowPlusTray((v) => !v);
                 }}
-                className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition ${
-                  showPlusTray
-                    ? "border-[var(--bc-primary)] bg-[var(--bc-primary)] text-white"
-                    : "border-[var(--bc-border)] bg-[var(--bc-panel)] text-[var(--bc-primary)] hover:bg-[var(--bc-soft)]"
-                }`}
+                className={`bc-iconbtn shrink-0 ${showPlusTray ? "bc-iconbtn-soft" : "text-[var(--bc-primary)]"}`}
               >
                 <Plus className="h-4 w-4" />
               </button>
@@ -3383,7 +3313,7 @@ export function ChatRoomView({
               <label
                 title="แนบรูปหรือไฟล์"
                 aria-label="แนบรูปหรือไฟล์"
-                className={`inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-[var(--bc-border)] bg-[var(--bc-panel)] text-[var(--bc-primary)] hover:bg-[var(--bc-soft)] ${
+                className={`bc-iconbtn shrink-0 cursor-pointer text-[var(--bc-primary)] ${
                   uploading ? "opacity-60" : ""
                 }`}
               >
@@ -3408,7 +3338,7 @@ export function ChatRoomView({
                   value={draft}
                   onChange={(e) => handleDraftChange(e.target.value)}
                   placeholder="พิมพ์ข้อความ..."
-                  className="h-9 w-full min-w-0 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-surface)] pl-2.5 pr-9 text-xs text-[var(--bc-text)] outline-none focus:border-[var(--bc-primary)]"
+                  className="bc-input h-9 w-full min-w-0 !rounded-full pl-3 !pr-10"
                 />
                 <button
                   type="button"
@@ -3421,10 +3351,8 @@ export function ChatRoomView({
                     setShowComposerAi(false);
                     setShowStickerPicker((v) => !v);
                   }}
-                  className={`absolute right-1 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md transition ${
-                    showStickerPicker
-                      ? "bg-[var(--bc-soft)] text-[var(--bc-primary)]"
-                      : "text-[var(--bc-muted)] hover:bg-[var(--bc-soft)] hover:text-[var(--bc-primary)]"
+                  className={`bc-iconbtn absolute right-1 top-1/2 !h-8 !w-8 -translate-y-1/2 ${
+                    showStickerPicker ? "bc-iconbtn-soft" : "text-[var(--bc-muted)]"
                   }`}
                 >
                   <Smile className="h-4 w-4" />
@@ -3442,11 +3370,7 @@ export function ChatRoomView({
                   setShowStickerPicker(false);
                   setShowComposerAi((v) => !v);
                 }}
-                className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition ${
-                  showComposerAi
-                    ? "border-indigo-500 bg-indigo-600 text-white"
-                    : "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
-                }`}
+                className={`bc-iconbtn shrink-0 ${showComposerAi ? "bc-iconbtn-soft" : "text-[var(--bc-primary)]"}`}
               >
                 <Sparkles className="h-4 w-4" />
               </button>
@@ -3459,10 +3383,10 @@ export function ChatRoomView({
                 onClick={handleToggleRecording}
                 aria-label={isRecording ? "หยุดอัดเสียง" : "อัดเสียง"}
                 title={isRecording ? "หยุดอัดเสียง" : "อัดเสียง"}
-                className={`inline-flex h-8 shrink-0 items-center justify-center gap-1 rounded-lg border text-[11px] font-semibold transition ${
+                className={`shrink-0 ${
                   isRecording
-                    ? "border-red-500 bg-red-600 px-2 text-white"
-                    : "w-8 border-[var(--bc-border)] bg-[var(--bc-panel)] text-[var(--bc-primary)] hover:bg-[var(--bc-soft)]"
+                    ? "bc-btn bc-btn-danger bc-btn-sm gap-1 px-2.5"
+                    : "bc-iconbtn text-[var(--bc-primary)]"
                 }`}
               >
                 {isRecording ? (
@@ -3481,7 +3405,7 @@ export function ChatRoomView({
                 aria-label="ส่ง"
                 title="ส่ง"
                 disabled={sending}
-                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--bc-primary)] text-white shadow-xs transition hover:brightness-95 disabled:opacity-50"
+                className="bc-iconbtn bc-iconbtn-primary shrink-0"
               >
                 <Send className="h-4 w-4 shrink-0" />
               </button>

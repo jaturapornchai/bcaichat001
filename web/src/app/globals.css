@@ -1,6 +1,22 @@
 @import "tailwindcss";
 
+/* สเกลมุมโค้งของยูทิลิตี rounded-* ทั้งระบบ (นุ่มกว่าค่าเริ่มต้นของ Tailwind เล็กน้อย ให้ทุกการ์ด/ปุ่ม/ช่องกรอกเข้าชุดกัน) */
+@theme {
+  --radius-md: 0.5rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.875rem;
+  --radius-2xl: 1.125rem;
+  --radius-3xl: 1.5rem;
+  --shadow-2xs: 0 1px 1px rgb(43 20 16 / 0.04);
+  --shadow-xs: 0 1px 2px rgb(43 20 16 / 0.05), 0 1px 1px rgb(43 20 16 / 0.03);
+  --shadow-sm: 0 1px 2px rgb(43 20 16 / 0.05), 0 6px 16px -6px rgb(43 20 16 / 0.1);
+  --shadow-md: 0 2px 4px rgb(43 20 16 / 0.05), 0 12px 28px -12px rgb(43 20 16 / 0.16);
+  --shadow-lg: 0 2px 4px rgb(43 20 16 / 0.05), 0 18px 40px -16px rgb(43 20 16 / 0.22);
+  --ease-bc: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
 :root {
+  /* ชุดสีของธีม — applyThemeCssVars (src/lib/themes.ts) เขียนทับสดเมื่อเปลี่ยนธีม */
   --bc-primary: #812920;
   --bc-deep: #681f18;
   --bc-ring: #a04035;
@@ -17,12 +33,61 @@
   --bc-bubble-sent: #fadbd4;
   --bc-bubble-sent-text: #2b1410;
   --bc-bubble-recv: #ffffff;
+
+  /* ค่าที่คำนวณจากชุดสีข้างบน — เปลี่ยนตามธีมเองโดยไม่ต้องตั้งซ้ำ */
+  --bc-line: color-mix(in srgb, var(--bc-border) 58%, transparent); /* เส้นบางของการ์ด/เส้นคั่น */
+  --bc-line-strong: color-mix(in srgb, var(--bc-border) 92%, transparent); /* ขอบช่องกรอก/ปุ่มรอง */
+  --bc-tint: color-mix(in srgb, var(--bc-soft) 34%, var(--bc-card)); /* พื้นตอนชี้/แตะ */
+  --bc-tint-strong: color-mix(in srgb, var(--bc-soft) 64%, var(--bc-card)); /* พื้นตอนเลือกอยู่ */
+  --bc-grad-primary: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bc-primary) 86%, white) 0%,
+    var(--bc-primary) 48%,
+    var(--bc-deep) 100%
+  );
+  --bc-grad-accent: linear-gradient(90deg, var(--bc-gold), var(--bc-primary));
+  --bc-grad-gold-line: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--bc-gold) 75%, transparent) 20%,
+    color-mix(in srgb, var(--bc-gold) 75%, transparent) 80%,
+    transparent
+  );
+  --bc-elev-1: 0 1px 2px rgb(43 20 16 / 0.05), 0 1px 1px rgb(43 20 16 / 0.03);
+  --bc-elev-2: 0 1px 2px rgb(43 20 16 / 0.05), 0 6px 16px -6px rgb(43 20 16 / 0.1);
+  --bc-elev-3: 0 2px 4px rgb(43 20 16 / 0.05), 0 18px 40px -16px rgb(43 20 16 / 0.22);
+  --bc-elev-up: 0 -10px 30px -18px rgb(43 20 16 / 0.28);
+  --bc-focus: 0 0 0 3px color-mix(in srgb, var(--bc-primary) 16%, transparent);
+  --bc-danger: #b42318;
   color-scheme: light;
+}
+
+/* พื้นที่โทนมืด (ห้องแชทโทน "รัตติกาลดินเผา", แถบสายโทร) — ใส่คลาสนี้ที่กล่องครอบ ชิ้นส่วนกลางข้างในจะสลับสีเอง */
+.bc-dark {
+  --bc-surface: #1c1412;
+  --bc-panel: #251a17;
+  --bc-card: #2c201c;
+  --bc-sand: #3a2b26;
+  --bc-border: #5a433c;
+  --bc-soft: #4a2b25;
+  --bc-text: #f6ede9;
+  --bc-muted: #bfaea8;
+  --bc-bubble-recv: #32241f;
+  --bc-line: rgb(255 255 255 / 0.09);
+  --bc-line-strong: rgb(255 255 255 / 0.16);
+  --bc-tint: rgb(255 255 255 / 0.06);
+  --bc-tint-strong: rgb(255 255 255 / 0.11);
+  --bc-elev-1: 0 1px 2px rgb(0 0 0 / 0.3);
+  --bc-elev-2: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 18px -8px rgb(0 0 0 / 0.5);
+  --bc-elev-3: 0 2px 4px rgb(0 0 0 / 0.3), 0 20px 44px -16px rgb(0 0 0 / 0.65);
+  --bc-elev-up: 0 -10px 30px -18px rgb(0 0 0 / 0.7);
+  color: var(--bc-text);
+  color-scheme: dark;
 }
 
 @layer base {
   * {
-    border-color: var(--bc-border);
+    border-color: var(--bc-line);
   }
 
   html,
@@ -33,31 +98,827 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    font-synthesis: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--bc-primary) 22%, transparent);
+  }
+
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+
+  button,
+  a,
+  input,
+  textarea,
+  select,
+  summary {
+    transition:
+      background-color 0.16s var(--ease-bc),
+      border-color 0.16s var(--ease-bc),
+      color 0.16s var(--ease-bc),
+      box-shadow 0.16s var(--ease-bc),
+      opacity 0.16s var(--ease-bc),
+      transform 0.16s var(--ease-bc);
+  }
+
+  button:not(:disabled),
+  summary,
+  [role="button"] {
+    cursor: pointer;
+  }
+
+  /* วงโฟกัสเดียวกันทั้งระบบ (เฉพาะตอนใช้คีย์บอร์ด) */
+  :focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--bc-primary) 55%, transparent);
+    outline-offset: 2px;
+  }
+
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: none;
+    box-shadow: var(--bc-focus);
+  }
+
+  ::placeholder {
+    color: color-mix(in srgb, var(--bc-muted) 68%, transparent);
+  }
+
+  /* เส้นไอคอน lucide บางลงเล็กน้อยให้ดูประณีต */
+  .lucide {
+    stroke-width: 1.75;
   }
 }
 
-/* Ban Chiang inspired contemporary spiral-wave geometric backdrop */
+@layer components {
+  /* ── พื้นผิว ─────────────────────────────────────────────── */
+  .bc-glass {
+    background: color-mix(in srgb, var(--bc-card) 84%, transparent);
+    -webkit-backdrop-filter: saturate(1.5) blur(16px);
+    backdrop-filter: saturate(1.5) blur(16px);
+  }
+
+  /* แถบหัวบนสุดของหน้าจอ/ห้อง: กระจกฝ้า + เส้นทองบาง */
+  .bc-appbar {
+    position: relative;
+    background: color-mix(in srgb, var(--bc-card) 86%, transparent);
+    -webkit-backdrop-filter: saturate(1.5) blur(16px);
+    backdrop-filter: saturate(1.5) blur(16px);
+    border-bottom: 1px solid var(--bc-line);
+  }
+
+  .bc-appbar::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 -1px 0;
+    height: 1px;
+    background: var(--bc-grad-gold-line);
+    pointer-events: none;
+  }
+
+  /* แถบแท็บหลักด้านล่าง */
+  .bc-tabbar {
+    background: color-mix(in srgb, var(--bc-card) 90%, transparent);
+    -webkit-backdrop-filter: saturate(1.5) blur(16px);
+    backdrop-filter: saturate(1.5) blur(16px);
+    border-top: 1px solid var(--bc-line);
+    box-shadow: var(--bc-elev-up);
+  }
+
+  .bc-tab {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    min-height: 52px;
+    border-radius: var(--radius-xl);
+    color: var(--bc-muted);
+    font-size: 10.5px;
+    font-weight: 500;
+    line-height: 1.2;
+  }
+
+  @media (hover: hover) {
+    .bc-tab:hover {
+      color: var(--bc-text);
+      background: var(--bc-tint);
+    }
+  }
+
+  .bc-tab.is-active {
+    color: var(--bc-primary);
+    font-weight: 600;
+  }
+
+  .bc-tab.is-active::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 24px;
+    height: 3px;
+    transform: translateX(-50%);
+    border-radius: 0 0 999px 999px;
+    background: var(--bc-grad-accent);
+  }
+
+  .bc-card {
+    background: var(--bc-card);
+    border: 1px solid var(--bc-line);
+    border-radius: var(--radius-2xl);
+    box-shadow: var(--bc-elev-1);
+  }
+
+  .bc-card-raised {
+    box-shadow: var(--bc-elev-2);
+  }
+
+  /* กล่องย่อยในการ์ด (พื้นเข้มกว่าการ์ดหนึ่งระดับ ไม่มีเงา) */
+  .bc-well {
+    background: var(--bc-panel);
+    border: 1px solid var(--bc-line);
+    border-radius: var(--radius-xl);
+  }
+
+  /* ถาด/แผงที่กางในหน้าเดิม (ไม่ใช่ popup) */
+  .bc-tray {
+    background: var(--bc-card);
+    border-top: 1px solid var(--bc-line);
+    box-shadow: var(--bc-elev-up);
+  }
+
+  /* ── ตัวอักษร ────────────────────────────────────────────── */
+  .bc-title {
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+    color: var(--bc-text);
+  }
+
+  .bc-overline {
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: 0.02em;
+    color: var(--bc-muted);
+  }
+
+  .bc-num {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── ปุ่ม ───────────────────────────────────────────────── */
+  .bc-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    min-height: 36px;
+    padding: 0 0.875rem;
+    border: 1px solid transparent;
+    border-radius: var(--radius-xl);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.2;
+    user-select: none;
+  }
+
+  .bc-btn:active:not(:disabled) {
+    transform: translateY(0.5px) scale(0.985);
+  }
+
+  .bc-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .bc-btn-sm {
+    min-height: 30px;
+    padding: 0 0.625rem;
+    border-radius: var(--radius-lg);
+    font-size: 0.75rem;
+  }
+
+  .bc-btn-lg {
+    min-height: 46px;
+    padding: 0 1.125rem;
+    border-radius: var(--radius-2xl);
+    font-size: 0.9375rem;
+  }
+
+  .bc-btn-primary {
+    color: #fff;
+    background: var(--bc-grad-primary);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.22),
+      inset 0 -1px 0 rgb(0 0 0 / 0.12),
+      0 1px 2px rgb(43 20 16 / 0.18),
+      0 6px 14px -6px color-mix(in srgb, var(--bc-primary) 60%, transparent);
+  }
+
+  @media (hover: hover) {
+    .bc-btn-primary:hover:not(:disabled) {
+      filter: brightness(1.07);
+    }
+  }
+
+  .bc-btn-secondary {
+    color: var(--bc-deep);
+    background: var(--bc-card);
+    border-color: var(--bc-line-strong);
+    box-shadow: var(--bc-elev-1);
+  }
+
+  @media (hover: hover) {
+    .bc-btn-secondary:hover:not(:disabled) {
+      background: var(--bc-tint);
+      border-color: color-mix(in srgb, var(--bc-primary) 38%, var(--bc-border));
+    }
+  }
+
+  .bc-btn-soft {
+    color: var(--bc-deep);
+    background: var(--bc-tint-strong);
+  }
+
+  @media (hover: hover) {
+    .bc-btn-soft:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--bc-primary) 17%, var(--bc-card));
+    }
+  }
+
+  .bc-btn-ghost {
+    color: var(--bc-muted);
+    background: transparent;
+  }
+
+  @media (hover: hover) {
+    .bc-btn-ghost:hover:not(:disabled) {
+      color: var(--bc-text);
+      background: var(--bc-tint);
+    }
+  }
+
+  .bc-btn-danger {
+    color: var(--bc-danger);
+    background: var(--bc-card);
+    border-color: color-mix(in srgb, var(--bc-danger) 26%, transparent);
+  }
+
+  @media (hover: hover) {
+    .bc-btn-danger:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--bc-danger) 7%, var(--bc-card));
+    }
+  }
+
+  /* ปุ่มไอคอน: ไม่มีกรอบ มีพื้นเฉพาะตอนชี้/แตะ */
+  .bc-iconbtn {
+    display: inline-grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-xl);
+    color: var(--bc-muted);
+  }
+
+  @media (hover: hover) {
+    .bc-iconbtn:hover:not(:disabled) {
+      color: var(--bc-text);
+      background: var(--bc-tint);
+    }
+  }
+
+  .bc-iconbtn:active:not(:disabled) {
+    background: var(--bc-tint-strong);
+    transform: scale(0.95);
+  }
+
+  .bc-iconbtn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .bc-iconbtn-soft {
+    color: var(--bc-primary);
+    background: var(--bc-tint-strong);
+  }
+
+  @media (hover: hover) {
+    .bc-iconbtn-soft:hover:not(:disabled) {
+      color: var(--bc-deep);
+      background: color-mix(in srgb, var(--bc-primary) 17%, var(--bc-card));
+    }
+  }
+
+  .bc-iconbtn-primary,
+  .bc-iconbtn-primary:hover:not(:disabled) {
+    color: #fff;
+    border-radius: 999px;
+    background: var(--bc-grad-primary);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.22),
+      0 4px 10px -4px color-mix(in srgb, var(--bc-primary) 60%, transparent);
+  }
+
+  @media (hover: hover) {
+    .bc-iconbtn-primary:hover:not(:disabled) {
+      filter: brightness(1.07);
+    }
+  }
+
+  /* ── ชิป / แท็บย่อย (ตัดบรรทัดได้ ไม่เลื่อนซ้าย-ขวา) ───────── */
+  .bc-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    min-height: 32px;
+    padding: 0 0.75rem;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.2;
+    color: var(--bc-muted);
+    background: color-mix(in srgb, var(--bc-sand) 42%, transparent);
+  }
+
+  @media (hover: hover) {
+    .bc-chip:hover:not(:disabled):not(.is-active) {
+      color: var(--bc-text);
+      background: var(--bc-tint-strong);
+    }
+  }
+
+  .bc-chip.is-active {
+    color: #fff;
+    font-weight: 600;
+    background: var(--bc-grad-primary);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.2),
+      0 4px 10px -5px color-mix(in srgb, var(--bc-primary) 60%, transparent);
+  }
+
+  /* ── ช่องกรอก ────────────────────────────────────────────── */
+  .bc-input {
+    width: 100%;
+    min-height: 38px;
+    padding: 0.375rem 0.75rem;
+    border: 1px solid var(--bc-line-strong);
+    border-radius: var(--radius-xl);
+    background: var(--bc-card);
+    color: var(--bc-text);
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    outline: none;
+    box-shadow: inset 0 1px 2px rgb(43 20 16 / 0.04);
+  }
+
+  @media (hover: hover) {
+    .bc-input:hover:not(:disabled):not(:focus) {
+      border-color: color-mix(in srgb, var(--bc-primary) 30%, var(--bc-border));
+    }
+  }
+
+  .bc-input:focus {
+    border-color: var(--bc-primary);
+    box-shadow: var(--bc-focus);
+  }
+
+  .bc-input:disabled {
+    opacity: 0.6;
+    background: var(--bc-panel);
+  }
+
+  .bc-input-lg {
+    min-height: 48px;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-2xl);
+    font-size: 1rem;
+  }
+
+  /* ช่องค้นหาทรงแคปซูล: ไม่มีกรอบจนกว่าจะโฟกัส */
+  .bc-search {
+    border-color: transparent;
+    border-radius: 999px;
+    background: var(--bc-panel);
+    box-shadow: none;
+  }
+
+  .bc-search:focus {
+    background: var(--bc-card);
+  }
+
+  /* ── แถวรายการ ───────────────────────────────────────────── */
+  .bc-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    width: 100%;
+    text-align: left;
+  }
+
+  @media (hover: hover) {
+    .bc-row:hover {
+      background: var(--bc-tint);
+    }
+  }
+
+  .bc-row.is-active {
+    background: var(--bc-tint);
+    box-shadow: inset 3px 0 0 var(--bc-primary);
+  }
+
+  /* เส้นคั่นแถวแบบเว้นช่วงรูปโปรไฟล์ (ใส่ที่กล่องครอบรายการ) */
+  .bc-list-inset > * + *::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 4rem;
+    height: 1px;
+    background: var(--bc-line);
+    pointer-events: none;
+  }
+
+  /* ── ป้าย / ตัวนับ / รูปโปรไฟล์ ───────────────────────────── */
+  .bc-count {
+    display: inline-grid;
+    place-items: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: var(--bc-grad-primary);
+    color: #fff;
+    font-size: 10.5px;
+    font-weight: 600;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .bc-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    min-height: 18px;
+    padding: 0 0.45rem;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+    color: var(--bc-deep);
+    background: var(--bc-tint-strong);
+  }
+
+  .bc-tag-gold {
+    color: color-mix(in srgb, var(--bc-gold) 40%, #3b2410);
+    background: color-mix(in srgb, var(--bc-gold) 20%, var(--bc-card));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bc-gold) 50%, transparent);
+  }
+
+  .bc-avatar {
+    display: inline-grid;
+    place-items: center;
+    flex-shrink: 0;
+    overflow: hidden;
+    border-radius: 999px;
+    color: #fff;
+    font-weight: 600;
+    background: linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--bc-ring) 82%, white) 0%,
+      var(--bc-primary) 55%,
+      var(--bc-deep) 100%
+    );
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.28),
+      inset 0 -8px 12px -8px rgb(0 0 0 / 0.28),
+      0 1px 2px rgb(43 20 16 / 0.16);
+  }
+
+  /* รูปโปรไฟล์ที่เป็นรูปภาพ: เส้นขอบบาง ๆ รอบรูป */
+  .bc-avatar-img {
+    flex-shrink: 0;
+    border-radius: 999px;
+    object-fit: cover;
+    box-shadow:
+      0 0 0 1px var(--bc-line),
+      0 1px 2px rgb(43 20 16 / 0.12);
+  }
+
+  /* วงทองสำหรับบัญชีทางการ/ร้านค้า */
+  .bc-avatar-gold {
+    box-shadow:
+      0 0 0 1.5px var(--bc-card),
+      0 0 0 3px var(--bc-gold),
+      0 1px 3px rgb(43 20 16 / 0.18);
+  }
+
+  /* ── ฟองข้อความ ──────────────────────────────────────────── */
+  .bc-bubble {
+    border-radius: 18px;
+    overflow-wrap: anywhere;
+  }
+
+  .bc-bubble-recv {
+    background: var(--bc-bubble-recv);
+    color: var(--bc-text);
+    border-top-left-radius: 6px;
+    box-shadow:
+      0 1px 1.5px rgb(43 20 16 / 0.07),
+      0 0 0 1px var(--bc-line);
+  }
+
+  .bc-bubble-sent {
+    background: var(--bc-bubble-sent);
+    color: var(--bc-bubble-sent-text);
+    border-top-right-radius: 6px;
+    box-shadow:
+      0 1px 1.5px rgb(43 20 16 / 0.09),
+      inset 0 0 0 1px color-mix(in srgb, var(--bc-primary) 10%, transparent);
+  }
+
+  /* ── ช่องเมนูไอคอน (เมนูปุ่ม + ในห้องแชท, เครื่องมือ) ────────── */
+  .bc-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 0.25rem;
+    border-radius: var(--radius-2xl);
+    font-size: 11.5px;
+    font-weight: 500;
+    line-height: 1.25;
+    text-align: center;
+    color: var(--bc-text);
+  }
+
+  @media (hover: hover) {
+    .bc-tile:hover:not(:disabled) {
+      background: var(--bc-tint);
+    }
+  }
+
+  .bc-tile-icon {
+    display: grid;
+    place-items: center;
+    width: 46px;
+    height: 46px;
+    border-radius: 16px;
+    color: var(--bc-primary);
+    background: var(--bc-tint-strong);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.5);
+  }
+
+  /* ── ป้ายกำกับฟอร์ม / กล่องข้อความแจ้ง / สถานะว่าง ─────────── */
+  .bc-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.3;
+    color: var(--bc-muted);
+  }
+
+  .bc-note {
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius-xl);
+    font-size: 0.75rem;
+    line-height: 1.5;
+    color: var(--bc-text);
+    background: var(--bc-tint);
+    box-shadow: inset 0 0 0 1px var(--bc-line);
+  }
+
+  .bc-note-danger {
+    color: #912018;
+    background: #fef3f2;
+    box-shadow: inset 0 0 0 1px #fecdca;
+  }
+
+  .bc-note-warn {
+    color: #93370d;
+    background: #fffaeb;
+    box-shadow: inset 0 0 0 1px #fedf89;
+  }
+
+  .bc-note-ok {
+    color: #085d3a;
+    background: #ecfdf3;
+    box-shadow: inset 0 0 0 1px #abefc6;
+  }
+
+  .bc-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 1.5rem 1rem;
+    text-align: center;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    color: var(--bc-muted);
+  }
+
+  /* ── ตัวเลือกแบบแถบ (สลับโหมดในกล่องเดียว ตัดบรรทัดได้) ───────── */
+  .bc-segment {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    padding: 3px;
+    border-radius: var(--radius-xl);
+    background: color-mix(in srgb, var(--bc-sand) 46%, var(--bc-panel));
+  }
+
+  .bc-segment-item {
+    display: inline-flex;
+    flex: 1 1 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    min-height: 32px;
+    padding: 0 0.75rem;
+    border-radius: calc(var(--radius-xl) - 3px);
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.2;
+    color: var(--bc-muted);
+  }
+
+  @media (hover: hover) {
+    .bc-segment-item:hover:not(:disabled):not(.is-active) {
+      color: var(--bc-text);
+    }
+  }
+
+  .bc-segment-item.is-active {
+    color: var(--bc-deep);
+    font-weight: 600;
+    background: var(--bc-card);
+    box-shadow: var(--bc-elev-1);
+  }
+
+  /* ── เส้นทอง / แผ่นแบรนด์ ───────────────────────────────── */
+  .bc-goldline {
+    height: 1px;
+    border: 0;
+    background: var(--bc-grad-gold-line);
+  }
+
+  /* แผ่นแบรนด์ (หน้าเข้าสู่ระบบ, หัวการ์ดสำคัญ): ไล่สีดินเผา + ลายเกลียวคลื่นทอง (ต้นฉบับ) */
+  .bc-hero {
+    position: relative;
+    overflow: hidden;
+    color: #fff;
+    background:
+      radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--bc-gold) 38%, transparent) 0, transparent 55%),
+      linear-gradient(155deg, var(--bc-ring) 0%, var(--bc-primary) 42%, var(--bc-deep) 100%);
+  }
+
+  .bc-hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    opacity: 0.5;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%23F3D9B5' stroke-opacity='0.28' stroke-width='1.2'%3E%3Cpath d='M0 30 Q30 10 60 30 T120 30'/%3E%3Cpath d='M0 90 Q30 70 60 90 T120 90'/%3E%3Ccircle cx='30' cy='60' r='11'/%3E%3Ccircle cx='30' cy='60' r='5'/%3E%3Ccircle cx='90' cy='60' r='11'/%3E%3Ccircle cx='90' cy='60' r='5'/%3E%3C/g%3E%3C/svg%3E");
+    background-size: 120px 120px;
+  }
+
+  .bc-hero > * {
+    position: relative;
+  }
+
+  /* ── ปุ่มควบคุมสายโทร (วงกลมกระจกบนพื้นมืด) ────────────────── */
+  .bc-callbtn {
+    display: inline-grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    border-radius: 999px;
+    color: #fff;
+    background: rgb(255 255 255 / 0.14);
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.16);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+  }
+
+  @media (hover: hover) {
+    .bc-callbtn:hover:not(:disabled) {
+      background: rgb(255 255 255 / 0.24);
+    }
+  }
+
+  .bc-callbtn:active:not(:disabled) {
+    transform: scale(0.95);
+  }
+
+  .bc-callbtn.is-off {
+    color: #1b1c1c;
+    background: #fff;
+  }
+
+  .bc-callbtn-danger,
+  .bc-callbtn-danger:hover:not(:disabled) {
+    background: linear-gradient(180deg, #ef4444, #c81e1e);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.25),
+      0 6px 16px -6px rgb(200 30 30 / 0.7);
+  }
+
+  .bc-callbtn-accept,
+  .bc-callbtn-accept:hover:not(:disabled) {
+    background: linear-gradient(180deg, #17a673, #0b7a55);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.25),
+      0 6px 16px -6px rgb(11 122 85 / 0.7);
+  }
+
+  @media (hover: hover) {
+    .bc-callbtn-danger:hover:not(:disabled),
+    .bc-callbtn-accept:hover:not(:disabled) {
+      filter: brightness(1.08);
+    }
+  }
+
+  /* ── การเคลื่อนไหว ───────────────────────────────────────── */
+  .bc-rise-in {
+    animation: bc-rise-in 0.22s var(--ease-bc) both;
+  }
+
+  .bc-fade-in {
+    animation: bc-fade-in 0.2s var(--ease-bc) both;
+  }
+}
+
+@keyframes bc-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes bc-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* พื้นหลังหน้าเว็บ: ลายเกลียวคลื่นประยุกต์ (ต้นฉบับ) บนแสงไล่อุ่นจากสีธีม */
 .bc-spiral-bg {
   background-color: var(--bc-surface);
   background-image:
-    radial-gradient(circle at 12% 18%, color-mix(in srgb, var(--bc-primary) 7%, transparent) 0, transparent 42%),
-    radial-gradient(circle at 88% 82%, color-mix(in srgb, var(--bc-gold) 14%, transparent) 0, transparent 45%),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%23812920' stroke-opacity='0.055' stroke-width='1.4'%3E%3Cpath d='M0 30 Q30 10 60 30 T120 30'/%3E%3Cpath d='M0 90 Q30 70 60 90 T120 90'/%3E%3Ccircle cx='30' cy='60' r='11'/%3E%3Ccircle cx='30' cy='60' r='5'/%3E%3Ccircle cx='90' cy='60' r='11'/%3E%3Ccircle cx='90' cy='60' r='5'/%3E%3C/g%3E%3C/svg%3E");
+    radial-gradient(120% 70% at 0% 0%, color-mix(in srgb, var(--bc-primary) 6%, transparent) 0, transparent 55%),
+    radial-gradient(90% 60% at 100% 100%, color-mix(in srgb, var(--bc-gold) 15%, transparent) 0, transparent 60%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%23812920' stroke-opacity='0.04' stroke-width='1.2'%3E%3Cpath d='M0 30 Q30 10 60 30 T120 30'/%3E%3Cpath d='M0 90 Q30 70 60 90 T120 90'/%3E%3Ccircle cx='30' cy='60' r='11'/%3E%3Ccircle cx='30' cy='60' r='5'/%3E%3Ccircle cx='90' cy='60' r='11'/%3E%3Ccircle cx='90' cy='60' r='5'/%3E%3C/g%3E%3C/svg%3E");
   background-size: auto, auto, 120px 120px;
+  background-attachment: fixed;
 }
 
 .bc-room-spiral-light {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Cg fill='none' stroke='%23812920' stroke-opacity='0.045' stroke-width='1.3'%3E%3Cpath d='M0 35 Q35 12 70 35 T140 35'/%3E%3Cpath d='M0 105 Q35 82 70 105 T140 105'/%3E%3Ccircle cx='35' cy='70' r='13'/%3E%3Ccircle cx='35' cy='70' r='6'/%3E%3Ccircle cx='105' cy='70' r='13'/%3E%3Ccircle cx='105' cy='70' r='6'/%3E%3C/g%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Cg fill='none' stroke='%23812920' stroke-opacity='0.035' stroke-width='1.2'%3E%3Cpath d='M0 35 Q35 12 70 35 T140 35'/%3E%3Cpath d='M0 105 Q35 82 70 105 T140 105'/%3E%3Ccircle cx='35' cy='70' r='13'/%3E%3Ccircle cx='35' cy='70' r='6'/%3E%3Ccircle cx='105' cy='70' r='13'/%3E%3Ccircle cx='105' cy='70' r='6'/%3E%3C/g%3E%3C/svg%3E");
   background-size: 140px 140px;
 }
 
 .bc-room-spiral-dark {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Cg fill='none' stroke='%23D4A373' stroke-opacity='0.075' stroke-width='1.3'%3E%3Cpath d='M0 35 Q35 12 70 35 T140 35'/%3E%3Cpath d='M0 105 Q35 82 70 105 T140 105'/%3E%3Ccircle cx='35' cy='70' r='13'/%3E%3Ccircle cx='35' cy='70' r='6'/%3E%3Ccircle cx='105' cy='70' r='13'/%3E%3Ccircle cx='105' cy='70' r='6'/%3E%3C/g%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Cg fill='none' stroke='%23D4A373' stroke-opacity='0.06' stroke-width='1.2'%3E%3Cpath d='M0 35 Q35 12 70 35 T140 35'/%3E%3Cpath d='M0 105 Q35 82 70 105 T140 105'/%3E%3Ccircle cx='35' cy='70' r='13'/%3E%3Ccircle cx='35' cy='70' r='6'/%3E%3Ccircle cx='105' cy='70' r='13'/%3E%3Ccircle cx='105' cy='70' r='6'/%3E%3C/g%3E%3C/svg%3E");
   background-size: 140px 140px;
 }
 
 /* Baseline-first UI alignment helpers */
-.bc-row {
+.bc-row-inline {
   display: inline-flex;
   align-items: center;
   vertical-align: middle;
@@ -73,10 +934,10 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--bc-primary) 26%, transparent);
+  background: color-mix(in srgb, var(--bc-primary) 22%, transparent);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--bc-primary) 45%, transparent);
+  background: color-mix(in srgb, var(--bc-primary) 42%, transparent);
 }

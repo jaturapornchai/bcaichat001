@@ -617,19 +617,19 @@ export function CallWorkspaceBar({
       },
     ].filter((r) => r.show && r.devices.length > 1);
     const iconCls = darkMode
-      ? "h-3.5 w-3.5 shrink-0 text-[#D4A373]"
+      ? "h-3.5 w-3.5 shrink-0 text-[var(--bc-gold)]"
       : "h-3.5 w-3.5 shrink-0 text-[var(--bc-muted)]";
     const textCls = darkMode ? "text-white/90" : "text-[var(--bc-text)]";
     const selectCls = darkMode
-      ? "h-8 min-w-0 flex-1 rounded-lg border border-white/20 bg-[#1C1412] px-2 text-[11px] text-white outline-none focus-visible:border-[#D4A373]"
-      : "h-8 min-w-0 flex-1 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-card)] px-2 text-[11px] text-[var(--bc-text)] outline-none focus-visible:border-[var(--bc-primary)]";
+      ? "h-8 min-w-0 flex-1 rounded-lg border border-white/15 bg-[#1C1412] px-2 text-[11px] text-white outline-none focus-visible:border-[var(--bc-gold)]"
+      : "h-8 min-w-0 flex-1 rounded-lg border border-[var(--bc-line-strong)] bg-[var(--bc-card)] px-2 text-[11px] text-[var(--bc-text)] outline-none focus-visible:border-[var(--bc-primary)]";
     return (
       <div
         data-testid="call-devices-tray"
         className={
           darkMode
-            ? "grid grid-cols-1 gap-1.5 rounded-xl border border-white/15 bg-black/35 p-2"
-            : "mt-2 grid grid-cols-1 gap-1.5 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2"
+            ? "bc-glass bc-dark bc-rise-in grid grid-cols-1 gap-1.5 rounded-xl border border-white/10 bg-black/35 p-2"
+            : "bc-well bc-rise-in mt-2 grid grid-cols-1 gap-1.5 rounded-xl p-2"
         }
       >
         {rows.length === 0 && (
@@ -640,7 +640,7 @@ export function CallWorkspaceBar({
         {rows.map(({ kind, label, testId, Icon, devices, value }) => (
           <label key={kind} className="flex items-center gap-1.5">
             <Icon className={iconCls} />
-            <span className={`w-16 shrink-0 text-[11px] font-semibold ${textCls}`}>{label}</span>
+            <span className={`w-16 shrink-0 text-[11px] font-medium ${textCls}`}>{label}</span>
             <select
               data-testid={testId}
               value={devices.some((d) => d.deviceId === value) ? value : ""}
@@ -676,7 +676,7 @@ export function CallWorkspaceBar({
     return (
       <div
         data-testid="call-fullscreen-stage"
-        className="relative flex min-h-0 flex-1 flex-col justify-between overflow-hidden px-4 py-4 text-white"
+        className="bc-dark relative flex min-h-0 flex-1 flex-col justify-between overflow-hidden px-4 py-4 text-white"
         style={{
           background: "linear-gradient(160deg, #1C1412 0%, #3A1510 55%, #681F18 100%)",
         }}
@@ -697,7 +697,7 @@ export function CallWorkspaceBar({
             className="relative z-10 flex min-h-0 flex-1 flex-col justify-between"
           >
             <div className="flex h-9 shrink-0 items-center justify-between gap-2">
-              <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-white/10 px-3 text-xs font-bold text-[#FFDAD5]">
+              <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-white/10 px-3 text-xs font-medium text-[#FFDAD5] shadow-[inset_0_0_0_1px_rgb(255_255_255/0.12)]">
                 <PhoneCall className="h-3.5 w-3.5 shrink-0 animate-pulse" />
                 <span>
                   สายเรียกเข้า · {incomingCall.call_type === "video" ? "วิดีโอคอล" : "โทรเสียง"}
@@ -707,7 +707,7 @@ export function CallWorkspaceBar({
                 type="button"
                 data-testid="call-minimize-btn"
                 onClick={() => onToggleExpanded(false)}
-                className="inline-flex h-7 items-center gap-1 rounded-full bg-white/15 px-2.5 text-xs font-semibold text-white transition hover:bg-white/25"
+                className="bc-btn bc-btn-ghost bc-btn-sm rounded-full bg-white/10 text-white"
               >
                 <Minimize2 className="h-3.5 w-3.5 shrink-0" />
                 <span>ย่อจอ</span>
@@ -715,15 +715,15 @@ export function CallWorkspaceBar({
             </div>
 
             <div className="flex flex-1 flex-col items-center justify-center gap-3 px-2 text-center">
-              <div className="flex h-36 w-36 items-center justify-center rounded-full border-2 border-[#D4A373]/40 bg-white/5 p-3 shadow-xl">
+              <div className="flex h-36 w-36 items-center justify-center rounded-full border border-white/15 bg-white/5 p-3 shadow-[0_0_0_6px_rgb(212_163_115/0.12),var(--bc-elev-3)]">
                 <UserAvatar
                   name={incomingCall.initiator_name}
                   avatarUrl={incomingCall.initiator_avatar}
                   size={108}
                 />
               </div>
-              <h2 className="text-2xl font-bold text-white">{incomingCall.initiator_name}</h2>
-              <p className="text-sm text-[#FFDAD5]">
+              <h2 className="text-2xl font-semibold text-white">{incomingCall.initiator_name}</h2>
+              <p className="text-sm text-white/65">
                 {incomingCall.call_type === "video"
                   ? "วิดีโอคอล • กดรับสายเพื่อเปิดห้องสนทนา"
                   : "โทรเสียง • กดรับสายเพื่อคุยทันที"}
@@ -745,11 +745,11 @@ export function CallWorkspaceBar({
                       setActionBusy(false);
                     }
                   }}
-                  className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-red-600 text-white shadow-lg transition hover:bg-red-700 disabled:opacity-60"
+                  className="bc-callbtn bc-callbtn-danger h-16 w-16 disabled:opacity-60"
                 >
                   <PhoneOff className="h-7 w-7" />
                 </button>
-                <span className="text-xs font-bold text-white/90">ปฏิเสธ</span>
+                <span className="text-xs font-semibold text-white/90">ปฏิเสธ</span>
               </div>
 
               <div className="flex flex-col items-center gap-1.5">
@@ -766,7 +766,7 @@ export function CallWorkspaceBar({
                       setActionBusy(false);
                     }
                   }}
-                  className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-emerald-600 text-white shadow-lg transition hover:bg-emerald-700 disabled:opacity-60"
+                  className="bc-callbtn bc-callbtn-accept h-16 w-16 disabled:opacity-60"
                 >
                   {incomingCall.call_type === "video" ? (
                     <Video className="h-7 w-7" />
@@ -774,7 +774,7 @@ export function CallWorkspaceBar({
                     <Phone className="h-7 w-7" />
                   )}
                 </button>
-                <span className="text-xs font-bold text-white/90">รับสาย</span>
+                <span className="text-xs font-semibold text-white/90">รับสาย</span>
               </div>
             </div>
           </div>
@@ -790,9 +790,9 @@ export function CallWorkspaceBar({
             {showIncomingBanner && incomingCall && (
               <div
                 data-testid="incoming-call-banner"
-                className="flex shrink-0 items-center justify-between gap-2 rounded-xl border border-[#D4A373]/50 bg-black/40 px-2.5 py-1.5"
+                className="bc-glass bc-rise-in flex shrink-0 items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/40 px-2.5 py-1.5 shadow-[var(--bc-elev-3)]"
               >
-                <span className="min-w-0 truncate text-xs font-bold text-white">
+                <span className="min-w-0 truncate text-xs font-semibold text-white">
                   สายเรียกเข้าจาก {incomingCall.initiator_name}
                 </span>
                 <div className="flex shrink-0 items-center gap-1.5">
@@ -808,7 +808,7 @@ export function CallWorkspaceBar({
                         setActionBusy(false);
                       }
                     }}
-                    className="inline-flex h-7 items-center gap-1 rounded-lg bg-emerald-600 px-2.5 text-[11px] font-bold text-white"
+                    className="bc-btn bc-btn-primary bc-btn-sm"
                   >
                     <span>รับสาย</span>
                   </button>
@@ -824,7 +824,7 @@ export function CallWorkspaceBar({
                         setActionBusy(false);
                       }
                     }}
-                    className="inline-flex h-7 items-center gap-1 rounded-lg bg-red-600 px-2.5 text-[11px] font-bold text-white"
+                    className="bc-btn bc-btn-danger bc-btn-sm"
                   >
                     <span>ปฏิเสธ</span>
                   </button>
@@ -836,10 +836,10 @@ export function CallWorkspaceBar({
             <div className="flex h-9 shrink-0 items-center justify-between gap-2">
               <div className="flex min-w-0 flex-1 items-center gap-1.5">
                 <span
-                  className={`inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2.5 text-xs font-bold ${
+                  className={`inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2.5 text-xs font-semibold ${
                     connState === ConnectionState.Connected
-                      ? "bg-emerald-600 text-white"
-                      : "bg-white/15 text-white"
+                      ? "bg-emerald-600/90 text-white"
+                      : "bg-white/10 text-white"
                   }`}
                 >
                   {activeJoin.call.call_type === "video" ? (
@@ -849,18 +849,18 @@ export function CallWorkspaceBar({
                   )}
                   <span>{activeJoin.call.call_type === "video" ? "วิดีโอคอล" : "โทรเสียง"}</span>
                 </span>
-                <span className="inline-flex h-7 shrink-0 items-center rounded-full bg-[#D4A373]/25 px-2.5 text-[11px] font-bold text-[#FFDAD5]">
+                <span className="bc-num inline-flex h-7 shrink-0 items-center rounded-full bg-[var(--bc-gold)]/20 px-2.5 text-[11px] font-semibold text-[#FFDAD5]">
                   {activeJoin.call.status === "ringing"
                     ? "กำลังเรียก..."
                     : formatCallDuration(elapsedSec)}
                 </span>
-                <span className="inline-flex h-7 shrink-0 items-center text-[11px] text-white/80">
+                <span className="bc-num inline-flex h-7 shrink-0 items-center text-[11px] text-white/65">
                   • {Math.max(1, tiles.length)} คน
                 </span>
                 {(activeJoin.call.call_type === "video" || camOn) && (
                   <span
                     data-testid="call-quality-badge"
-                    className="inline-flex h-7 shrink-0 items-center rounded-full bg-white/15 px-2 text-[11px] font-bold text-[#D4A373]"
+                    className="inline-flex h-7 shrink-0 items-center rounded-full bg-white/10 px-2 text-[11px] font-medium text-[var(--bc-gold)]"
                   >
                     {resolveAdaptiveQualityBadge(netQuality)}
                   </span>
@@ -872,7 +872,7 @@ export function CallWorkspaceBar({
                   <button
                     type="button"
                     onClick={() => void handleEnablePlayback()}
-                    className="inline-flex h-7 items-center gap-1 rounded-full bg-amber-600 px-2.5 text-[11px] font-semibold text-white hover:bg-amber-700"
+                    className="bc-btn bc-btn-sm rounded-full bg-amber-600 text-white hover:bg-amber-700"
                   >
                     <Volume2 className="h-3.5 w-3.5 shrink-0" />
                     <span>เปิดเสียง</span>
@@ -885,10 +885,10 @@ export function CallWorkspaceBar({
                     aria-pressed={autoArrange}
                     onClick={() => setAutoArrange((v) => !v)}
                     title={autoArrange ? "ปิดการเรียงตามคนพูดอัตโนมัติ" : "เปิดการเรียงตามคนพูดอัตโนมัติ"}
-                    className={`inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold text-white transition ${
+                    className={`inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-medium text-white transition ${
                       autoArrange
-                        ? "border-[#D4A373] bg-[#D4A373]/30"
-                        : "border-transparent bg-white/15 hover:bg-white/25"
+                        ? "border-[var(--bc-gold)] bg-[var(--bc-gold)]/25"
+                        : "border-transparent bg-white/10 hover:bg-white/20"
                     }`}
                   >
                     <LayoutDashboard className="h-3.5 w-3.5 shrink-0" />
@@ -900,7 +900,7 @@ export function CallWorkspaceBar({
                   data-testid="call-minimize-btn"
                   onClick={() => onToggleExpanded(false)}
                   title="ย่อจอเพื่อดูแชท"
-                  className="inline-flex h-7 items-center gap-1 rounded-full bg-white/15 px-2.5 text-xs font-semibold text-white transition hover:bg-white/25"
+                  className="inline-flex h-7 items-center gap-1 rounded-full bg-white/10 px-2.5 text-xs font-medium text-white transition hover:bg-white/20"
                 >
                   <Minimize2 className="h-3.5 w-3.5 shrink-0" />
                   <span>ย่อจอ</span>
@@ -911,7 +911,7 @@ export function CallWorkspaceBar({
             {roomErr ? (
               <p
                 data-testid="call-room-error"
-                className="shrink-0 truncate rounded-lg bg-red-900/60 px-2.5 py-1 text-center text-[11px] font-semibold text-red-100"
+                className="shrink-0 truncate rounded-lg bg-red-900/60 px-2.5 py-1 text-center text-[11px] font-medium text-red-100"
               >
                 {roomErr}
               </p>
@@ -924,7 +924,7 @@ export function CallWorkspaceBar({
             {renderDeviceSelector(true)}
 
             {/* Main Video / Voice Stage */}
-            <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/15 bg-black/35">
+            <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/10 bg-black/35 shadow-[var(--bc-elev-3)]">
               {tiles.length <= 2 ? (
                 <>
                   {mainTile ? (
@@ -942,11 +942,11 @@ export function CallWorkspaceBar({
                         />
                       ) : (
                         <div className="flex flex-col items-center gap-2.5 p-4 text-center">
-                          <div className="flex h-32 w-32 items-center justify-center rounded-full border-2 border-[#D4A373]/40 bg-white/5 p-2">
+                          <div className="flex h-32 w-32 items-center justify-center rounded-full border border-white/15 bg-white/5 p-2 shadow-[0_0_0_5px_rgb(212_163_115/0.12)]">
                             <UserAvatar name={mainTile.name} size={96} />
                           </div>
-                          <span className="text-lg font-bold text-white">{mainTile.name}</span>
-                          <span className="text-xs text-[#FFDAD5]">
+                          <span className="text-lg font-semibold text-white">{mainTile.name}</span>
+                          <span className="text-xs text-white/65">
                             {mainTile.isLocal
                               ? "กำลังรอคู่สายรับสาย..."
                               : connState === ConnectionState.Connecting
@@ -955,14 +955,14 @@ export function CallWorkspaceBar({
                           </span>
                         </div>
                       )}
-                      <div className="absolute bottom-3 left-3 inline-flex items-center gap-1 rounded-full bg-black/60 px-2.5 py-1 text-xs font-semibold text-white">
+                      <div className="bc-glass absolute bottom-3 left-3 inline-flex items-center gap-1 rounded-full border border-white/10 bg-black/50 px-2.5 py-1 text-xs font-medium text-white">
                         <span>{mainTile.isLocal ? `${mainTile.name} (คุณ)` : mainTile.name}</span>
                         {!mainTile.micEnabled && <MicOff className="h-3.5 w-3.5 text-red-300" />}
                       </div>
                     </div>
                   ) : (
                     <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-center">
-                      <span className="text-sm font-bold text-white">
+                      <span className="text-sm font-semibold text-white">
                         {connState === ConnectionState.Connecting
                           ? "กำลังเชื่อมต่อห้องสนทนา..."
                           : "กำลังเตรียมห้องสนทนา..."}
@@ -975,7 +975,7 @@ export function CallWorkspaceBar({
                       data-testid="call-participant-tile"
                       data-participant-id={pipTile.identity}
                       data-has-video={pipTile.videoTrack ? "true" : "false"}
-                      className="absolute right-3 top-3 z-20 flex h-32 w-24 items-center justify-center overflow-hidden rounded-xl border-2 border-[#D4A373] bg-[#1C1412] shadow-lg"
+                      className="absolute right-3 top-3 z-20 flex h-32 w-24 items-center justify-center overflow-hidden rounded-xl border border-[var(--bc-gold)]/70 bg-[#1C1412] shadow-[var(--bc-elev-3)]"
                     >
                       {pipTile.videoTrack ? (
                         <VideoTrackView
@@ -986,12 +986,12 @@ export function CallWorkspaceBar({
                       ) : (
                         <div className="flex flex-col items-center gap-1 p-1 text-center">
                           <UserAvatar name={pipTile.name} size={40} />
-                          <span className="max-w-[78px] truncate text-[10px] font-semibold text-white">
+                          <span className="max-w-[78px] truncate text-[10px] font-medium text-white">
                             {pipTile.name}
                           </span>
                         </div>
                       )}
-                      <div className="absolute bottom-1 left-1 right-1 flex items-center justify-between gap-1 rounded bg-black/65 px-1 py-0.5 text-[9px] font-semibold text-white">
+                      <div className="bc-glass absolute bottom-1 left-1 right-1 flex items-center justify-between gap-1 rounded-md bg-black/55 px-1 py-0.5 text-[9px] font-medium text-white">
                         <span className="truncate">{pipTile.isLocal ? "คุณ" : pipTile.name}</span>
                         {!pipTile.micEnabled && <MicOff className="h-2.5 w-2.5 text-red-300" />}
                       </div>
@@ -1023,8 +1023,8 @@ export function CallWorkspaceBar({
                           style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
                           className={`absolute flex items-center justify-center overflow-hidden rounded-2xl border bg-[#1C1412] transition-all duration-500 ease-out ${
                             tile.isSpeaking
-                              ? "border-2 border-[#D4A373] shadow-[0_0_18px_rgba(212,163,115,0.55)]"
-                              : "border-white/15"
+                              ? "border-2 border-[var(--bc-gold)] shadow-[0_0_18px_rgba(212,163,115,0.55)]"
+                              : "border-white/10"
                           }`}
                         >
                           {tile.videoTrack ? (
@@ -1036,7 +1036,7 @@ export function CallWorkspaceBar({
                           ) : (
                             <UserAvatar name={tile.name} size={rank === 0 ? 72 : 48} />
                           )}
-                          <span className="absolute bottom-1.5 left-1.5 right-1.5 flex items-center justify-between gap-1 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white">
+                          <span className="bc-glass absolute bottom-1.5 left-1.5 right-1.5 flex items-center justify-between gap-1 rounded-md bg-black/55 px-2 py-0.5 text-[10px] font-medium text-white">
                             <span className="truncate">
                               {tile.isLocal ? `${tile.name} (คุณ)` : tile.name}
                             </span>
@@ -1051,22 +1051,18 @@ export function CallWorkspaceBar({
             </div>
 
             {/* Bottom Symmetric Controls */}
-            <div className="flex shrink-0 items-center justify-around gap-2 rounded-2xl border border-white/15 bg-black/35 px-3 py-3">
+            <div className="bc-glass flex shrink-0 items-center justify-around gap-2 rounded-2xl border border-white/10 bg-black/35 px-3 py-3 shadow-[var(--bc-elev-3)]">
               <div className="flex flex-col items-center gap-1">
                 <button
                   type="button"
                   data-testid="call-toggle-mic-btn"
                   onClick={() => void handleToggleMic()}
                   title={micOn ? "ปิดไมโครโฟน" : "เปิดไมโครโฟน"}
-                  className={`inline-flex h-12 w-12 items-center justify-center rounded-full border transition ${
-                    micOn
-                      ? "border-white/25 bg-white/15 text-white hover:bg-white/25"
-                      : "border-red-400 bg-red-600/80 text-white"
-                  }`}
+                  className={`bc-callbtn ${micOn ? "" : "is-off"}`}
                 >
                   {micOn ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
                 </button>
-                <span className="text-[11px] font-semibold text-white/90">
+                <span className="text-[11px] font-medium text-white/90">
                   {micOn ? "ไมค์" : "ปิดไมค์"}
                 </span>
               </div>
@@ -1077,15 +1073,11 @@ export function CallWorkspaceBar({
                   data-testid="call-toggle-cam-btn"
                   onClick={() => void handleToggleCam()}
                   title={camOn ? "ปิดกล้อง" : "เปิดกล้อง"}
-                  className={`inline-flex h-12 w-12 items-center justify-center rounded-full border transition ${
-                    camOn
-                      ? "border-[#D4A373] bg-[#D4A373]/30 text-white"
-                      : "border-white/25 bg-white/15 text-white/80 hover:bg-white/25"
-                  }`}
+                  className={`bc-callbtn ${camOn ? "" : "is-off"}`}
                 >
                   {camOn ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
                 </button>
-                <span className="text-[11px] font-semibold text-white/90">
+                <span className="text-[11px] font-medium text-white/90">
                   {camOn ? "กล้อง" : "ปิดกล้อง"}
                 </span>
               </div>
@@ -1099,11 +1091,11 @@ export function CallWorkspaceBar({
                       title="สลับกล้อง"
                       disabled={switchingCam}
                       onClick={() => void handleSwitchCamera()}
-                      className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/25 bg-white/15 text-white transition hover:bg-white/25 disabled:opacity-60"
+                      className="bc-callbtn disabled:opacity-60"
                     >
                       <SwitchCamera className="h-5 w-5" />
                     </button>
-                    <span className="text-[11px] font-semibold text-white/90">สลับกล้อง</span>
+                    <span className="text-[11px] font-medium text-white/90">สลับกล้อง</span>
                   </div>
                 )}
 
@@ -1115,15 +1107,11 @@ export function CallWorkspaceBar({
                   aria-expanded={showDevices}
                   onClick={() => setShowDevices((v) => !v)}
                   title="เลือกอุปกรณ์"
-                  className={`inline-flex h-12 w-12 items-center justify-center rounded-full border transition ${
-                    showDevices
-                      ? "border-[#D4A373] bg-[#D4A373]/30 text-white"
-                      : "border-white/25 bg-white/15 text-white hover:bg-white/25"
-                  }`}
+                  className={`bc-callbtn ${showDevices ? "is-off" : ""}`}
                 >
                   <SlidersHorizontal className="h-5 w-5" />
                 </button>
-                <span className="text-[11px] font-semibold text-white/90">อุปกรณ์</span>
+                <span className="text-[11px] font-medium text-white/90">อุปกรณ์</span>
               </div>
 
               <div className="flex flex-col items-center gap-1">
@@ -1139,11 +1127,11 @@ export function CallWorkspaceBar({
                       setActionBusy(false);
                     }
                   }}
-                  className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-red-600 text-white shadow-lg transition hover:bg-red-700 disabled:opacity-60"
+                  className="bc-callbtn bc-callbtn-danger disabled:opacity-60"
                 >
                   <PhoneOff className="h-5 w-5" />
                 </button>
-                <span className="text-[11px] font-bold text-red-200">วางสาย</span>
+                <span className="text-[11px] font-semibold text-red-200">วางสาย</span>
               </div>
             </div>
           </div>
@@ -1153,7 +1141,7 @@ export function CallWorkspaceBar({
   }
 
   return (
-    <div className="space-y-1.5 border-b border-[var(--bc-border)] bg-[var(--bc-panel)] px-2.5 py-1.5">
+    <div className="bc-glass space-y-1.5 border-b border-[var(--bc-line)] px-2.5 py-1.5">
       {/* Hidden remote audio elements */}
       {remoteAudioTracks.map((item) => (
         <AudioTrackPlayer key={item.sid} track={item.track} />
@@ -1163,7 +1151,7 @@ export function CallWorkspaceBar({
       {showIncomingBanner && incomingCall && (
         <div
           data-testid="incoming-call-banner"
-          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border-2 border-[var(--bc-primary)] bg-[var(--bc-card)] px-2.5 py-1.5 shadow-sm"
+          className="bc-glass bc-rise-in flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--bc-line-strong)] px-2.5 py-1.5 shadow-[var(--bc-elev-3)]"
         >
           <div className="flex min-w-0 items-center gap-2">
             <UserAvatar
@@ -1174,7 +1162,7 @@ export function CallWorkspaceBar({
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
                 <PhoneCall className="h-3.5 w-3.5 shrink-0 animate-pulse text-[var(--bc-primary)]" />
-                <span className="truncate text-xs font-bold text-[var(--bc-text)]">
+                <span className="truncate text-xs font-semibold text-[var(--bc-text)]">
                   สายเรียกเข้าจาก {incomingCall.initiator_name}
                 </span>
               </div>
@@ -1190,7 +1178,7 @@ export function CallWorkspaceBar({
                 type="button"
                 data-testid="call-expand-btn"
                 onClick={() => onToggleExpanded(true)}
-                className="inline-flex h-8 items-center gap-1 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2.5 text-xs font-semibold text-[var(--bc-text)]"
+                className="bc-btn bc-btn-secondary bc-btn-sm"
               >
                 <Maximize2 className="h-3.5 w-3.5 shrink-0" />
                 <span>เต็มจอ</span>
@@ -1209,7 +1197,7 @@ export function CallWorkspaceBar({
                   setActionBusy(false);
                 }
               }}
-              className="inline-flex h-8 items-center gap-1 rounded-xl bg-red-600 px-3 text-xs font-bold text-white shadow-xs transition hover:bg-red-700 disabled:opacity-60"
+              className="bc-btn bc-btn-danger bc-btn-sm"
             >
               <PhoneOff className="h-3.5 w-3.5 shrink-0" />
               <span>ปฏิเสธ</span>
@@ -1226,7 +1214,7 @@ export function CallWorkspaceBar({
                   setActionBusy(false);
                 }
               }}
-              className="inline-flex h-8 items-center gap-1 rounded-xl bg-emerald-700 px-3 text-xs font-bold text-white shadow-xs transition hover:bg-emerald-800 disabled:opacity-60"
+              className="bc-btn bc-btn-primary bc-btn-sm"
             >
               {incomingCall.call_type === "video" ? (
                 <Video className="h-3.5 w-3.5 shrink-0" />
@@ -1244,7 +1232,7 @@ export function CallWorkspaceBar({
         <div
           data-testid="active-call-dock"
           data-conn-state={connState}
-          className="rounded-xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-2 shadow-sm"
+          className="bc-glass rounded-xl border border-[var(--bc-line)] p-2 shadow-[var(--bc-elev-2)]"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2">
@@ -1264,22 +1252,22 @@ export function CallWorkspaceBar({
 
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-xs font-bold text-[var(--bc-text)]">
+                  <span className="text-xs font-semibold text-[var(--bc-text)]">
                     {activeJoin.call.call_type === "video" ? "วิดีโอคอล" : "โทรเสียง"}
                   </span>
-                  <span className="rounded-full bg-[var(--bc-soft)] px-2 py-0.5 text-[10px] font-bold text-[var(--bc-deep)]">
+                  <span className="bc-num rounded-full bg-[var(--bc-tint-strong)] px-2 py-0.5 text-[10px] font-semibold text-[var(--bc-deep)]">
                     {activeJoin.call.status === "ringing"
                       ? "กำลังเรียก..."
                       : formatCallDuration(elapsedSec)}
                   </span>
-                  <span className="text-[11px] text-[var(--bc-muted)]">
+                  <span className="bc-num text-[11px] text-[var(--bc-muted)]">
                     • {Math.max(1, tiles.length)} คน
                   </span>
                 </div>
                 {roomErr ? (
                   <p
                     data-testid="call-room-error"
-                    className="truncate text-[11px] font-semibold text-red-700"
+                    className="truncate text-[11px] font-medium text-red-700"
                   >
                     {roomErr}
                   </p>
@@ -1294,7 +1282,7 @@ export function CallWorkspaceBar({
                 type="button"
                 data-testid="call-expand-btn"
                 onClick={() => onToggleExpanded(true)}
-                className="inline-flex h-8 items-center gap-1 rounded-lg border border-[var(--bc-primary)] bg-[var(--bc-soft)] px-2 text-[11px] font-bold text-[var(--bc-deep)]"
+                className="bc-btn bc-btn-soft bc-btn-sm"
               >
                 <Maximize2 className="h-3.5 w-3.5 shrink-0" />
                 <span>เต็มจอ</span>
@@ -1304,7 +1292,7 @@ export function CallWorkspaceBar({
                 <button
                   type="button"
                   onClick={() => void handleEnablePlayback()}
-                  className="inline-flex h-8 items-center gap-1 rounded-lg bg-amber-600 px-2 text-[11px] font-semibold text-white hover:bg-amber-700"
+                  className="bc-btn bc-btn-sm bg-amber-600 text-white hover:bg-amber-700"
                 >
                   <Volume2 className="h-3.5 w-3.5 shrink-0" />
                   <span>เปิดเสียง</span>
@@ -1316,11 +1304,7 @@ export function CallWorkspaceBar({
                 data-testid="call-toggle-mic-btn"
                 onClick={() => void handleToggleMic()}
                 title={micOn ? "ปิดไมโครโฟน" : "เปิดไมโครโฟน"}
-                className={`inline-flex h-8 items-center gap-1 rounded-lg border px-2 text-[11px] font-semibold transition ${
-                  micOn
-                    ? "border-[var(--bc-border)] bg-[var(--bc-panel)] text-[var(--bc-text)]"
-                    : "border-red-300 bg-red-50 text-red-700"
-                }`}
+                className={`bc-iconbtn h-8 w-8 ${micOn ? "" : "bg-red-50 text-red-700"}`}
               >
                 {micOn ? <Mic className="h-3.5 w-3.5" /> : <MicOff className="h-3.5 w-3.5" />}
               </button>
@@ -1330,11 +1314,7 @@ export function CallWorkspaceBar({
                 data-testid="call-toggle-cam-btn"
                 onClick={() => void handleToggleCam()}
                 title={camOn ? "ปิดกล้อง" : "เปิดกล้อง"}
-                className={`inline-flex h-8 items-center gap-1 rounded-lg border px-2 text-[11px] font-semibold transition ${
-                  camOn
-                    ? "border-[var(--bc-primary)] bg-[var(--bc-soft)] text-[var(--bc-deep)]"
-                    : "border-[var(--bc-border)] bg-[var(--bc-panel)] text-[var(--bc-muted)]"
-                }`}
+                className={`bc-iconbtn h-8 w-8 ${camOn ? "bc-iconbtn-soft" : ""}`}
               >
                 {camOn ? <Video className="h-3.5 w-3.5" /> : <VideoOff className="h-3.5 w-3.5" />}
               </button>
@@ -1347,7 +1327,7 @@ export function CallWorkspaceBar({
                   title="สลับกล้อง"
                   disabled={switchingCam}
                   onClick={() => void handleSwitchCamera()}
-                  className="inline-flex h-8 items-center gap-1 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2 text-[11px] font-semibold text-[var(--bc-text)] disabled:opacity-60"
+                  className="bc-iconbtn h-8 w-8 disabled:opacity-60"
                 >
                   <SwitchCamera className="h-3.5 w-3.5" />
                 </button>
@@ -1360,11 +1340,7 @@ export function CallWorkspaceBar({
                 aria-expanded={showDevices}
                 onClick={() => setShowDevices((v) => !v)}
                 title="เลือกอุปกรณ์"
-                className={`inline-flex h-8 items-center gap-1 rounded-lg border px-2 text-[11px] font-semibold ${
-                  showDevices
-                    ? "border-[var(--bc-primary)] bg-[var(--bc-soft)] text-[var(--bc-deep)]"
-                    : "border-[var(--bc-border)] bg-[var(--bc-panel)] text-[var(--bc-muted)]"
-                }`}
+                className={`bc-iconbtn h-8 w-8 ${showDevices ? "bc-iconbtn-soft" : ""}`}
               >
                 <SlidersHorizontal className="h-3.5 w-3.5" />
               </button>
@@ -1381,7 +1357,7 @@ export function CallWorkspaceBar({
                     setActionBusy(false);
                   }
                 }}
-                className="inline-flex h-8 items-center gap-1 rounded-lg bg-red-600 px-2.5 text-[11px] font-bold text-white shadow-xs transition hover:bg-red-700 disabled:opacity-60"
+                className="bc-btn bc-btn-danger bc-btn-sm"
               >
                 <PhoneOff className="h-3.5 w-3.5 shrink-0" />
                 <span>วางสาย</span>

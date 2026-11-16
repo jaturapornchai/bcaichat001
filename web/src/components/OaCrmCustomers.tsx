@@ -22,11 +22,7 @@ const FOLLOW_OPTIONS: Array<{ id: FollowFilter; label: string }> = [
 ];
 
 function chipClass(active: boolean) {
-  return `inline-flex min-h-[26px] items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition ${
-    active
-      ? "bg-[var(--bc-primary)] text-white"
-      : "border border-[var(--bc-border)] bg-[var(--bc-panel)] text-[var(--bc-muted)] hover:border-[var(--bc-primary)]"
-  }`;
+  return `bc-chip ${active ? "is-active" : ""}`;
 }
 
 function parseTags(raw: string): string[] {
@@ -254,7 +250,7 @@ export function OaCrmCustomers({
 
   return (
     <div data-testid="oa-crm" className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
-      <div className="space-y-2 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-2.5 shadow-2xs">
+      <div className="bc-card space-y-2 p-2.5">
         <div className="relative flex items-center">
           <Search className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-[var(--bc-muted)]" />
           <input
@@ -263,12 +259,12 @@ export function OaCrmCustomers({
             onChange={(e) => setQuery(e.target.value)}
             placeholder="ค้นหาชื่อ / เบอร์ / อีเมล / โน้ตลูกค้า..."
             data-testid="oa-crm-search"
-            className="w-full rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] py-1.5 pl-8 pr-2.5 text-xs outline-none focus:border-[var(--bc-primary)]"
+            className="bc-input bc-search w-full pl-8"
           />
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[11px] font-bold text-[var(--bc-text)]">แท็ก</span>
+          <span className="bc-overline">แท็ก</span>
           <OaTagChips
             tags={tagStats?.tags ?? []}
             selected={selectedTags}
@@ -278,7 +274,7 @@ export function OaCrmCustomers({
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[11px] font-bold text-[var(--bc-text)]">สถานะ</span>
+          <span className="bc-overline">สถานะ</span>
           {FOLLOW_OPTIONS.map((o) => (
             <button
               key={o.id}
@@ -291,7 +287,7 @@ export function OaCrmCustomers({
               {o.label}
             </button>
           ))}
-          <span className="ml-1 text-[11px] font-bold text-[var(--bc-text)]">เรียง</span>
+          <span className="bc-overline ml-1">เรียง</span>
           {SORT_OPTIONS.map((o) => (
             <button
               key={o.id}
@@ -306,9 +302,9 @@ export function OaCrmCustomers({
           ))}
         </div>
 
-        <div className="max-h-[460px] space-y-1.5 overflow-y-auto">
+        <div className="max-h-[460px] divide-y divide-[var(--bc-line)] overflow-y-auto">
           {items.length === 0 ? (
-            <p className="py-4 text-center text-xs text-[var(--bc-muted)]">
+            <p className="bc-empty py-4 text-center text-xs">
               {loading ? "กำลังโหลดลูกค้า..." : "ไม่พบลูกค้าตามเงื่อนไขที่เลือก"}
             </p>
           ) : (
@@ -318,24 +314,16 @@ export function OaCrmCustomers({
                 type="button"
                 data-testid={`oa-crm-row-${c.customer_id}`}
                 onClick={() => setSelectedId(c.customer_id)}
-                className={`flex w-full items-center gap-2 rounded-xl border p-2 text-left transition ${
-                  selectedId === c.customer_id
-                    ? "border-[var(--bc-primary)] bg-[var(--bc-soft)]/50"
-                    : "border-[var(--bc-border)] bg-[var(--bc-panel)] hover:border-[var(--bc-primary)]"
-                }`}
+                className={`bc-row w-full px-1.5 py-1.5 text-left ${selectedId === c.customer_id ? "is-active" : ""}`}
               >
-                <UserAvatar name={c.customer_name} avatarUrl={c.customer_avatar} size={34} />
+                <UserAvatar name={c.customer_name} avatarUrl={c.customer_avatar} size={38} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-1">
-                    <span className="truncate text-xs font-bold text-[var(--bc-text)]">
+                    <span className="truncate text-xs font-semibold text-[var(--bc-text)]">
                       {c.customer_name}
                     </span>
                     <span
-                      className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-                        c.is_following
-                          ? "bg-[var(--bc-soft)] text-[var(--bc-deep)]"
-                          : "bg-stone-100 text-stone-600"
-                      }`}
+                      className="bc-tag shrink-0"
                     >
                       {c.is_following ? "ติดตามอยู่" : "เลิกติดตาม"}
                     </span>
@@ -344,7 +332,7 @@ export function OaCrmCustomers({
                     <span className="truncate">
                       {c.tags.length > 0 ? c.tags.map((t) => `#${t}`).join(" ") : "ยังไม่มีแท็ก"}
                     </span>
-                    <span className="shrink-0">
+                    <span className="bc-num shrink-0">
                       {c.updated_at ? formatThaiTime(c.updated_at) : ""}
                     </span>
                   </div>
@@ -355,7 +343,7 @@ export function OaCrmCustomers({
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <span data-testid="oa-crm-count" className="text-[11px] text-[var(--bc-muted)]">
+          <span data-testid="oa-crm-count" className="bc-num text-[11px] text-[var(--bc-muted)]">
             แสดง {items.length} จาก {total}
           </span>
           {items.length < total && (
@@ -364,7 +352,7 @@ export function OaCrmCustomers({
               disabled={loading}
               data-testid="oa-crm-load-more"
               onClick={() => void fetchPage(page + 1, true)}
-              className="rounded-xl border border-[var(--bc-primary)] bg-[var(--bc-soft)] px-3 py-1 text-xs font-bold text-[var(--bc-deep)] disabled:opacity-60"
+              className="bc-btn bc-btn-secondary bc-btn-sm"
             >
               โหลดเพิ่ม
             </button>
@@ -374,19 +362,19 @@ export function OaCrmCustomers({
 
       <div
         data-testid="oa-crm-detail"
-        className="rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-2.5 shadow-2xs"
+        className="bc-card p-2.5"
       >
         {!customer || !detail ? (
-          <div className="flex h-40 items-center justify-center text-xs text-[var(--bc-muted)]">
+          <div className="bc-empty flex h-40 items-center justify-center text-xs">
             {selectedId ? "กำลังโหลดข้อมูลลูกค้า..." : "เลือกลูกค้าจากรายการเพื่อดูรายละเอียด"}
           </div>
         ) : (
           <div className="space-y-2.5">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--bc-border)] pb-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--bc-line)] pb-2">
               <div className="flex min-w-0 items-center gap-2">
                 <UserAvatar name={customer.customer_name} avatarUrl={customer.customer_avatar} size={40} />
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-bold text-[var(--bc-text)]">
+                  <div className="bc-title truncate text-sm text-[var(--bc-text)]">
                     {customer.customer_name}
                   </div>
                   <div className="truncate text-[11px] text-[var(--bc-muted)]">
@@ -401,7 +389,7 @@ export function OaCrmCustomers({
                   type="button"
                   data-testid="oa-crm-open-chat"
                   onClick={() => onOpenChat(customer.conversation_id)}
-                  className="inline-flex items-center gap-1 rounded-xl bg-[var(--bc-primary)] px-3 py-1.5 text-xs font-bold text-white hover:brightness-95"
+                  className="bc-btn bc-btn-primary bc-btn-sm"
                 >
                   <MessageSquare className="h-3.5 w-3.5" />
                   <span>เปิดแชทลูกค้า</span>
@@ -410,13 +398,13 @@ export function OaCrmCustomers({
             </div>
 
             <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-              <span className="rounded-full bg-[var(--bc-soft)] px-2 py-0.5 font-bold text-[var(--bc-deep)]">
+              <span className="bc-tag bc-num">
                 เก็บคูปอง {detail.stats.coupons_claimed}
               </span>
-              <span className="rounded-full bg-[var(--bc-soft)] px-2 py-0.5 font-bold text-[var(--bc-deep)]">
+              <span className="bc-tag bc-num">
                 ใช้คูปอง {detail.stats.coupons_redeemed}
               </span>
-              <span className="rounded-full bg-[var(--bc-soft)] px-2 py-0.5 font-bold text-[var(--bc-deep)]">
+              <span className="bc-tag bc-num">
                 ได้รับข่าว {detail.stats.broadcasts_received}
               </span>
               {customer.followed_at && (
@@ -433,7 +421,7 @@ export function OaCrmCustomers({
                 onChange={(e) => setTagsInput(e.target.value)}
                 placeholder="แท็กลูกค้า คั่นด้วยจุลภาค เช่น vip, ลูกค้าประจำ"
                 data-testid="oa-crm-tags-input"
-                className="w-full rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1.5 text-xs outline-none focus:border-[var(--bc-primary)]"
+                className="bc-input w-full"
               />
               <textarea
                 rows={2}
@@ -441,10 +429,10 @@ export function OaCrmCustomers({
                 onChange={(e) => setNoteInput(e.target.value)}
                 placeholder="โน้ตเกี่ยวกับลูกค้า (เห็นเฉพาะทีมงาน)"
                 data-testid="oa-crm-note-input"
-                className="w-full rounded-xl border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 py-1.5 text-xs outline-none focus:border-[var(--bc-primary)]"
+                className="bc-input w-full"
               />
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--bc-text)]">
+                <label className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--bc-text)]">
                   <input
                     type="checkbox"
                     checked={aiPaused}
@@ -456,7 +444,7 @@ export function OaCrmCustomers({
                   type="submit"
                   disabled={saving}
                   data-testid="oa-crm-save"
-                  className="rounded-xl bg-[var(--bc-primary)] px-3.5 py-1.5 text-xs font-bold text-white disabled:opacity-60"
+                  className="bc-btn bc-btn-primary"
                 >
                   บันทึก
                 </button>
@@ -464,25 +452,21 @@ export function OaCrmCustomers({
             </form>
 
             <div className="space-y-1">
-              <h3 className="text-xs font-bold text-[var(--bc-text)]">ประวัติคูปอง</h3>
+              <h3 className="bc-overline">ประวัติคูปอง</h3>
               {detail.coupons.length === 0 ? (
                 <p className="text-[11px] text-[var(--bc-muted)]">ลูกค้ายังไม่เคยเก็บคูปอง</p>
               ) : (
                 detail.coupons.map((cp) => (
                   <div
                     key={cp.id}
-                    className="flex items-center justify-between gap-2 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2 py-1 text-[11px]"
+                    className="bc-well flex items-center justify-between gap-2 rounded-xl px-2 py-1 text-[11px]"
                   >
-                    <span className="min-w-0 truncate font-semibold text-[var(--bc-text)]">
+                    <span className="min-w-0 truncate font-medium text-[var(--bc-text)]">
                       {cp.code} — {cp.title}
                       {cp.discount_text ? ` (${cp.discount_text})` : ""}
                     </span>
                     <span
-                      className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-                        cp.is_redeemed
-                          ? "bg-emerald-50 text-emerald-800"
-                          : "bg-amber-50 text-amber-800"
-                      }`}
+                      className={`bc-tag shrink-0 ${cp.is_redeemed ? "bc-tag-gold" : ""}`}
                     >
                       {cp.is_redeemed ? "ใช้แล้ว" : "ยังไม่ใช้"}
                     </span>
@@ -492,14 +476,14 @@ export function OaCrmCustomers({
             </div>
 
             <div className="space-y-1">
-              <h3 className="text-xs font-bold text-[var(--bc-text)]">ข่าวที่ลูกค้าได้รับ</h3>
+              <h3 className="bc-overline">ข่าวที่ลูกค้าได้รับ</h3>
               {detail.broadcasts.length === 0 ? (
                 <p className="text-[11px] text-[var(--bc-muted)]">ยังไม่เคยส่งข่าวถึงลูกค้ารายนี้</p>
               ) : (
                 detail.broadcasts.map((b) => (
                   <div
                     key={b.id}
-                    className="rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2 py-1 text-[11px]"
+                    className="bc-well rounded-xl px-2 py-1 text-[11px]"
                   >
                     <div className="flex items-center justify-between gap-2 text-[var(--bc-muted)]">
                       <span className="truncate">
@@ -507,7 +491,7 @@ export function OaCrmCustomers({
                           ? b.target_tags.map((t) => `#${t}`).join(" ")
                           : "ผู้ติดตามทุกคน"}
                       </span>
-                      <span className="shrink-0">{formatThaiTime(b.created_at)}</span>
+                      <span className="bc-num shrink-0">{formatThaiTime(b.created_at)}</span>
                     </div>
                     <p className="line-clamp-2 text-[var(--bc-text)]">
                       {b.content || (b.coupon_id ? "ส่งคูปองให้ลูกค้า" : "")}
