@@ -3244,9 +3244,12 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     final address = (loc?.address ?? '').trim();
     final lat = loc?.latitude ?? 0.0;
     final lng = loc?.longitude ?? 0.0;
-    final mapUrl =
-        loc?.resolvedMapUrl ??
-        'https://www.google.com/maps/search/?api=1&query=$lat,$lng';
+    // ปุ่มนำทาง: ไม่ระบุต้นทาง + dir_action=navigate = Google Maps เริ่มนำทางจากตำแหน่งเครื่องทันที
+    // ที่มา: https://developers.google.com/maps/documentation/urls/get-started#directions-action
+    final mapUrl = BcMapPreview.isValidLatLng(loc?.latitude, loc?.longitude)
+        ? 'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&dir_action=navigate'
+        : (loc?.resolvedMapUrl ??
+              'https://www.google.com/maps/search/?api=1&query=$lat,$lng');
 
     return Container(
       width: 270,

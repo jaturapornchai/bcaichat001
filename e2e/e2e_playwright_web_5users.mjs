@@ -693,6 +693,9 @@ async function main() {
     assert.equal(await u1.page.getByTestId("plus-attach-tray").count(), 0, "Tray closes after the location is sent");
     await u1.page.locator('[data-testid^="location-card-"]').first().waitFor({ state: "visible", timeout: 8000 });
     await u2.page.locator('[data-testid^="location-card-"]').first().waitFor({ state: "visible", timeout: 8000 });
+    // ปุ่มนำทางในการ์ดตำแหน่ง: ลิงก์เปิดโหมดนำทางของ Google Maps ไปยังพิกัดทันที (ไม่ใช่แค่หน้าค้นหาหมุด)
+    const navHref = await u2.page.locator('[data-testid^="location-card-"]').first().locator('a[href*="google.com/maps/"]').getAttribute("href");
+    assert.match(navHref ?? "", /^https:\/\/www\.google\.com\/maps\/dir\/\?api=1&destination=-?\d+(\.\d+)?,-?\d+(\.\d+)?&dir_action=navigate$/, "Navigate button starts navigation right away");
     // แผนที่ฟรี (OpenStreetMap) ในการ์ดตำแหน่ง: มีหมุดและเครดิตแผนที่
     const locMap = u2.page.locator('[data-testid^="location-map-"][data-has-pin="true"].leaflet-container').first();
     await locMap.waitFor({ state: "visible", timeout: 8000 });
@@ -702,6 +705,21 @@ async function main() {
       await locMap.locator("img.leaflet-tile-loaded").nth(3).waitFor({ timeout: 15000 }).catch(() => {});
       await shot(u2.page, "web-location-map");
     }
+
+    // 7a-2. อนุญาตตำแหน่งแล้ว: เปิดแผนที่มาปักหมุดที่ตำแหน่งของผู้ใช้เอง ไม่ต้องแตะแผนที่หรือกดปุ่ม
+    await u1.ctx.grantPermissions(["geolocation"]);
+    await u1.ctx.setGeolocation({ latitude: 18.7883, longitude: 98.9853 });
+    await u1.page.getByTestId("plus-attach-toggle").click();
+    await u1.page.getByTestId("attach-tab-location").click();
+    await u1.page.locator('[data-testid="loc-fullmap-map"][data-has-pin="true"]').waitFor({ state: "visible", timeout: 10000 });
+    assert.equal(await u1.page.getByTestId("loc-fullmap-coords").innerText(), "พิกัด: 18.78830, 98.98530", "Map opens on the user's own position");
+    assert.equal(await u1.page.getByTestId("loc-fullmap-confirm-btn").isDisabled(), false, "Confirm enabled once the map has located the user");
+    await u1.page.getByTestId("loc-fullmap-close-btn").click();
+    await u1.page.getByTestId("loc-fullmap-view").waitFor({ state: "detached", timeout: 5000 });
+    await u1.ctx.clearPermissions();
+    // ปิดแผนที่โดยไม่ส่ง ถาด + ยังเปิดอยู่ ปิดก่อนไปขั้นถัดไป
+    if (await u1.page.getByTestId("plus-attach-tray").count()) await u1.page.getByTestId("plus-attach-toggle").click();
+    await u1.page.getByTestId("plus-attach-tray").waitFor({ state: "detached", timeout: 5000 });
 
     // 7b. Contact Card via inline + tray
     await u1.page.getByTestId("plus-attach-toggle").click();

@@ -44,6 +44,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               child: BcMapPreview(
                 key: const Key('loc-fullmap-map'),
                 interactive: true,
+                autoLocate: true,
                 height: null,
                 lat: _lat,
                 lng: _lng,

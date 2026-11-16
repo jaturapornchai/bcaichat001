@@ -27,6 +27,9 @@ class BcMapPreview extends StatefulWidget {
   final bool interactive;
   final void Function(double lat, double lng)? onPick;
 
+  /// true = เปิดมายังไม่มีหมุด ให้จับตำแหน่งปัจจุบันเองหนึ่งครั้ง (ใช้คู่กับ interactive)
+  final bool autoLocate;
+
   const BcMapPreview({
     super.key,
     this.lat,
@@ -34,6 +37,7 @@ class BcMapPreview extends StatefulWidget {
     this.height = 140,
     this.interactive = false,
     this.onPick,
+    this.autoLocate = false,
   });
 
   static const tileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -121,6 +125,12 @@ class _BcMapPreviewState extends State<BcMapPreview>
       duration: const Duration(milliseconds: 280),
     )..addListener(_onMoveTick);
     _shownPin = _pin;
+    if (widget.interactive && widget.autoLocate && _pin == null) {
+      // รอเฟรมแรกก่อน เพราะ _useGps เรียก setState
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _useGps(auto: true);
+      });
+    }
   }
 
   @override
@@ -247,7 +257,8 @@ class _BcMapPreviewState extends State<BcMapPreview>
 
   // ───── ตำแหน่งปัจจุบันจาก GPS ─────
 
-  Future<void> _useGps() async {
+  /// auto = จับเองตอนเปิดแผนที่ (ไม่ใช่การกดปุ่ม) — ถ้าผู้ใช้ปักหมุดเองไปก่อนแล้ว ไม่ทับหมุดนั้น
+  Future<void> _useGps({bool auto = false}) async {
     if (_gpsLoading) return;
     setState(() {
       _gpsLoading = true;
@@ -272,7 +283,11 @@ class _BcMapPreviewState extends State<BcMapPreview>
               timeLimit: Duration(seconds: 12),
             ),
           );
-          widget.onPick?.call(pos.latitude, pos.longitude);
+          // ปิดหน้าแผนที่ไปก่อนได้ตำแหน่ง: ห้ามเรียก onPick ของหน้าที่ถูกทิ้งแล้ว
+          if (!mounted) return;
+          if (!(auto && _pin != null)) {
+            widget.onPick?.call(pos.latitude, pos.longitude);
+          }
         }
       }
     } catch (_) {
@@ -281,7 +296,7 @@ class _BcMapPreviewState extends State<BcMapPreview>
     if (!mounted) return;
     setState(() {
       _gpsLoading = false;
-      _notice = notice;
+      _notice = auto && _pin != null ? null : notice;
     });
   }
 

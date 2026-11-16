@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Check, LocateFixed } from "lucide-react";
 import MapPreview, { isValidLatLng } from "@/components/MapPreview";
 
@@ -27,6 +27,9 @@ export default function LocationPickerView({
   const [gpsLoading, setGpsLoading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  // ผู้ใช้ปักหมุดเองแล้ว (แตะ/ลาก) — ผลจับตำแหน่งอัตโนมัติที่มาทีหลังต้องไม่ทับหมุดนั้น
+  const userPickedRef = useRef(hasInitial);
+  const autoLocatedRef = useRef(false);
 
   const handleConfirm = async () => {
     if (!pin || sending) return;
@@ -38,7 +41,8 @@ export default function LocationPickerView({
     }
   };
 
-  const handleUseGps = () => {
+  /** auto = จับเองตอนเปิดแผนที่ (ไม่ใช่การกดปุ่ม) */
+  const handleUseGps = (auto = false) => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       setNotice("เบราว์เซอร์นี้ไม่รองรับการจับตำแหน่ง แตะบนแผนที่เพื่อปักหมุดแทน");
       return;
@@ -47,16 +51,26 @@ export default function LocationPickerView({
     setNotice(null);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setPin({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         setGpsLoading(false);
+        if (auto && userPickedRef.current) return;
+        setPin({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       },
       () => {
         setGpsLoading(false);
+        if (auto && userPickedRef.current) return;
         setNotice("จับตำแหน่งปัจจุบันไม่ได้ แตะบนแผนที่เพื่อปักหมุดแทน");
       },
       { enableHighAccuracy: true, timeout: 8000 }
     );
   };
+
+  // เปิดแผนที่มายังไม่มีหมุด → พาไปตำแหน่งของผู้ใช้เองหนึ่งครั้ง ไม่ต้องกดปุ่ม
+  // (ref กันรันซ้ำจาก Strict Mode ที่เรียก effect สองรอบตอน dev)
+  useEffect(() => {
+    if (autoLocatedRef.current || userPickedRef.current) return;
+    autoLocatedRef.current = true;
+    handleUseGps(true);
+  }, []);
 
   return (
     <section
@@ -80,7 +94,7 @@ export default function LocationPickerView({
         <button
           type="button"
           data-testid="loc-fullmap-gps-btn"
-          onClick={handleUseGps}
+          onClick={() => handleUseGps()}
           disabled={gpsLoading}
           className="bc-btn bc-btn-soft bc-btn-sm shrink-0"
         >
@@ -97,6 +111,7 @@ export default function LocationPickerView({
           lat={pin?.lat}
           lng={pin?.lng}
           onPick={(lat, lng) => {
+            userPickedRef.current = true;
             setPin({ lat, lng });
             setNotice(null);
           }}

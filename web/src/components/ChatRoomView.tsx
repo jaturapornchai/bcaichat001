@@ -1856,9 +1856,14 @@ export function ChatRoomView({
 
                               {msg.type === "location" && msg.location_data && (() => {
                                 const loc = msg.location_data;
-                                const mapsHref = isSafeHttpUrl(loc.map_url)
-                                  ? loc.map_url!
-                                  : `https://www.google.com/maps/search/?api=1&query=${loc.latitude},${loc.longitude}`;
+                                // ปุ่มนำทาง: ไม่ระบุต้นทาง + dir_action=navigate = Google Maps เริ่มนำทางจากตำแหน่งเครื่องทันที
+                                // (ที่ที่นำทางไม่ได้ เช่นเบราว์เซอร์คอมพิวเตอร์ จะได้หน้าเส้นทางแทน)
+                                // ที่มา: https://developers.google.com/maps/documentation/urls/get-started#directions-action
+                                const mapsHref = isValidLatLng(Number(loc.latitude), Number(loc.longitude))
+                                  ? `https://www.google.com/maps/dir/?api=1&destination=${loc.latitude},${loc.longitude}&dir_action=navigate`
+                                  : isSafeHttpUrl(loc.map_url)
+                                    ? loc.map_url!
+                                    : `https://www.google.com/maps/search/?api=1&query=${loc.latitude},${loc.longitude}`;
                                 const coordText = `${Number(loc.latitude).toFixed(5)}, ${Number(loc.longitude).toFixed(5)}`;
                                 return (
                                   <div

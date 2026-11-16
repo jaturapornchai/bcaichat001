@@ -1,14 +1,128 @@
+import 'dart:async';
+
 import 'package:bcaichat_app/screens/location_picker_screen.dart';
 import 'package:bcaichat_app/widgets/map_preview.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:geolocator/geolocator.dart';
 
 Widget _host(Widget child) => MaterialApp(
   home: Scaffold(body: SizedBox(width: 300, child: child)),
 );
 
+/// ตัวจำลองบริการตำแหน่งของเครื่อง (ไม่แตะ GPS จริง)
+class _FakeGeolocator extends GeolocatorPlatform {
+  _FakeGeolocator({
+    required this.position,
+    this.permission = LocationPermission.whileInUse,
+  });
+
+  final Future<Position> position;
+  final LocationPermission permission;
+
+  @override
+  Future<bool> isLocationServiceEnabled() async => true;
+
+  @override
+  Future<LocationPermission> checkPermission() async => permission;
+
+  @override
+  Future<LocationPermission> requestPermission() async => permission;
+
+  @override
+  Future<Position> getCurrentPosition({LocationSettings? locationSettings}) =>
+      position;
+}
+
+Position _positionAt(double lat, double lng) => Position(
+  latitude: lat,
+  longitude: lng,
+  timestamp: DateTime.utc(2026),
+  accuracy: 5,
+  altitude: 0,
+  altitudeAccuracy: 0,
+  heading: 0,
+  headingAccuracy: 0,
+  speed: 0,
+  speedAccuracy: 0,
+);
+
 void main() {
+  group('เปิดหน้าแชร์ตำแหน่ง: ไปตำแหน่งของผู้ใช้เอง', () {
+    late GeolocatorPlatform original;
+    setUp(() => original = GeolocatorPlatform.instance);
+    tearDown(() => GeolocatorPlatform.instance = original);
+
+    String? coordsText(WidgetTester tester) => tester
+        .widget<Text>(find.byKey(const Key('loc-fullmap-coords')))
+        .data;
+
+    testWidgets('จับตำแหน่งได้: ปักหมุดและเลื่อนแผนที่ไปเองโดยไม่ต้องแตะ', (
+      tester,
+    ) async {
+      GeolocatorPlatform.instance = _FakeGeolocator(
+        position: Future.value(_positionAt(18.7883, 98.9853)),
+      );
+      await tester.pumpWidget(const MaterialApp(home: LocationPickerScreen()));
+      await tester.pumpAndSettle();
+
+      expect(coordsText(tester), 'พิกัด: 18.78830, 98.98530');
+      expect(find.byKey(const Key('map-preview-pin')), findsOneWidget);
+      final confirm = find.byKey(const Key('loc-fullmap-confirm-btn'));
+      expect(tester.widget<FilledButton>(confirm).onPressed, isNotNull);
+      final camera = tester
+          .widget<FlutterMap>(find.byType(FlutterMap))
+          .mapController!
+          .camera;
+      expect(camera.center.latitude, closeTo(18.7883, 0.0001));
+      expect(camera.center.longitude, closeTo(98.9853, 0.0001));
+      expect(camera.zoom, greaterThanOrEqualTo(15));
+    });
+
+    testWidgets('ผู้ใช้แตะปักหมุดเองก่อนได้ตำแหน่ง: ไม่ทับหมุดของผู้ใช้', (
+      tester,
+    ) async {
+      final gps = Completer<Position>();
+      GeolocatorPlatform.instance = _FakeGeolocator(position: gps.future);
+      await tester.pumpWidget(const MaterialApp(home: LocationPickerScreen()));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('กำลังจับพิกัด...'), findsOneWidget);
+
+      await tester.tap(find.byType(FlutterMap));
+      await tester.pump(const Duration(milliseconds: 400));
+      final picked = coordsText(tester);
+      expect(picked, startsWith('พิกัด: 13.'));
+
+      gps.complete(_positionAt(18.7883, 98.9853));
+      await tester.pumpAndSettle();
+      expect(coordsText(tester), picked);
+      expect(find.text('ตำแหน่งฉัน'), findsOneWidget);
+    });
+
+    testWidgets('ไม่อนุญาตตำแหน่ง: อยู่ที่มุมมองเดิม บอกเหตุผล และยังแตะปักหมุดได้', (
+      tester,
+    ) async {
+      GeolocatorPlatform.instance = _FakeGeolocator(
+        // ไม่อนุญาต = ไม่ถูกเรียก จึงใช้ future ที่ไม่มีวันจบ
+        position: Completer<Position>().future,
+        permission: LocationPermission.denied,
+      );
+      await tester.pumpWidget(const MaterialApp(home: LocationPickerScreen()));
+      await tester.pumpAndSettle();
+
+      expect(coordsText(tester), 'แตะบนแผนที่เพื่อปักหมุด');
+      expect(find.text('ยังไม่ได้อนุญาตให้แอปใช้ตำแหน่ง'), findsOneWidget);
+      expect(find.byKey(const Key('map-preview-pin')), findsNothing);
+
+      await tester.tap(find.byType(FlutterMap));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(coordsText(tester), startsWith('พิกัด: '));
+      expect(find.text('ยังไม่ได้อนุญาตให้แอปใช้ตำแหน่ง'), findsNothing);
+    });
+  });
+
   test('isValidLatLng ตรวจช่วงพิกัด', () {
     expect(BcMapPreview.isValidLatLng(13.7563, 100.5018), isTrue);
     expect(BcMapPreview.isValidLatLng(null, 100), isFalse);
