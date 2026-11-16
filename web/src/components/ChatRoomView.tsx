@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import LocationPickerView from "@/components/LocationPickerView";
+import MapPreview, { isValidLatLng } from "@/components/MapPreview";
 import {
   AlertTriangle,
   Archive,
@@ -28,6 +30,7 @@ import {
   Layers,
   LocateFixed,
   Lock,
+  Map as MapIcon,
   MapPin,
   Menu,
   Mic,
@@ -325,6 +328,7 @@ export function ChatRoomView({
   >([]);
   const [locSearchNotice, setLocSearchNotice] = useState<string | null>(null);
   const [gpsLoading, setGpsLoading] = useState(false);
+  const [locFullMapOpen, setLocFullMapOpen] = useState(false);
 
   // Contact sharing state
   const [contactSearch, setContactSearch] = useState("");
@@ -1039,6 +1043,21 @@ export function ChatRoomView({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--bc-card)]">
+      {locFullMapOpen && (
+        <LocationPickerView
+          initialLat={locLat.trim() ? Number(locLat) : undefined}
+          initialLng={locLng.trim() ? Number(locLng) : undefined}
+          onCancel={() => setLocFullMapOpen(false)}
+          onConfirm={(lat, lng) => {
+            setLocLat(lat.toFixed(6));
+            setLocLng(lng.toFixed(6));
+            setLocSearchNotice("เลือกตำแหน่งจากแผนที่แล้ว");
+            setLocFullMapOpen(false);
+          }}
+        />
+      )}
+      {/* ระหว่างเลือกตำแหน่งเต็มพื้นที่ ซ่อนเนื้อหาห้องไว้ (ไม่ถอดออก เพื่อคงตำแหน่งเลื่อนและข้อความที่พิมพ์ค้าง) */}
+      <div className={locFullMapOpen ? "hidden" : "contents"}>
       {/* Compact Single-Row Top Room Header */}
       <header className="shrink-0 border-b border-[var(--bc-border)] bg-[var(--bc-card)]">
         <div className="flex items-center justify-between gap-1.5 px-2 py-1.5 sm:px-2.5">
@@ -2006,6 +2025,14 @@ export function ChatRoomView({
                                       <p className="break-words text-[11px] text-[var(--bc-muted)]">
                                         {loc.address}
                                       </p>
+                                    )}
+                                    {isValidLatLng(Number(loc.latitude), Number(loc.longitude)) && (
+                                      <MapPreview
+                                        testId={`location-map-${msg.id}`}
+                                        lat={Number(loc.latitude)}
+                                        lng={Number(loc.longitude)}
+                                        height={130}
+                                      />
                                     )}
                                     <div className="rounded-lg bg-[var(--bc-panel)] px-2 py-1 text-[10px] font-semibold tabular-nums text-[var(--bc-deep)]">
                                       พิกัด: {coordText}
@@ -3069,6 +3096,15 @@ export function ChatRoomView({
                         <LocateFixed className="h-3.5 w-3.5" />
                         <span>{gpsLoading ? "กำลังจับพิกัด..." : "ใช้ตำแหน่งปัจจุบัน"}</span>
                       </button>
+                      <button
+                        type="button"
+                        data-testid="loc-fullmap-open-btn"
+                        onClick={() => setLocFullMapOpen(true)}
+                        className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-[var(--bc-primary)] bg-[var(--bc-soft)] px-2.5 text-[11px] font-bold text-[var(--bc-deep)]"
+                      >
+                        <MapIcon className="h-3.5 w-3.5" />
+                        <span>เลือกบนแผนที่เต็มจอ</span>
+                      </button>
 
                       <div className="flex min-w-0 flex-1 items-center gap-1">
                         <input
@@ -3118,6 +3154,19 @@ export function ChatRoomView({
                         {locSearchNotice}
                       </div>
                     )}
+
+                    <MapPreview
+                      testId="loc-pick-map"
+                      interactive
+                      height={170}
+                      lat={locLat.trim() ? Number(locLat) : undefined}
+                      lng={locLng.trim() ? Number(locLng) : undefined}
+                      onPick={(lat, lng) => {
+                        setLocLat(lat.toFixed(6));
+                        setLocLng(lng.toFixed(6));
+                        setLocSearchNotice("ปักหมุดจากแผนที่แล้ว แตะจุดอื่นเพื่อย้ายหมุด");
+                      }}
+                    />
 
                     <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                       <input
@@ -3687,6 +3736,7 @@ export function ChatRoomView({
           </div>
         </>
       )}
+      </div>
     </div>
   );
 }

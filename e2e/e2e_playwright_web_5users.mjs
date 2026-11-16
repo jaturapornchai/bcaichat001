@@ -572,6 +572,20 @@ async function main() {
     await u1.page.getByTestId("plus-attach-tray").waitFor({ state: "visible", timeout: 5000 });
     await u1.page.getByTestId("attach-tab-location").click();
     assert.equal(await u1.page.getByTestId("loc-lat-input").count(), 0, "Manual coords folded initially");
+    // เลือกตำแหน่งบนแผนที่เต็มพื้นที่: แตะแผนที่ปักหมุด แล้วยืนยันกลับมาที่ถาด
+    await u1.page.getByTestId("loc-fullmap-open-btn").click();
+    await u1.page.getByTestId("loc-fullmap-view").waitFor({ state: "visible", timeout: 5000 });
+    assert.equal(await u1.page.getByTestId("loc-fullmap-confirm-btn").isDisabled(), true, "Confirm disabled before a pin is placed");
+    await u1.page.locator('[data-testid="loc-fullmap-map"].leaflet-container').click({ position: { x: 120, y: 120 } });
+    await u1.page.locator('[data-testid="loc-fullmap-map"][data-has-pin="true"]').waitFor({ state: "visible", timeout: 5000 });
+    assert.match(await u1.page.getByTestId("loc-fullmap-coords").innerText(), /พิกัด: \d+\.\d{5}, \d+\.\d{5}/);
+    if (README_SHOTS_DIR) {
+      await u1.page.locator('[data-testid="loc-fullmap-map"] img.leaflet-tile-loaded').nth(8).waitFor({ timeout: 15000 }).catch(() => {});
+      await shot(u1.page, "web-location-picker");
+    }
+    await u1.page.getByTestId("loc-fullmap-confirm-btn").click();
+    await u1.page.getByTestId("loc-fullmap-view").waitFor({ state: "detached", timeout: 5000 });
+    await u1.page.locator('[data-testid="loc-pick-map"][data-has-pin="true"]').waitFor({ state: "visible", timeout: 5000 });
     await u1.page.getByTestId("loc-title-input").fill("สยามพารากอน PW");
     await u1.page.getByTestId("toggle-manual-coords").click();
     await u1.page.getByTestId("loc-lat-input").fill("13.7462");
@@ -579,6 +593,15 @@ async function main() {
     await u1.page.getByTestId("send-location-btn").click();
     await u1.page.locator('[data-testid^="location-card-"]').first().waitFor({ state: "visible", timeout: 8000 });
     await u2.page.locator('[data-testid^="location-card-"]').first().waitFor({ state: "visible", timeout: 8000 });
+    // แผนที่ฟรี (OpenStreetMap) ในการ์ดตำแหน่ง: มีหมุดและเครดิตแผนที่
+    const locMap = u2.page.locator('[data-testid^="location-map-"][data-has-pin="true"].leaflet-container').first();
+    await locMap.waitFor({ state: "visible", timeout: 8000 });
+    await locMap.locator(".leaflet-control-attribution", { hasText: "OpenStreetMap" }).waitFor({ state: "visible", timeout: 8000 });
+    if (README_SHOTS_DIR) {
+      // รอไทล์แผนที่โหลดจากอินเทอร์เน็ตก่อนถ่ายภาพ (ไม่บังคับผ่านเมื่อออฟไลน์)
+      await locMap.locator("img.leaflet-tile-loaded").nth(3).waitFor({ timeout: 15000 }).catch(() => {});
+      await shot(u2.page, "web-location-map");
+    }
 
     // 7b. Contact Card via inline + tray
     await u1.page.getByTestId("plus-attach-toggle").click();

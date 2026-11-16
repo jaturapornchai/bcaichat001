@@ -1,0 +1,91 @@
+import 'package:bcaichat_app/screens/location_picker_screen.dart';
+import 'package:bcaichat_app/widgets/map_preview.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+Widget _host(Widget child) => MaterialApp(
+  home: Scaffold(body: SizedBox(width: 300, child: child)),
+);
+
+void main() {
+  test('isValidLatLng ตรวจช่วงพิกัด', () {
+    expect(BcMapPreview.isValidLatLng(13.7563, 100.5018), isTrue);
+    expect(BcMapPreview.isValidLatLng(null, 100), isFalse);
+    expect(BcMapPreview.isValidLatLng(91, 100), isFalse);
+    expect(BcMapPreview.isValidLatLng(13, 181), isFalse);
+    expect(BcMapPreview.isValidLatLng(double.nan, 100), isFalse);
+  });
+
+  testWidgets('มีพิกัด: แสดงหมุด เครดิตแผนที่ และใช้ไทล์ OpenStreetMap', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(const BcMapPreview(lat: 13.7563, lng: 100.5018)),
+    );
+    await tester.pump();
+    expect(find.byKey(const Key('map-preview-pin')), findsOneWidget);
+    expect(find.text('© OpenStreetMap'), findsOneWidget);
+    final layer = tester.widget<TileLayer>(find.byType(TileLayer));
+    expect(layer.urlTemplate, BcMapPreview.tileUrl);
+  });
+
+  testWidgets('ยังไม่มีพิกัด: ไม่มีหมุด แตะแผนที่แล้วได้พิกัดกลับมา', (
+    tester,
+  ) async {
+    double? pickedLat;
+    await tester.pumpWidget(
+      _host(
+        BcMapPreview(
+          interactive: true,
+          height: 200,
+          onPick: (lat, lng) => pickedLat = lat,
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.byKey(const Key('map-preview-pin')), findsNothing);
+    await tester.tap(find.byType(FlutterMap));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(pickedLat, isNotNull);
+    expect(pickedLat, closeTo(13.7563, 0.2));
+  });
+
+  testWidgets('หน้าเลือกตำแหน่งเต็มจอ: แตะแผนที่แล้วกดยืนยัน คืนพิกัดกลับ', (
+    tester,
+  ) async {
+    ({double lat, double lng})? result;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () async {
+              result = await Navigator.of(context)
+                  .push<({double lat, double lng})>(
+                    MaterialPageRoute(
+                      builder: (_) => const LocationPickerScreen(),
+                    ),
+                  );
+            },
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.text('แตะบนแผนที่เพื่อปักหมุด'), findsOneWidget);
+    final confirm = find.byKey(const Key('loc-fullmap-confirm-btn'));
+    expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+
+    await tester.tap(find.byType(FlutterMap));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byKey(const Key('map-preview-pin')), findsOneWidget);
+    expect(find.textContaining('พิกัด: '), findsOneWidget);
+
+    await tester.tap(confirm);
+    await tester.pumpAndSettle();
+    expect(result, isNotNull);
+    expect(result!.lat, closeTo(13.7563, 0.3));
+  });
+}

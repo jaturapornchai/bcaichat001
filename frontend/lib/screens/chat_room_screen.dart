@@ -12,7 +12,9 @@ import '../models/models.dart';
 import '../services/api_service.dart';
 import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/map_preview.dart';
 import 'call_inline_panel.dart';
+import 'location_picker_screen.dart';
 import 'login_screen.dart' show cleanErrorMessage;
 import 'mini_app_runner_screen.dart';
 
@@ -3252,6 +3254,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 height: 1.35,
               ),
             ),
+          ],
+          if (BcMapPreview.isValidLatLng(loc?.latitude, loc?.longitude)) ...[
+            const SizedBox(height: 6),
+            BcMapPreview(lat: lat, lng: lng, height: 130),
           ],
           const SizedBox(height: 8),
           Row(
@@ -8628,6 +8634,23 @@ class _InlinePlusActionPanelState extends State<_InlinePlusActionPanel> {
     super.dispose();
   }
 
+  Future<void> _openFullMapPicker() async {
+    final picked = await Navigator.of(context).push<({double lat, double lng})>(
+      MaterialPageRoute(
+        builder: (_) => LocationPickerScreen(
+          initialLat: double.tryParse(_locLatCtrl.text.trim()),
+          initialLng: double.tryParse(_locLngCtrl.text.trim()),
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _locLatCtrl.text = picked.lat.toStringAsFixed(6);
+      _locLngCtrl.text = picked.lng.toStringAsFixed(6);
+      _placeSearchNote = 'เลือกตำแหน่งจากแผนที่แล้ว ✓';
+    });
+  }
+
   Future<void> _searchPlaces() async {
     final q = _placeSearchCtrl.text.trim();
     if (q.isEmpty || _searchingPlace) return;
@@ -9170,6 +9193,35 @@ class _InlinePlusActionPanelState extends State<_InlinePlusActionPanel> {
                         ),
                       ),
                     ],
+                    const SizedBox(height: 6),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        key: const Key('loc-fullmap-open-btn'),
+                        onPressed: _openFullMapPicker,
+                        icon: const Icon(Icons.map_outlined, size: 16),
+                        label: const Text(
+                          'เลือกบนแผนที่เต็มจอ',
+                          style: TextStyle(fontSize: 12.5),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    BcMapPreview(
+                      key: const Key('loc-pick-map'),
+                      interactive: true,
+                      height: 150,
+                      lat: double.tryParse(_locLatCtrl.text.trim()),
+                      lng: double.tryParse(_locLngCtrl.text.trim()),
+                      onPick: (lat, lng) => setState(() {
+                        _locLatCtrl.text = lat.toStringAsFixed(6);
+                        _locLngCtrl.text = lng.toStringAsFixed(6);
+                        _placeSearchNote = 'ปักหมุดจากแผนที่แล้ว ✓';
+                      }),
+                    ),
                     const SizedBox(height: 6),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
