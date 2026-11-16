@@ -2186,7 +2186,6 @@ class _MainShellState extends State<MainShell> {
           curve: AppTheme.motionCurve,
           height: 28,
           padding: const EdgeInsets.symmetric(horizontal: 10),
-          alignment: Alignment.center,
           decoration: BoxDecoration(
             color: active ? AppTheme.slateDark : AppTheme.surfaceBg,
             borderRadius: BorderRadius.circular(999),
@@ -2195,15 +2194,19 @@ class _MainShellState extends State<MainShell> {
             ),
             boxShadow: active ? AppTheme.shadowSm : const [],
           ),
-          child: AnimatedDefaultTextStyle(
-            duration: AppTheme.motionFast,
-            style: TextStyle(
-              fontSize: 12.5,
-              height: 1.35,
-              fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-              color: active ? Colors.white : AppTheme.slateBody,
+          // widthFactor: ชิปกว้างเท่าข้อความ (alignment ของ Container จะยืดเต็มแถวใน Wrap)
+          child: Center(
+            widthFactor: 1,
+            child: AnimatedDefaultTextStyle(
+              duration: AppTheme.motionFast,
+              style: TextStyle(
+                fontSize: 12.5,
+                height: 1.35,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                color: active ? Colors.white : AppTheme.slateBody,
+              ),
+              child: Text(label, maxLines: 1),
             ),
-            child: Text(label, maxLines: 1),
           ),
         ),
       ),

@@ -5315,6 +5315,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Wrap(
+        alignment: WrapAlignment.center,
         crossAxisAlignment: WrapCrossAlignment.center,
         spacing: 6,
         runSpacing: 4,
@@ -8842,94 +8843,97 @@ class _InlinePlusActionPanelState extends State<_InlinePlusActionPanel> {
           ),
           if (_tab == 'options') const SizedBox(height: 6),
           if (_tab == 'options')
-          Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 6,
-              runSpacing: 0,
-              children: [
-                ActionChip(
-                  visualDensity: VisualDensity.compact,
-                  backgroundColor: isUrgent
-                      ? AppTheme.dangerRed
-                      : isSilent
-                      ? const Color(0xFF312E81)
-                      : AppTheme.surfaceBg,
-                  avatar: Icon(
-                    isUrgent
-                        ? Icons.notifications_active_rounded
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 6,
+                runSpacing: 0,
+                children: [
+                  ActionChip(
+                    visualDensity: VisualDensity.compact,
+                    backgroundColor: isUrgent
+                        ? AppTheme.dangerRed
                         : isSilent
-                        ? Icons.nights_stay_rounded
-                        : Icons.chat_bubble_outline_rounded,
-                    size: 14,
-                    color: (isUrgent || isSilent)
-                        ? Colors.white
-                        : AppTheme.slateBody,
-                  ),
-                  label: Text(
-                    isUrgent
-                        ? 'เรื่องด่วน'
-                        : isSilent
-                        ? 'ส่งแบบไร้เสียง'
-                        : 'โหมดส่ง: ปกติ',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w700,
+                        ? const Color(0xFF312E81)
+                        : AppTheme.surfaceBg,
+                    avatar: Icon(
+                      isUrgent
+                          ? Icons.notifications_active_rounded
+                          : isSilent
+                          ? Icons.nights_stay_rounded
+                          : Icons.chat_bubble_outline_rounded,
+                      size: 14,
                       color: (isUrgent || isSilent)
                           ? Colors.white
-                          : AppTheme.slateDark,
+                          : AppTheme.slateBody,
                     ),
+                    label: Text(
+                      isUrgent
+                          ? 'เรื่องด่วน'
+                          : isSilent
+                          ? 'ส่งแบบไร้เสียง'
+                          : 'โหมดส่ง: ปกติ',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: (isUrgent || isSilent)
+                            ? Colors.white
+                            : AppTheme.slateDark,
+                      ),
+                    ),
+                    onPressed: widget.onCyclePriority,
                   ),
-                  onPressed: widget.onCyclePriority,
-                ),
-                ActionChip(
-                  visualDensity: VisualDensity.compact,
-                  backgroundColor: widget.isConfidentialMode
-                      ? const Color(0xFF991B1B)
-                      : AppTheme.surfaceBg,
-                  avatar: Icon(
-                    widget.isConfidentialMode
-                        ? Icons.lock_rounded
-                        : Icons.lock_open_rounded,
-                    size: 14,
-                    color: widget.isConfidentialMode
-                        ? Colors.white
-                        : AppTheme.slateBody,
-                  ),
-                  label: Text(
-                    'โหมดความลับ',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w700,
+                  ActionChip(
+                    visualDensity: VisualDensity.compact,
+                    backgroundColor: widget.isConfidentialMode
+                        ? const Color(0xFF991B1B)
+                        : AppTheme.surfaceBg,
+                    avatar: Icon(
+                      widget.isConfidentialMode
+                          ? Icons.lock_rounded
+                          : Icons.lock_open_rounded,
+                      size: 14,
                       color: widget.isConfidentialMode
                           ? Colors.white
-                          : AppTheme.slateDark,
+                          : AppTheme.slateBody,
                     ),
-                  ),
-                  onPressed: widget.onToggleConfidential,
-                ),
-                ActionChip(
-                  visualDensity: VisualDensity.compact,
-                  backgroundColor: isDisappearOn
-                      ? const Color(0xFF92400E)
-                      : AppTheme.surfaceBg,
-                  avatar: Icon(
-                    isDisappearOn
-                        ? Icons.timer_rounded
-                        : Icons.timer_off_outlined,
-                    size: 14,
-                    color: isDisappearOn ? Colors.white : AppTheme.slateBody,
-                  ),
-                  label: Text(
-                    widget.disappearLabel,
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w700,
-                      color: isDisappearOn ? Colors.white : AppTheme.slateDark,
+                    label: Text(
+                      'โหมดความลับ',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: widget.isConfidentialMode
+                            ? Colors.white
+                            : AppTheme.slateDark,
+                      ),
                     ),
+                    onPressed: widget.onToggleConfidential,
                   ),
-                  onPressed: widget.onCycleDisappear,
-                ),
-              ],
+                  ActionChip(
+                    visualDensity: VisualDensity.compact,
+                    backgroundColor: isDisappearOn
+                        ? const Color(0xFF92400E)
+                        : AppTheme.surfaceBg,
+                    avatar: Icon(
+                      isDisappearOn
+                          ? Icons.timer_rounded
+                          : Icons.timer_off_outlined,
+                      size: 14,
+                      color: isDisappearOn ? Colors.white : AppTheme.slateBody,
+                    ),
+                    label: Text(
+                      widget.disappearLabel,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: isDisappearOn ? Colors.white : AppTheme.slateDark,
+                      ),
+                    ),
+                    onPressed: widget.onCycleDisappear,
+                  ),
+                ],
+              ),
             ),
           if (_tab == 'contact' || _tab == 'ladder') const SizedBox(height: 8),
           if (_tab == 'contact' || _tab == 'ladder')

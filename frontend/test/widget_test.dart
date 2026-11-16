@@ -90,10 +90,24 @@ void main() {
       expect(find.text('ตัวกรอง ▾'), findsOneWidget);
       expect(find.text('เก็บถาวร'), findsNothing);
 
+      // ชิปโฟลเดอร์ต้องกว้างเท่าข้อความ ไม่ยืดเต็มแถวจนซ้อนกันหลายบรรทัด
+      double folderChipWidth(String label) => tester
+          .getSize(
+            find
+                .ancestor(
+                  of: find.text(label),
+                  matching: find.byType(AnimatedContainer),
+                )
+                .first,
+          )
+          .width;
+      expect(folderChipWidth('กลุ่ม'), lessThan(160));
+
       await tester.tap(find.text('ตัวกรอง ▾'));
       await tester.pumpAndSettle();
       expect(find.text('ตัวกรอง ▴'), findsOneWidget);
       expect(find.text('ครอบครัว'), findsOneWidget);
+      expect(folderChipWidth('ครอบครัว'), lessThan(200));
       expect(find.text('เก็บถาวร'), findsOneWidget);
 
       // Switch to Home tab (tab 0 = หน้าหลัก).
