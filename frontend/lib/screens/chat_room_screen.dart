@@ -2417,27 +2417,25 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: ['❤️', '👍', '😂', '😮', '😢', '🙏'].map((emoji) {
-                      return InkWell(
-                        borderRadius: BorderRadius.circular(14),
-                        onTap: () {
-                          setState(() => _selectedActionMessage = null);
-                          _handleReactMessage(msg, emoji);
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          child: Text(emoji, style: const TextStyle(fontSize: 19)),
+                child: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  runSpacing: 2,
+                  children: ['❤️', '👍', '😂', '😮', '😢', '🙏'].map((emoji) {
+                    return InkWell(
+                      borderRadius: BorderRadius.circular(14),
+                      onTap: () {
+                        setState(() => _selectedActionMessage = null);
+                        _handleReactMessage(msg, emoji);
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
                         ),
-                      );
-                    }).toList(),
-                  ),
+                        child: Text(emoji, style: const TextStyle(fontSize: 19)),
+                      ),
+                    );
+                  }).toList(),
                 ),
               ),
               IconButton(
@@ -2448,184 +2446,173 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             ],
           ),
           const SizedBox(height: 6),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 6,
+            runSpacing: 0,
+            children: [
+              ActionChip(
+                avatar: const Icon(Icons.reply_rounded, size: 15),
+                label: const Text('ตอบกลับ', style: TextStyle(fontSize: 12)),
+                onPressed: () => setState(() {
+                  _replyingTo = msg;
+                  _selectedActionMessage = null;
+                }),
+              ),
+              if (msg.type == 'text' &&
+                  !msg.isUnsent &&
+                  msg.content.trim().isNotEmpty &&
+                  (!msg.isConfidential ||
+                      _revealedMessageIds.contains(msg.id))) ...[
                 ActionChip(
-                  avatar: const Icon(Icons.reply_rounded, size: 15),
-                  label: const Text('ตอบกลับ', style: TextStyle(fontSize: 12)),
-                  onPressed: () => setState(() {
-                    _replyingTo = msg;
-                    _selectedActionMessage = null;
-                  }),
-                ),
-                if (msg.type == 'text' &&
-                    !msg.isUnsent &&
-                    msg.content.trim().isNotEmpty &&
-                    (!msg.isConfidential ||
-                        _revealedMessageIds.contains(msg.id))) ...[
-                  const SizedBox(width: 6),
-                  ActionChip(
-                    key: Key('copy-msg-btn-${msg.id}'),
-                    avatar: const Icon(Icons.copy_rounded, size: 15),
-                    label: const Text('คัดลอก', style: TextStyle(fontSize: 12)),
-                    onPressed: () {
-                      setState(() => _selectedActionMessage = null);
-                      Clipboard.setData(ClipboardData(text: msg.content));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('คัดลอกข้อความแล้ว')),
-                      );
-                    },
-                  ),
-                ],
-                if (msg.senderId == (ApiService.instance.currentUser?.id ?? '') &&
-                    msg.type == 'text' &&
-                    !msg.isUnsent) ...[
-                  const SizedBox(width: 6),
-                  ActionChip(
-                    avatar: const Icon(
-                      Icons.edit_rounded,
-                      size: 15,
-                      color: AppTheme.workBlue,
-                    ),
-                    label: const Text('แก้ไข', style: TextStyle(fontSize: 12)),
-                    onPressed: () {
-                      setState(() => _selectedActionMessage = null);
-                      _startEditingMessage(msg);
-                    },
-                  ),
-                ],
-                if (!msg.isUnsent &&
-                    msg.type != 'system' &&
-                    msg.type != 'call_log') ...[
-                  const SizedBox(width: 6),
-                  ActionChip(
-                    avatar: Icon(
-                      Icons.shortcut_rounded,
-                      size: 15,
-                      color: AppTheme.brandDeep,
-                    ),
-                    label: const Text('ส่งต่อ', style: TextStyle(fontSize: 12)),
-                    onPressed: () {
-                      setState(() => _selectedActionMessage = null);
-                      _startForwardingMessage(msg);
-                    },
-                  ),
-                ],
-                if (!msg.isUnsent && msg.type != 'system') ...[
-                  const SizedBox(width: 6),
-                  ActionChip(
-                    avatar: Icon(
-                      Icons.bookmark_rounded,
-                      size: 15,
-                      color: AppTheme.brandPrimary,
-                    ),
-                    label: const Text('Keep', style: TextStyle(fontSize: 12)),
-                    onPressed: () {
-                      setState(() => _selectedActionMessage = null);
-                      _saveMessageToKeepAction(msg);
-                    },
-                  ),
-                ],
-                const SizedBox(width: 6),
-                ActionChip(
-                  avatar: const Icon(
-                    Icons.push_pin_rounded,
-                    size: 15,
-                    color: AppTheme.warningAmber,
-                  ),
-                  label: const Text('ปักหมุดหัวห้อง', style: TextStyle(fontSize: 12)),
+                  key: Key('copy-msg-btn-${msg.id}'),
+                  avatar: const Icon(Icons.copy_rounded, size: 15),
+                  label: const Text('คัดลอก', style: TextStyle(fontSize: 12)),
                   onPressed: () {
                     setState(() => _selectedActionMessage = null);
-                    _pinMessageToBanner(msg);
+                    Clipboard.setData(ClipboardData(text: msg.content));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('คัดลอกข้อความแล้ว')),
+                    );
                   },
                 ),
-                const SizedBox(width: 6),
+              ],
+              if (msg.senderId == (ApiService.instance.currentUser?.id ?? '') &&
+                  msg.type == 'text' &&
+                  !msg.isUnsent) ...[
+                ActionChip(
+                  avatar: const Icon(
+                    Icons.edit_rounded,
+                    size: 15,
+                    color: AppTheme.workBlue,
+                  ),
+                  label: const Text('แก้ไข', style: TextStyle(fontSize: 12)),
+                  onPressed: () {
+                    setState(() => _selectedActionMessage = null);
+                    _startEditingMessage(msg);
+                  },
+                ),
+              ],
+              if (!msg.isUnsent &&
+                  msg.type != 'system' &&
+                  msg.type != 'call_log') ...[
                 ActionChip(
                   avatar: Icon(
-                    Icons.bookmark_add_rounded,
+                    Icons.shortcut_rounded,
+                    size: 15,
+                    color: AppTheme.brandDeep,
+                  ),
+                  label: const Text('ส่งต่อ', style: TextStyle(fontSize: 12)),
+                  onPressed: () {
+                    setState(() => _selectedActionMessage = null);
+                    _startForwardingMessage(msg);
+                  },
+                ),
+              ],
+              if (!msg.isUnsent && msg.type != 'system') ...[
+                ActionChip(
+                  avatar: Icon(
+                    Icons.bookmark_rounded,
                     size: 15,
                     color: AppTheme.brandPrimary,
                   ),
-                  label: const Text('บันทึกโน้ต', style: TextStyle(fontSize: 12)),
+                  label: const Text('Keep', style: TextStyle(fontSize: 12)),
                   onPressed: () {
                     setState(() => _selectedActionMessage = null);
-                    _saveMessageToNotebook(msg);
+                    _saveMessageToKeepAction(msg);
                   },
                 ),
-                if (msg.type == 'text' &&
-                    !msg.isUnsent &&
-                    (msg.taskStatus ?? 'open') == 'open') ...[
-                  const SizedBox(width: 6),
-                  ActionChip(
-                    avatar: const Icon(
-                      Icons.pan_tool_alt_rounded,
-                      size: 15,
-                      color: AppTheme.workBlue,
-                    ),
-                    label: const Text('อาสาช่วย', style: TextStyle(fontSize: 12)),
-                    onPressed: () {
-                      setState(() => _selectedActionMessage = null);
-                      _handleTaskAction(msg, 'accept');
-                    },
-                  ),
-                ],
-                const SizedBox(width: 6),
-                ActionChip(
-                  avatar: const Icon(Icons.delete_outline_rounded, size: 15),
-                  tooltip: 'ลบเฉพาะฝั่งฉัน',
-                  label: const Text('ลบ', style: TextStyle(fontSize: 12)),
-                  onPressed: () {
-                    setState(() => _selectedActionMessage = null);
-                    _handleDeleteForMe(msg);
-                  },
-                ),
-                if (canRecall) ...[
-                  const SizedBox(width: 6),
-                  ActionChip(
-                    avatar: const Icon(
-                      Icons.undo_rounded,
-                      size: 15,
-                      color: AppTheme.dangerRed,
-                    ),
-                    label: const Text(
-                      'ยกเลิกการส่ง',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppTheme.dangerRed,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    onPressed: () {
-                      setState(() => _selectedActionMessage = null);
-                      _unsendOrHardRecall(msg, hard: false);
-                    },
-                  ),
-                  const SizedBox(width: 6),
-                  ActionChip(
-                    avatar: const Icon(
-                      Icons.delete_forever_rounded,
-                      size: 15,
-                      color: Color(0xFF991B1B),
-                    ),
-                    label: const Text(
-                      'ลบไร้ร่องรอย',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF991B1B),
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    onPressed: () {
-                      setState(() => _selectedActionMessage = null);
-                      _unsendOrHardRecall(msg, hard: true);
-                    },
-                  ),
-                ],
               ],
-            ),
+              ActionChip(
+                avatar: const Icon(
+                  Icons.push_pin_rounded,
+                  size: 15,
+                  color: AppTheme.warningAmber,
+                ),
+                label: const Text('ปักหมุดหัวห้อง', style: TextStyle(fontSize: 12)),
+                onPressed: () {
+                  setState(() => _selectedActionMessage = null);
+                  _pinMessageToBanner(msg);
+                },
+              ),
+              ActionChip(
+                avatar: Icon(
+                  Icons.bookmark_add_rounded,
+                  size: 15,
+                  color: AppTheme.brandPrimary,
+                ),
+                label: const Text('บันทึกโน้ต', style: TextStyle(fontSize: 12)),
+                onPressed: () {
+                  setState(() => _selectedActionMessage = null);
+                  _saveMessageToNotebook(msg);
+                },
+              ),
+              if (msg.type == 'text' &&
+                  !msg.isUnsent &&
+                  (msg.taskStatus ?? 'open') == 'open') ...[
+                ActionChip(
+                  avatar: const Icon(
+                    Icons.pan_tool_alt_rounded,
+                    size: 15,
+                    color: AppTheme.workBlue,
+                  ),
+                  label: const Text('อาสาช่วย', style: TextStyle(fontSize: 12)),
+                  onPressed: () {
+                    setState(() => _selectedActionMessage = null);
+                    _handleTaskAction(msg, 'accept');
+                  },
+                ),
+              ],
+              ActionChip(
+                avatar: const Icon(Icons.delete_outline_rounded, size: 15),
+                tooltip: 'ลบเฉพาะฝั่งฉัน',
+                label: const Text('ลบ', style: TextStyle(fontSize: 12)),
+                onPressed: () {
+                  setState(() => _selectedActionMessage = null);
+                  _handleDeleteForMe(msg);
+                },
+              ),
+              if (canRecall) ...[
+                ActionChip(
+                  avatar: const Icon(
+                    Icons.undo_rounded,
+                    size: 15,
+                    color: AppTheme.dangerRed,
+                  ),
+                  label: const Text(
+                    'ยกเลิกการส่ง',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.dangerRed,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  onPressed: () {
+                    setState(() => _selectedActionMessage = null);
+                    _unsendOrHardRecall(msg, hard: false);
+                  },
+                ),
+                ActionChip(
+                  avatar: const Icon(
+                    Icons.delete_forever_rounded,
+                    size: 15,
+                    color: Color(0xFF991B1B),
+                  ),
+                  label: const Text(
+                    'ลบไร้ร่องรอย',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF991B1B),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  onPressed: () {
+                    setState(() => _selectedActionMessage = null);
+                    _unsendOrHardRecall(msg, hard: true);
+                  },
+                ),
+              ],
+            ],
           ),
         ],
       ),
@@ -4855,80 +4842,75 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                ActionChip(
-                  avatar: Icon(
-                    Icons.folder_open_rounded,
-                    size: 16,
-                    color: AppTheme.brandPrimary,
-                  ),
-                  label: const Text('เลือกรูป/ไฟล์จากเครื่อง'),
-                  onPressed: () {
-                    setState(() => _activeComposerTray = null);
-                    _pickAndUploadFile();
-                  },
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 0,
+            children: [
+              ActionChip(
+                avatar: Icon(
+                  Icons.folder_open_rounded,
+                  size: 16,
+                  color: AppTheme.brandPrimary,
                 ),
-                const SizedBox(width: 8),
-                ActionChip(
-                  avatar: const Icon(
-                    Icons.map_rounded,
-                    size: 16,
-                    color: AppTheme.workBlue,
-                  ),
-                  label: const Text('ส่งไฟล์แพลนเที่ยวตัวอย่าง'),
-                  onPressed: () {
-                    setState(() => _activeComposerTray = null);
-                    final sampleContent = utf8.encode(
-                      'บันทึกแพลนเที่ยว & ของฝาก BC Ai Chat\n'
-                      'ทริป: เชียงใหม่ - บ้านเชียง 3 วัน 2 คืน\n'
-                      'จุดแวะ: คาเฟ่ริมน้ำ, ตลาดเช้า, บ้านญาติ\n'
-                      'จัดเก็บไฟล์ถาวร (ส่งผิดกดลบทันที)\n',
-                    );
-                    _uploadBytesAndSend(
-                      fileName:
-                          'trip-plan-${DateTime.now().millisecondsSinceEpoch % 10000}.txt',
-                      bytes: sampleContent,
-                      extension: 'txt',
-                    );
-                  },
+                label: const Text('เลือกรูป/ไฟล์จากเครื่อง'),
+                onPressed: () {
+                  setState(() => _activeComposerTray = null);
+                  _pickAndUploadFile();
+                },
+              ),
+              ActionChip(
+                avatar: const Icon(
+                  Icons.map_rounded,
+                  size: 16,
+                  color: AppTheme.workBlue,
                 ),
-                const SizedBox(width: 8),
-                ActionChip(
-                  avatar: Icon(
-                    Icons.mic_rounded,
-                    size: 16,
-                    color: AppTheme.brandPrimary,
-                  ),
-                  label: const Text('ส่งไฟล์เสียง'),
-                  onPressed: () {
-                    setState(() => _activeComposerTray = null);
-                    _pickAndUploadAudio();
-                  },
+                label: const Text('ส่งไฟล์แพลนเที่ยวตัวอย่าง'),
+                onPressed: () {
+                  setState(() => _activeComposerTray = null);
+                  final sampleContent = utf8.encode(
+                    'บันทึกแพลนเที่ยว & ของฝาก BC Ai Chat\n'
+                    'ทริป: เชียงใหม่ - บ้านเชียง 3 วัน 2 คืน\n'
+                    'จุดแวะ: คาเฟ่ริมน้ำ, ตลาดเช้า, บ้านญาติ\n'
+                    'จัดเก็บไฟล์ถาวร (ส่งผิดกดลบทันที)\n',
+                  );
+                  _uploadBytesAndSend(
+                    fileName:
+                        'trip-plan-${DateTime.now().millisecondsSinceEpoch % 10000}.txt',
+                    bytes: sampleContent,
+                    extension: 'txt',
+                  );
+                },
+              ),
+              ActionChip(
+                avatar: Icon(
+                  Icons.mic_rounded,
+                  size: 16,
+                  color: AppTheme.brandPrimary,
                 ),
-                const SizedBox(width: 8),
-                ActionChip(
-                  avatar: const Icon(Icons.poll_outlined, size: 16),
-                  label: const Text('สร้างโพลโหวต'),
-                  onPressed: () {
-                    setState(() => _activeComposerTray = null);
-                    _openCreatePollDialog();
-                  },
-                ),
-                const SizedBox(width: 8),
-                ActionChip(
-                  avatar: const Icon(Icons.event_available_outlined, size: 16),
-                  label: const Text('นัดเจอ / กิจกรรม'),
-                  onPressed: () {
-                    setState(() => _activeComposerTray = null);
-                    _openEventsDialog();
-                  },
-                ),
-              ],
-            ),
+                label: const Text('ส่งไฟล์เสียง'),
+                onPressed: () {
+                  setState(() => _activeComposerTray = null);
+                  _pickAndUploadAudio();
+                },
+              ),
+              ActionChip(
+                avatar: const Icon(Icons.poll_outlined, size: 16),
+                label: const Text('สร้างโพลโหวต'),
+                onPressed: () {
+                  setState(() => _activeComposerTray = null);
+                  _openCreatePollDialog();
+                },
+              ),
+              ActionChip(
+                avatar: const Icon(Icons.event_available_outlined, size: 16),
+                label: const Text('นัดเจอ / กิจกรรม'),
+                onPressed: () {
+                  setState(() => _activeComposerTray = null);
+                  _openEventsDialog();
+                },
+              ),
+            ],
           ),
         ],
       ),
@@ -5085,37 +5067,37 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               style: TextStyle(fontSize: 12, color: AppTheme.slateMuted),
             )
           else
-            SizedBox(
-              height: 40,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: rooms.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 6),
-                itemBuilder: (_, i) {
-                  final r = rooms[i];
-                  final selected = _forwardTargetIds.contains(r.id);
-                  return FilterChip(
-                    selected: selected,
-                    selectedColor: AppTheme.brandSoft,
-                    label: Text(
-                      r.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                    onSelected: (v) {
-                      setState(() {
-                        if (v) {
-                          if (_forwardTargetIds.length < 10) {
-                            _forwardTargetIds.add(r.id);
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 132),
+              child: SingleChildScrollView(
+                child: Wrap(
+                  spacing: 6,
+                  children: List.generate(rooms.length, (i) {
+                    final r = rooms[i];
+                    final selected = _forwardTargetIds.contains(r.id);
+                    return FilterChip(
+                      selected: selected,
+                      selectedColor: AppTheme.brandSoft,
+                      label: Text(
+                        r.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      onSelected: (v) {
+                        setState(() {
+                          if (v) {
+                            if (_forwardTargetIds.length < 10) {
+                              _forwardTargetIds.add(r.id);
+                            }
+                          } else {
+                            _forwardTargetIds.remove(r.id);
                           }
-                        } else {
-                          _forwardTargetIds.remove(r.id);
-                        }
-                      });
-                    },
-                  );
-                },
+                        });
+                      },
+                    );
+                  }),
+                ),
               ),
             ),
         ],
@@ -5163,13 +5145,12 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          SizedBox(
-            height: 62,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: widget.miniApps.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 8),
-              itemBuilder: (ctx, i) {
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: List.generate(widget.miniApps.length, (i) {
                 final app = widget.miniApps[i];
                 final color = AppTheme.parseHexColor(app.color);
                 return InkWell(
@@ -5234,7 +5215,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                     ),
                   ),
                 );
-              },
+              }),
             ),
           ),
         ],
@@ -5331,11 +5312,12 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     if (!isUrgent && !isSilent && !_isConfidentialMode && !isDisappearOn) {
       return const SizedBox.shrink();
     }
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
+    return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 6,
+        runSpacing: 4,
         children: [
           if (isUrgent)
             _modeChip(
@@ -5353,8 +5335,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               fg: Colors.white,
               bg: const Color(0xFF312E81),
             ),
-          if (_isConfidentialMode) ...[
-            if (isUrgent || isSilent) const SizedBox(width: 6),
+          if (_isConfidentialMode)
             _modeChip(
               onTap: () => setState(() => _isConfidentialMode = false),
               icon: Icons.lock_rounded,
@@ -5362,10 +5343,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               fg: Colors.white,
               bg: const Color(0xFF991B1B),
             ),
-          ],
-          if (isDisappearOn) ...[
-            if (isUrgent || isSilent || _isConfidentialMode)
-              const SizedBox(width: 6),
+          if (isDisappearOn)
             _modeChip(
               onTap: () => setState(() => _disappearMode = 'off'),
               icon: Icons.timer_rounded,
@@ -5373,7 +5351,6 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               fg: Colors.white,
               bg: const Color(0xFF92400E),
             ),
-          ],
         ],
       ),
     );
@@ -5507,14 +5484,11 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     }).take(6).toList();
 
     if (candidates.isEmpty) return const SizedBox.shrink();
-    return Container(
-      height: 36,
-      margin: const EdgeInsets.only(bottom: 6),
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: candidates.length,
-        separatorBuilder: (context, index) => const SizedBox(width: 6),
-        itemBuilder: (context, i) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Wrap(
+        spacing: 6,
+        children: List.generate(candidates.length, (i) {
           final c = candidates[i];
           return ActionChip(
             backgroundColor: AppTheme.brandSoft,
@@ -5543,7 +5517,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               });
             },
           );
-        },
+        }),
       ),
     );
   }
@@ -6935,50 +6909,49 @@ class _AiWritingAssistPanelState extends State<_AiWritingAssistPanel> {
               ],
             ),
             const SizedBox(height: 8),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: _modes.map((m) {
-                  final active = _mode == m.$1;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: ChoiceChip(
-                      selected: active,
-                      selectedColor: const Color(0xFFEDE9FE),
-                      label: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Icon(
-                            m.$3,
-                            size: 14,
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              runSpacing: 0,
+              children: _modes.map((m) {
+                final active = _mode == m.$1;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ChoiceChip(
+                    selected: active,
+                    selectedColor: const Color(0xFFEDE9FE),
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Icon(
+                          m.$3,
+                          size: 14,
+                          color: active
+                              ? AppTheme.personalPurple
+                              : AppTheme.slateBody,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          m.$2,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: active
+                                ? FontWeight.w700
+                                : FontWeight.w500,
                             color: active
                                 ? AppTheme.personalPurple
                                 : AppTheme.slateBody,
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            m.$2,
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: active
-                                  ? FontWeight.w700
-                                  : FontWeight.w500,
-                              color: active
-                                  ? AppTheme.personalPurple
-                                  : AppTheme.slateBody,
-                            ),
-                          ),
-                        ],
-                      ),
-                      onSelected: (_) {
-                        setState(() => _mode = m.$1);
-                        _runAssist();
-                      },
+                        ),
+                      ],
                     ),
-                  );
-                }).toList(),
-              ),
+                    onSelected: (_) {
+                      setState(() => _mode = m.$1);
+                      _runAssist();
+                    },
+                  ),
+                );
+              }).toList(),
             ),
             const SizedBox(height: 8),
             Row(
@@ -8869,97 +8842,94 @@ class _InlinePlusActionPanelState extends State<_InlinePlusActionPanel> {
           ),
           if (_tab == 'options') const SizedBox(height: 6),
           if (_tab == 'options')
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  ActionChip(
-                    visualDensity: VisualDensity.compact,
-                    backgroundColor: isUrgent
-                        ? AppTheme.dangerRed
+          Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 6,
+              runSpacing: 0,
+              children: [
+                ActionChip(
+                  visualDensity: VisualDensity.compact,
+                  backgroundColor: isUrgent
+                      ? AppTheme.dangerRed
+                      : isSilent
+                      ? const Color(0xFF312E81)
+                      : AppTheme.surfaceBg,
+                  avatar: Icon(
+                    isUrgent
+                        ? Icons.notifications_active_rounded
                         : isSilent
-                        ? const Color(0xFF312E81)
-                        : AppTheme.surfaceBg,
-                    avatar: Icon(
-                      isUrgent
-                          ? Icons.notifications_active_rounded
-                          : isSilent
-                          ? Icons.nights_stay_rounded
-                          : Icons.chat_bubble_outline_rounded,
-                      size: 14,
+                        ? Icons.nights_stay_rounded
+                        : Icons.chat_bubble_outline_rounded,
+                    size: 14,
+                    color: (isUrgent || isSilent)
+                        ? Colors.white
+                        : AppTheme.slateBody,
+                  ),
+                  label: Text(
+                    isUrgent
+                        ? 'เรื่องด่วน'
+                        : isSilent
+                        ? 'ส่งแบบไร้เสียง'
+                        : 'โหมดส่ง: ปกติ',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
                       color: (isUrgent || isSilent)
                           ? Colors.white
-                          : AppTheme.slateBody,
+                          : AppTheme.slateDark,
                     ),
-                    label: Text(
-                      isUrgent
-                          ? 'เรื่องด่วน'
-                          : isSilent
-                          ? 'ส่งแบบไร้เสียง'
-                          : 'โหมดส่ง: ปกติ',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
-                        color: (isUrgent || isSilent)
-                            ? Colors.white
-                            : AppTheme.slateDark,
-                      ),
-                    ),
-                    onPressed: widget.onCyclePriority,
                   ),
-                  const SizedBox(width: 6),
-                  ActionChip(
-                    visualDensity: VisualDensity.compact,
-                    backgroundColor: widget.isConfidentialMode
-                        ? const Color(0xFF991B1B)
-                        : AppTheme.surfaceBg,
-                    avatar: Icon(
-                      widget.isConfidentialMode
-                          ? Icons.lock_rounded
-                          : Icons.lock_open_rounded,
-                      size: 14,
+                  onPressed: widget.onCyclePriority,
+                ),
+                ActionChip(
+                  visualDensity: VisualDensity.compact,
+                  backgroundColor: widget.isConfidentialMode
+                      ? const Color(0xFF991B1B)
+                      : AppTheme.surfaceBg,
+                  avatar: Icon(
+                    widget.isConfidentialMode
+                        ? Icons.lock_rounded
+                        : Icons.lock_open_rounded,
+                    size: 14,
+                    color: widget.isConfidentialMode
+                        ? Colors.white
+                        : AppTheme.slateBody,
+                  ),
+                  label: Text(
+                    'โหมดความลับ',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
                       color: widget.isConfidentialMode
                           ? Colors.white
-                          : AppTheme.slateBody,
+                          : AppTheme.slateDark,
                     ),
-                    label: Text(
-                      'โหมดความลับ',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
-                        color: widget.isConfidentialMode
-                            ? Colors.white
-                            : AppTheme.slateDark,
-                      ),
-                    ),
-                    onPressed: widget.onToggleConfidential,
                   ),
-                  const SizedBox(width: 6),
-                  ActionChip(
-                    visualDensity: VisualDensity.compact,
-                    backgroundColor: isDisappearOn
-                        ? const Color(0xFF92400E)
-                        : AppTheme.surfaceBg,
-                    avatar: Icon(
-                      isDisappearOn
-                          ? Icons.timer_rounded
-                          : Icons.timer_off_outlined,
-                      size: 14,
-                      color: isDisappearOn ? Colors.white : AppTheme.slateBody,
-                    ),
-                    label: Text(
-                      widget.disappearLabel,
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
-                        color: isDisappearOn ? Colors.white : AppTheme.slateDark,
-                      ),
-                    ),
-                    onPressed: widget.onCycleDisappear,
+                  onPressed: widget.onToggleConfidential,
+                ),
+                ActionChip(
+                  visualDensity: VisualDensity.compact,
+                  backgroundColor: isDisappearOn
+                      ? const Color(0xFF92400E)
+                      : AppTheme.surfaceBg,
+                  avatar: Icon(
+                    isDisappearOn
+                        ? Icons.timer_rounded
+                        : Icons.timer_off_outlined,
+                    size: 14,
+                    color: isDisappearOn ? Colors.white : AppTheme.slateBody,
                   ),
-                ],
-              ),
+                  label: Text(
+                    widget.disappearLabel,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: isDisappearOn ? Colors.white : AppTheme.slateDark,
+                    ),
+                  ),
+                  onPressed: widget.onCycleDisappear,
+                ),
+              ],
             ),
           if (_tab == 'contact' || _tab == 'ladder') const SizedBox(height: 8),
           if (_tab == 'contact' || _tab == 'ladder')

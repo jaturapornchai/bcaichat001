@@ -71,7 +71,7 @@
    - พัฒนาแบบ Forward-Only ภายใน repository นี้เท่านั้น ห้ามแก้ไขไฟล์นอก workspace
 4. **Baseline-First, Mobile-First, Zero-Popup & Contract Safety**:
    - ข้อความ ปุ่ม ช่องกรอก ไอคอน และ Badge ในแถวเดียวกันต้องอยู่ระนาบ Baseline / กึ่งกลางแนวนอนเดียวกัน (`items-center` / `CrossAxisAlignment.center`)
-   - ห้ามใช้ Popup ซ้อนหน้าจอ (`[role="dialog"]`, `.fixed.inset-0`, `showDialog`, `showModalBottomSheet`) ใช้ Inline Panels/Trays และแถบโฟลเดอร์เลื่อนแนวนอนบนมือถือ (`ทั้งหมด`, `ส่วนตัว`, `ครอบครัว`, `กลุ่ม`, `ปักหมุด`, `ยังไม่อ่าน`, `เก็บถาวร`)
+   - ห้ามใช้ Popup ซ้อนหน้าจอ (`[role="dialog"]`, `.fixed.inset-0`, `showDialog`, `showModalBottomSheet`) ใช้ Inline Panels/Trays และแถบโฟลเดอร์/แถบเมนูแบบตัดบรรทัด (wrap ไม่เลื่อนซ้าย-ขวา) (`ทั้งหมด`, `ส่วนตัว`, `ครอบครัว`, `กลุ่ม`, `ปักหมุด`, `ยังไม่อ่าน`, `เก็บถาวร`)
    - ฟิลด์ใหม่ใน Rust DTO ต้องระบุ `#[serde(default)]` เพื่อคงความเข้ากันได้ข้ามแพลตฟอร์ม
 5. **ลด Padding & Margin เพื่อแสดงข้อมูลได้เยอะ (Compact Spacing & High Information Density)**:
    - ลด `padding`, `margin`, และ `gap` รอบขอบจอ การ์ด แถวรายการแชท แถบหัวข้อ และฟอร์มทั้งบน Web (`web/`) และ Flutter (`frontend/`) ให้กระชับ อ่านง่าย กดแม่น และรักษาแนวระนาบ Baseline เดียวกัน

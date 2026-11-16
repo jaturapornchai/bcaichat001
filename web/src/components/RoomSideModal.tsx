@@ -327,8 +327,8 @@ export function RoomSideModal({
         </div>
       </div>
 
-      {/* Horizontally Scrollable Sub Tabs */}
-      <div className="flex shrink-0 items-center gap-1 overflow-x-auto whitespace-nowrap border-b border-[var(--bc-border)] bg-[var(--bc-panel)] px-2 py-1.5">
+      {/* Sub Tabs: ตัดบรรทัดเมื่อไม่พอ ไม่เลื่อนซ้ายขวา */}
+      <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-[var(--bc-border)] bg-[var(--bc-panel)] px-2 py-1.5">
         {tabs.map((t) => {
           const active = t.id === openTab;
           return (

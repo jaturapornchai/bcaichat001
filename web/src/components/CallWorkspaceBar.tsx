@@ -174,7 +174,7 @@ export function CallWorkspaceBar({
   const [autoArrange, setAutoArrange] = useState(true);
   const [speakerOrder, setSpeakerOrder] = useState<string[]>([]);
   const [mosaicEl, setMosaicEl] = useState<HTMLDivElement | null>(null);
-  const [mosaicWidth, setMosaicWidth] = useState(0);
+  const [mosaicSize, setMosaicSize] = useState({ w: 0, h: 0 });
   const lastPromoteAtRef = useRef(0);
 
   // วิดีโอคอลกลุ่ม: คนที่กำลังพูด (ไม่นับตัวเอง) เลื่อนขึ้นเป็นไทล์แรก เว้นช่วง 1.5 วิ กันสลับถี่
@@ -196,7 +196,11 @@ export function CallWorkspaceBar({
 
   useEffect(() => {
     if (!mosaicEl) return;
-    const measure = () => setMosaicWidth(Math.max(0, mosaicEl.clientWidth - 16));
+    const measure = () => {
+      const w = Math.max(0, mosaicEl.clientWidth - 16);
+      const h = Math.max(0, mosaicEl.clientHeight - 16);
+      setMosaicSize((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(mosaicEl);
@@ -661,7 +665,7 @@ export function CallWorkspaceBar({
   };
 
   const mosaicOrder = promoteSpeakers(speakerOrder, tiles.map((t) => t.identity), []);
-  const mosaic = computeMosaicLayout(tiles.length, mosaicWidth);
+  const mosaicRects = computeMosaicLayout(tiles.length, mosaicSize.w, mosaicSize.h);
   const mainTile = tiles.find((t) => !t.isLocal) ?? tiles[0] ?? null;
   const pipTile =
     mainTile && tiles.length === 2
@@ -999,12 +1003,12 @@ export function CallWorkspaceBar({
                   ref={setMosaicEl}
                   data-testid="call-mosaic"
                   data-auto-arrange={autoArrange ? "true" : "false"}
-                  className="h-full overflow-y-auto p-2"
+                  className="h-full overflow-hidden p-2"
                 >
-                  <div className="relative" style={{ height: mosaic.height }}>
+                  <div className="relative h-full">
                     {tiles.map((tile) => {
                       const rank = mosaicOrder.indexOf(tile.identity);
-                      const rect = mosaic.rects[rank];
+                      const rect = mosaicRects[rank];
                       if (!rect) return null;
                       return (
                         <button

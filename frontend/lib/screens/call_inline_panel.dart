@@ -1302,7 +1302,8 @@ class CallFullScreenStage extends StatelessWidget {
     );
   }
 
-  /// วิดีโอคอลกลุ่ม: จัดไทล์แบบ masonry ตามลำดับคนพูด ย้ายตำแหน่ง/ขนาดแบบ animation
+  /// วิดีโอคอลกลุ่ม: จัดไทล์ให้เห็นครบทุกคนในกรอบเดียวตามลำดับคนพูด
+  /// ย้ายตำแหน่ง/ย่อ-ขยายแบบ animation
   Widget _buildMosaic(
     CallInlineManager mgr,
     List<_ParticipantVideoTile> videoTiles,
@@ -1310,25 +1311,24 @@ class CallFullScreenStage extends StatelessWidget {
     final order = mgr.tileOrder([for (final t in videoTiles) t.identity]);
     return LayoutBuilder(
       builder: (context, box) {
-        final layout = computeCallMosaicLayout(
+        final rects = computeCallMosaicLayout(
           videoTiles.length,
           box.maxWidth - 16,
+          box.maxHeight - 16,
         );
-        return SingleChildScrollView(
+        return Padding(
           key: const Key('call-mosaic'),
           padding: const EdgeInsets.all(8),
-          child: SizedBox(
-            height: layout.height,
-            child: Stack(
-              children: [
-                for (final tile in videoTiles)
+          child: Stack(
+            children: [
+              for (final tile in videoTiles)
+                if (order.indexOf(tile.identity) < rects.length)
                   _buildMosaicTile(
                     mgr,
                     tile,
-                    layout.rects[order.indexOf(tile.identity)],
+                    rects[order.indexOf(tile.identity)],
                   ),
-              ],
-            ),
+            ],
           ),
         );
       },

@@ -2559,7 +2559,7 @@ export function ChatRoomView({
               </div>
 
               {aiModalMode === "assist" && (
-                <div className="flex items-center gap-1 overflow-x-auto whitespace-nowrap pb-0">
+                <div className="flex flex-wrap items-center gap-1">
                   {(
                     [
                       ["suggest_reply", "คิดคำตอบ 3 แบบ"],

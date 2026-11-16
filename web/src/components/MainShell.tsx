@@ -2406,7 +2406,7 @@ export function MainShell({
                   const moreExpanded = showMoreFolders || isSecondaryFolder;
                   return (
                     <div data-testid="chat-folder-chips" className="space-y-1">
-                      <div className="flex items-center gap-1 overflow-x-auto whitespace-nowrap pb-0">
+                      <div className="flex flex-wrap items-center gap-1">
                         {(
                           [
                             ["all", "ทั้งหมด"],
@@ -2453,7 +2453,7 @@ export function MainShell({
                       </div>
 
                       {moreExpanded && (
-                        <div className="flex items-center gap-1 overflow-x-auto whitespace-nowrap pb-0">
+                        <div className="flex flex-wrap items-center gap-1">
                           {(
                             [
                               ["personal", "ส่วนตัว"],

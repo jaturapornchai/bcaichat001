@@ -745,7 +745,7 @@ export function OaConsoleWorkspace({
               </button>
             </div>
 
-            <div className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5">
+            <div className="mt-2 flex flex-wrap gap-1.5">
               {OA_CATEGORIES.map((cat) => (
                 <button
                   key={cat}
@@ -1068,7 +1068,7 @@ export function OaConsoleWorkspace({
               </div>
 
               {/* Sub-tab Pills (filtered by myRole) */}
-              <div className="flex items-center gap-1.5 overflow-x-auto whitespace-nowrap rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-2 shadow-2xs">
+              <div className="flex flex-wrap items-center gap-1.5 rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)] p-2 shadow-2xs">
                 {visibleSubTabs.map((t) => {
                   const Icon = t.icon;
                   return (

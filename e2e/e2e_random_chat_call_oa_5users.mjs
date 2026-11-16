@@ -880,6 +880,31 @@ async function assertConnectedCallTiles(tabsToCheck, minTiles, requireVideo) {
         { timeout: 15000 }
       );
     }
+    if (minTiles >= 3) {
+      // สายกลุ่ม: ทุกไทล์ต้องอยู่ในกรอบครบ ไม่ตกขอบและไม่ต้องเลื่อน
+      const clipped = await t.page.evaluate(() => {
+        const box = document.querySelector('[data-testid="call-mosaic"]');
+        if (!box) return ["no call-mosaic"];
+        const b = box.getBoundingClientRect();
+        return [...box.querySelectorAll('[data-testid="call-participant-tile"]')]
+          .map((el) => el.getBoundingClientRect())
+          .filter(
+            (r) =>
+              r.width < 40 ||
+              r.height < 40 ||
+              r.left < b.left - 1 ||
+              r.top < b.top - 1 ||
+              r.right > b.right + 1 ||
+              r.bottom > b.bottom + 1
+          )
+          .map((r) => `${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}x${Math.round(r.height)}`);
+      });
+      assert(clipped.length === 0, `${t.user.name} group call tiles outside the frame: ${clipped.join(" | ")}`);
+      const scrollable = await t.page
+        .locator('[data-testid="call-mosaic"]')
+        .evaluate((el) => el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1);
+      assert(!scrollable, `${t.user.name} group call frame must not scroll`);
+    }
   }
 }
 

@@ -875,18 +875,15 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
           ],
         ),
         const SizedBox(height: 6),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _modeChip('discover', 'ค้นพบ / ติดตาม (${_discoverOas.length})'),
-              const SizedBox(width: 6),
-              _modeChip('manage', 'ร้านของฉัน (${_myOas.length})'),
-              const SizedBox(width: 6),
-              _modeChip('create', '+ สร้างกิจการ / ร้านค้าใหม่'),
-            ],
-          ),
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 6,
+          runSpacing: 0,
+          children: [
+            _modeChip('discover', 'ค้นพบ / ติดตาม (${_discoverOas.length})'),
+            _modeChip('manage', 'ร้านของฉัน (${_myOas.length})'),
+            _modeChip('create', '+ สร้างกิจการ / ร้านค้าใหม่'),
+          ],
         ),
       ],
     );
@@ -1372,74 +1369,70 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // Multi-Shop Switcher with Role Badges + Create Another Shop button
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              for (final item in _myOas) ...[
-                Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: ChoiceChip(
-                    label: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Text(
-                          item.displayName,
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                        const SizedBox(width: 4),
-                        PillBadge(
-                          text: _roleLabel(item.effectiveRole(myId)),
-                          backgroundColor: _roleColor(
-                            item.effectiveRole(myId),
-                          ).withValues(alpha: 0.14),
-                          textColor: _roleColor(item.effectiveRole(myId)),
-                        ),
-                      ],
-                    ),
-                    selected: item.id == oa.id,
-                    visualDensity: VisualDensity.compact,
-                    onSelected: (_) => setState(() => _selectOa(item)),
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          runSpacing: 0,
+          children: [
+            for (final item in _myOas) ...[
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: ChoiceChip(
+                  label: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(
+                        item.displayName,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      const SizedBox(width: 4),
+                      PillBadge(
+                        text: _roleLabel(item.effectiveRole(myId)),
+                        backgroundColor: _roleColor(
+                          item.effectiveRole(myId),
+                        ).withValues(alpha: 0.14),
+                        textColor: _roleColor(item.effectiveRole(myId)),
+                      ),
+                    ],
                   ),
+                  selected: item.id == oa.id,
+                  visualDensity: VisualDensity.compact,
+                  onSelected: (_) => setState(() => _selectOa(item)),
                 ),
-              ],
-              ActionChip(
-                avatar: const Icon(Icons.add_business_outlined, size: 15),
-                label: const Text(
-                  'สร้างร้านใหม่',
-                  style: TextStyle(fontSize: 11.5),
-                ),
-                visualDensity: VisualDensity.compact,
-                onPressed: () => setState(() => _topMode = 'create'),
               ),
             ],
-          ),
+            ActionChip(
+              avatar: const Icon(Icons.add_business_outlined, size: 15),
+              label: const Text(
+                'สร้างร้านใหม่',
+                style: TextStyle(fontSize: 11.5),
+              ),
+              visualDensity: VisualDensity.compact,
+              onPressed: () => setState(() => _topMode = 'create'),
+            ),
+          ],
         ),
         const SizedBox(height: 6),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              if (oa.canHandleChats(myId))
-                _manageTabChip('chats', 'แชทลูกค้า'),
-              _manageTabChip('overview', 'ภาพรวม'),
-              _manageTabChip('settings', 'ตั้งค่า & ทีม'),
-              if (oa.canEditRichMenu(myId))
-                _manageTabChip(
-                  'rich_menu',
-                  'เมนูลัด (${_richMenuDraft.length}/6)',
-                ),
-              if (oa.canDoMarketing(myId))
-                _manageTabChip('auto_reply', 'ตอบอัตโนมัติ'),
-              if (oa.canDoMarketing(myId) || oa.canHandleChats(myId))
-                _manageTabChip('coupons', 'คูปอง'),
-              if (oa.canDoMarketing(myId))
-                _manageTabChip('broadcasts', 'ส่งข่าว'),
-            ],
-          ),
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          runSpacing: 0,
+          children: [
+            if (oa.canHandleChats(myId))
+              _manageTabChip('chats', 'แชทลูกค้า'),
+            _manageTabChip('overview', 'ภาพรวม'),
+            _manageTabChip('settings', 'ตั้งค่า & ทีม'),
+            if (oa.canEditRichMenu(myId))
+              _manageTabChip(
+                'rich_menu',
+                'เมนูลัด (${_richMenuDraft.length}/6)',
+              ),
+            if (oa.canDoMarketing(myId))
+              _manageTabChip('auto_reply', 'ตอบอัตโนมัติ'),
+            if (oa.canDoMarketing(myId) || oa.canHandleChats(myId))
+              _manageTabChip('coupons', 'คูปอง'),
+            if (oa.canDoMarketing(myId))
+              _manageTabChip('broadcasts', 'ส่งข่าว'),
+          ],
         ),
         const SizedBox(height: 4),
         Row(

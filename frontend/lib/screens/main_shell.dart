@@ -2401,23 +2401,19 @@ class _MainShellState extends State<MainShell> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SizedBox(
-                height: 34,
+              ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 34),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Expanded(
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            for (final f in primaryFolders) ...[
-                              _buildChatFolderChip(f.$1, f.$2),
-                              const SizedBox(width: 6),
-                            ],
-                          ],
-                        ),
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          for (final f in primaryFolders)
+                            _buildChatFolderChip(f.$1, f.$2),
+                        ],
                       ),
                     ),
                     const SizedBox(width: 4),
