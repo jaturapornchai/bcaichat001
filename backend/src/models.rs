@@ -1279,6 +1279,11 @@ pub struct OaBroadcastDoc {
     pub oa_id: String,
     #[serde(default)]
     pub target_tag: Option<String>,
+    #[serde(default)]
+    pub target_tags: Vec<String>,
+    /// User ids actually delivered; powers the per-customer broadcast history.
+    #[serde(default)]
+    pub recipient_ids: Vec<String>,
     /// "text" | "rich_card" | "coupon"
     pub msg_type: String,
     pub content: String,

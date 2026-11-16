@@ -32,6 +32,8 @@ const WEB_PORT = Number(process.env.E2E_WEB_PORT || 3098);
 const TEST_DB = process.env.E2E_MONGODB_DB || "bcaichat_e2e";
 const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
 const WEB_URL = `http://127.0.0.1:${WEB_PORT}`;
+// ไซต์ร้านค้า (BC Ai Chat OA) = host ขึ้นต้น oa. ; *.localhost ชี้ 127.0.0.1 ใน Chromium อัตโนมัติ
+const OA_URL = `http://oa.localhost:${WEB_PORT}`;
 
 const MOCK_OTP_CODE = "654321";
 const MOCK_GOOGLE_CLIENT_ID = "e2e-mock-google-client.apps.googleusercontent.com";
@@ -301,6 +303,19 @@ function assertCleanUiText(text, label) {
   }
 }
 
+// Node ไม่แปลง *.localhost เป็น loopback -> ต่อ 127.0.0.1 แล้วส่ง Host ของไซต์ร้านค้าเอง
+function fetchShopText(urlPath) {
+  return new Promise((resolve, reject) => {
+    http
+      .get({ host: "127.0.0.1", port: WEB_PORT, path: urlPath, headers: { host: `oa.localhost:${WEB_PORT}` } }, (res) => {
+        let body = "";
+        res.on("data", (c) => (body += c));
+        res.on("end", () => resolve(body));
+      })
+      .on("error", reject);
+  });
+}
+
 async function assertZeroPopupsAndOverlays(page, label) {
   const dialogCount = await page.locator('[role="dialog"]').count();
   assert.equal(dialogCount, 0, `[role="dialog"] must be 0 on ${label}`);
@@ -313,12 +328,12 @@ async function createTrackedContext(browser, label, viewport = { width: 1280, he
 
   // Proxy /api/* and /miniapp/* from Next.js (:3098) to isolated backend (:8098)
   // because prebuilt .next/routes-manifest.json caches Next rewrites at build time.
-  const apiRoutePattern = new RegExp(`^http://(?:127\\.0\\.0\\.1|localhost):${WEB_PORT}/(?:api|miniapp)/`);
+  const apiRoutePattern = new RegExp(`^http://(?:127\\.0\\.0\\.1|localhost|oa\\.localhost):${WEB_PORT}/(?:api|miniapp)/`);
   await ctx.route(apiRoutePattern, async (route) => {
     try {
       const reqUrl = route.request().url();
       const targetUrl = reqUrl.replace(
-        new RegExp(`^http://(?:127\\.0\\.0\\.1|localhost):${WEB_PORT}/`),
+        new RegExp(`^http://(?:127\\.0\\.0\\.1|localhost|oa\\.localhost):${WEB_PORT}/`),
         `${BACKEND_URL}/`
       );
       const response = await route.fetch({ url: targetUrl });
@@ -430,7 +445,13 @@ async function main() {
     ]);
     assert.ok(robotsRes.includes("Googlebot") && robotsRes.includes("GPTBot"), "robots.txt AI/SEO");
     assert.ok(llmsRes.includes("BC Ai Chat"), "llms.txt present");
-    assert.ok(sitemapRes.includes("/oa") && !sitemapRes.includes("multi-demo"), "sitemap has /oa and no /multi-demo");
+    assert.ok(!sitemapRes.includes("/oa") && !sitemapRes.includes("multi-demo"), "chat sitemap has no /oa and no /multi-demo");
+    const [oaRobots, oaLlms] = await Promise.all([
+      fetchShopText("/robots.txt"),
+      fetchShopText("/llms.txt"),
+    ]);
+    assert.ok(oaRobots.includes("GPTBot") && oaRobots.includes("ClaudeBot"), "shop robots.txt allows AI crawlers");
+    assert.ok(oaLlms.includes("BC Ai Chat OA"), "shop llms.txt names BC Ai Chat OA");
     assert.equal(multiDemoRes.status, 404, "/multi-demo must return 404");
 
     browser = await launchBrowser();
@@ -821,61 +842,94 @@ async function main() {
     );
     console.log("✅ Wave 2 (#52): QR Reset, Privacy Toggle, Timed Mute & Silent Block/Unblock UI passed");
 
-    // 9. /oa Multi-Shop Creation (2 shops by regular user U1), Switcher, Team Agent, Auto-Reply & Coupon
-    await u1.page.goto(`${WEB_URL}/oa`, { waitUntil: "domcontentloaded" });
-    await u1.page.getByTestId("oa-mode-console").click();
+    // 9. ไซต์ร้านค้า oa.localhost: แยก origin = แยก sessionStorage -> ต้องล็อกอินใหม่ (ใช้ token เดิมของ U1/U2 ใส่ใน origin ร้านค้า)
+    // 9.0 ไซต์แชท: ไม่มี console/สร้างร้าน และ /oa เด้งไปไซต์ร้านค้า
+    assert.equal(await u1.page.getByTestId("nav-tab-oa").count(), 1, "chat site keeps shop discovery tab");
+    await u1.page.getByTestId("nav-tab-oa").click();
+    await u1.page.getByTestId("oa-discover-search").waitFor({ state: "visible", timeout: 8000 });
+    assert.equal(await u1.page.getByTestId("toggle-create-oa-btn").count(), 0, "chat site has no create-shop UI");
+    assert.equal(await u1.page.getByTestId("oa-subtab-inbox").count(), 0, "chat site has no shop console");
+    assert.equal(await u1.page.getByTestId("oa-mode-console").count(), 0, "chat site has no console toggle");
+    await u1.page.getByTestId("nav-tab-chats").click();
+    const redirRes = await fetch(`http://localhost:${WEB_PORT}/oa`, { redirect: "manual" });
+    assert.equal(redirRes.status, 307, "/oa on chat host redirects");
+    assert.ok((redirRes.headers.get("location") || "").startsWith(`${OA_URL}/`), "/oa redirects to shop site root");
 
-    await u1.page.getByTestId("toggle-create-oa-btn").click();
-    await u1.page.getByTestId("create-oa-handle").fill("pw_cafe");
-    await u1.page.getByTestId("create-oa-name").fill("บ้านเชียงคาเฟ่ PW");
-    await u1.page.getByTestId("submit-create-oa-btn").click();
-    await u1.page.getByTestId("oa-shop-switch-pw_cafe").waitFor({ state: "visible", timeout: 10000 });
+    // 9.1 เปิดไซต์ร้านค้าด้วย session ของ U1
+    const u1Session = await u1.page.evaluate(() => ({
+      token: sessionStorage.getItem("bcaichat_tab_token"),
+      user: sessionStorage.getItem("bcaichat_tab_user"),
+    }));
+    const u2Session = await u2.page.evaluate(() => ({
+      token: sessionStorage.getItem("bcaichat_tab_token"),
+      user: sessionStorage.getItem("bcaichat_tab_user"),
+    }));
+    const openShopSite = async (ctx, sess) => {
+      const p = await ctx.newPage();
+      await p.goto(OA_URL, { waitUntil: "domcontentloaded" });
+      await p.evaluate(({ token, user }) => {
+        sessionStorage.setItem("bcaichat_tab_token", token);
+        sessionStorage.setItem("bcaichat_tab_user", user);
+      }, sess);
+      await p.goto(OA_URL, { waitUntil: "domcontentloaded" });
+      return p;
+    };
+    const u1Shop = await openShopSite(u1.ctx, u1Session);
+    await u1Shop.getByTestId("toggle-create-oa-btn").waitFor({ state: "visible", timeout: 15000 });
+    assert.equal(await u1Shop.getByTestId("nav-tab-home").count(), 0, "shop site has no friends tab");
+    assert.equal(await u1Shop.getByTestId("nav-tab-chats").count(), 0, "shop site has no chats tab");
+    assert.equal(await u1Shop.getByTestId("nav-tab-notes").count(), 0, "shop site has no notebook tab");
+    assert.equal(await u1Shop.locator("h1").first().innerText(), "BC Ai Chat OA", "shop site h1");
+    // ผู้ใช้ยังไม่มีร้าน ฟอร์มเปิดร้านเปิดเองครั้งแรก -> ถ้ายังไม่เห็นช่องกรอกค่อยกดปุ่ม
+    await u1Shop.getByTestId("create-oa-handle").waitFor({ state: "visible", timeout: 10000 });
+    await u1Shop.getByTestId("create-oa-handle").fill("pw_cafe");
+    await u1Shop.getByTestId("create-oa-name").fill("บ้านเชียงคาเฟ่ PW");
+    await u1Shop.getByTestId("submit-create-oa-btn").click();
+    await u1Shop.getByTestId("oa-shop-switch-pw_cafe").waitFor({ state: "visible", timeout: 10000 });
 
-    await u1.page.getByTestId("toggle-create-oa-btn").click();
-    await u1.page.getByTestId("create-oa-handle").fill("pw_bakery");
-    await u1.page.getByTestId("create-oa-name").fill("ขนมไทย PW");
-    await u1.page.getByTestId("submit-create-oa-btn").click();
-    await u1.page.getByTestId("oa-shop-switch-pw_bakery").waitFor({ state: "visible", timeout: 10000 });
+    await u1Shop.getByTestId("toggle-create-oa-btn").click();
+    await u1Shop.getByTestId("create-oa-handle").fill("pw_bakery");
+    await u1Shop.getByTestId("create-oa-name").fill("ขนมไทย PW");
+    await u1Shop.getByTestId("submit-create-oa-btn").click();
+    await u1Shop.getByTestId("oa-shop-switch-pw_bakery").waitFor({ state: "visible", timeout: 10000 });
 
     // Switch back from Shop 2 to Shop 1 in Multi-Shop Switcher
-    await u1.page.getByTestId("oa-shop-switch-pw_cafe").click();
-    await u1.page.locator("text=บ้านเชียงคาเฟ่ PW").first().waitFor({ state: "visible", timeout: 5000 });
-    const oaConsoleText = await u1.page.locator("body").innerText();
+    await u1Shop.getByTestId("oa-shop-switch-pw_cafe").click();
+    await u1Shop.locator("text=บ้านเชียงคาเฟ่ PW").first().waitFor({ state: "visible", timeout: 5000 });
+    const oaConsoleText = await u1Shop.locator("body").innerText();
     assert.ok(oaConsoleText.includes("ร้านค้า"), "OaConsoleWorkspace must show ร้านค้า");
     assertCleanUiText(oaConsoleText, "oa_console_workspace");
-    await assertZeroPopupsAndOverlays(u1.page, "oa_console_switcher");
+    await assertZeroPopupsAndOverlays(u1Shop, "oa_console_switcher");
 
     // Add U2 as Agent in Team tab
-    await u1.page.getByTestId("oa-subtab-team").click();
-    await u1.page.getByTestId("oa-team-query-input").fill("0822222222");
-    await u1.page.getByTestId("oa-team-role-select").selectOption("agent");
-    await u1.page.getByTestId("oa-team-add-btn").click();
-    await u1.page.getByTestId(`oa-staff-row-${u2UserId}`).waitFor({ state: "visible", timeout: 10000 });
+    await u1Shop.getByTestId("oa-subtab-team").click();
+    await u1Shop.getByTestId("oa-team-query-input").fill("0822222222");
+    await u1Shop.getByTestId("oa-team-role-select").selectOption("agent");
+    await u1Shop.getByTestId("oa-team-add-btn").click();
+    await u1Shop.getByTestId(`oa-staff-row-${u2UserId}`).waitFor({ state: "visible", timeout: 10000 });
 
     // Configure Auto-Reply + Coupon on Shop 1
-    await u1.page.getByTestId("oa-subtab-auto_reply").click();
-    await u1.page.getByTestId("oa-ar-keyword").fill("โปรโมชั่น");
-    await u1.page.getByTestId("oa-ar-reply").fill("โปรพิเศษบ้านเชียง PW ลดทันที 50 บาทค่ะ!");
-    await u1.page.getByTestId("oa-ar-submit").click();
-    await u1.page.locator("text=โปรพิเศษบ้านเชียง PW").first().waitFor({ state: "visible", timeout: 8000 });
+    await u1Shop.getByTestId("oa-subtab-auto_reply").click();
+    await u1Shop.getByTestId("oa-ar-keyword").fill("โปรโมชั่น");
+    await u1Shop.getByTestId("oa-ar-reply").fill("โปรพิเศษบ้านเชียง PW ลดทันที 50 บาทค่ะ!");
+    await u1Shop.getByTestId("oa-ar-submit").click();
+    await u1Shop.locator("text=โปรพิเศษบ้านเชียง PW").first().waitFor({ state: "visible", timeout: 8000 });
 
-    await u1.page.getByTestId("oa-subtab-coupons").click();
-    await u1.page.getByTestId("oa-coupon-code").fill("PW50");
-    await u1.page.getByTestId("oa-coupon-title").fill("ส่วนลดพิเศษ PW50");
-    await u1.page.getByTestId("oa-coupon-submit").click();
-    await u1.page.locator("text=PW50").first().waitFor({ state: "visible", timeout: 8000 });
+    await u1Shop.getByTestId("oa-subtab-coupons").click();
+    await u1Shop.getByTestId("oa-coupon-code").fill("PW50");
+    await u1Shop.getByTestId("oa-coupon-title").fill("ส่วนลดพิเศษ PW50");
+    await u1Shop.getByTestId("oa-coupon-submit").click();
+    await u1Shop.locator("text=PW50").first().waitFor({ state: "visible", timeout: 8000 });
 
     // Agent U2 opens /oa Console -> sees Shop 1 & Inbox tab, does NOT see Broadcast or Settings tabs
-    await u2.page.goto(`${WEB_URL}/oa`, { waitUntil: "domcontentloaded" });
-    await u2.page.getByTestId("oa-mode-console").click();
-    await u2.page.getByTestId("oa-shop-switch-pw_cafe").waitFor({ state: "visible", timeout: 10000 });
-    await u2.page.getByTestId("oa-subtab-inbox").waitFor({ state: "visible", timeout: 5000 });
-    assert.equal(await u2.page.getByTestId("oa-subtab-broadcast").count(), 0, "Agent must not see Broadcast tab");
-    assert.equal(await u2.page.getByTestId("oa-subtab-settings").count(), 0, "Agent must not see Settings tab");
+    const u2Shop = await openShopSite(u2.ctx, u2Session);
+    await u2Shop.getByTestId("oa-shop-switch-pw_cafe").waitFor({ state: "visible", timeout: 10000 });
+    await u2Shop.getByTestId("oa-subtab-inbox").waitFor({ state: "visible", timeout: 5000 });
+    assert.equal(await u2Shop.getByTestId("oa-subtab-broadcast").count(), 0, "Agent must not see Broadcast tab");
+    assert.equal(await u2Shop.getByTestId("oa-subtab-settings").count(), 0, "Agent must not see Settings tab");
 
     // Customer U4 discovers & follows Shop 1 -> Rich Menu -> Auto-Reply -> Claim Coupon UI
-    await u4.page.goto(`${WEB_URL}/oa`, { waitUntil: "domcontentloaded" });
-    await u4.page.getByTestId("oa-mode-discover").click();
+    await u4.page.getByTestId("nav-tab-oa").click();
     await u4.page.getByTestId("oa-discover-search").fill("pw_cafe");
     await u4.page.getByTestId("oa-card-pw_cafe").waitFor({ state: "visible", timeout: 10000 });
     await u4.page.getByTestId("oa-follow-btn-pw_cafe").click();
@@ -899,7 +953,28 @@ async function main() {
     assert.ok(oaRoomText.includes("ร้านค้า"), "ChatRoomView OA room must show ร้านค้า");
     assertCleanUiText(oaRoomText, "oa_chat_room_view");
     await assertZeroPopupsAndOverlays(u4.page, "oa_customer_room_and_coupon_tray");
-    await shot(u1.page, "web-oa-console");
+    await shot(u1Shop, "web-oa-console");
+    // 9.2 CRM ลูกค้า (ไซต์ร้านค้า): แสดงผู้ติดตาม U4, ใส่แท็ก, กรองด้วยแท็ก, เปิดรายละเอียด, ส่งข่าวหลายแท็กเห็นจำนวนผู้รับ
+    await u1Shop.getByTestId("oa-subtab-customers").click();
+    await u1Shop.getByTestId("oa-crm").waitFor({ state: "visible", timeout: 10000 });
+    const u4Row = u1Shop.getByTestId(`oa-crm-row-${u4Auth.user.id}`);
+    await u4Row.waitFor({ state: "visible", timeout: 10000 });
+    await u4Row.click();
+    await u1Shop.getByTestId("oa-crm-detail").waitFor({ state: "visible", timeout: 8000 });
+    await u1Shop.getByTestId("oa-crm-tags-input").fill("vip, pwtag2");
+    await u1Shop.getByTestId("oa-crm-save").click();
+    await u1Shop.getByTestId("oa-crm-tag-vip").waitFor({ state: "visible", timeout: 10000 });
+    await u1Shop.getByTestId("oa-crm-tag-vip").click();
+    await u1Shop.getByTestId(`oa-crm-row-${u4Auth.user.id}`).waitFor({ state: "visible", timeout: 8000 });
+    assert.match(await u1Shop.getByTestId("oa-crm-count").innerText(), /แสดง\s*\d+\s*จาก\s*\d+/, "customers count shows แสดง x จาก y");
+    await assertZeroPopupsAndOverlays(u1Shop, "oa_crm_customers");
+
+    await u1Shop.getByTestId("oa-subtab-broadcast").click();
+    await u1Shop.getByTestId("oa-broadcast-tag-vip").click();
+    await u1Shop.getByTestId("oa-broadcast-tag-pwtag2").click();
+    await u1Shop.locator('[data-testid="oa-broadcast-recipient-count"]:has-text("จะส่งถึง")').waitFor({ state: "visible", timeout: 8000 });
+    assert.match(await u1Shop.getByTestId("oa-broadcast-recipient-count").innerText(), /จะส่งถึง\s*\d+\s*คน/, "multi-tag broadcast shows recipient count");
+    await assertZeroPopupsAndOverlays(u1Shop, "oa_broadcast_multi_tag");
     console.log("✅ /oa Multi-Shop Switcher + Team Agent + Follow + Rich Menu + Coupon UI passed");
 
     // 10. Wave 3 (#56) Setup Recovery PIN (U1) & Mobile Viewport (390x844) Audit

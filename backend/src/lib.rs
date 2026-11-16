@@ -66,9 +66,10 @@ use crate::{
         oa_routes::{
             add_oa_admin_handler, claim_oa_coupon_handler, create_oa_auto_reply_handler,
             create_oa_coupon_handler, create_oa_handler, delete_oa_auto_reply_handler,
-            discover_oas_handler, follow_oa_handler, get_oa_chat_messages_handler, get_oa_handler,
+            discover_oas_handler, follow_oa_handler, get_oa_chat_messages_handler, get_oa_customer_handler, get_oa_handler,
             list_my_oas_handler, list_oa_admins_handler, list_oa_auto_replies_handler,
             list_oa_broadcasts_handler, list_oa_chats_handler, list_oa_coupons_handler,
+            list_oa_customer_tags_handler, list_oa_customers_handler,
             oa_overview_handler, redeem_oa_coupon_handler, remove_oa_admin_handler,
             send_oa_broadcast_handler, send_oa_chat_message_handler, unfollow_oa_handler,
             update_oa_admin_role_handler, update_oa_follower_crm_handler, update_oa_handler,
@@ -351,6 +352,9 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/oa/:id/unfollow", post(unfollow_oa_handler))
         .route("/api/oa/:id/overview", get(oa_overview_handler))
         .route("/api/oa/:id/chats", get(list_oa_chats_handler))
+        .route("/api/oa/:id/customers", get(list_oa_customers_handler))
+        .route("/api/oa/:id/customers/:uid", get(get_oa_customer_handler))
+        .route("/api/oa/:id/customer-tags", get(list_oa_customer_tags_handler))
         .route(
             "/api/oa/:id/chats/:conv_id/messages",
             get(get_oa_chat_messages_handler).post(send_oa_chat_message_handler),

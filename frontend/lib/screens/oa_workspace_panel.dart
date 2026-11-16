@@ -1,24 +1,31 @@
 import 'package:flutter/material.dart';
 
+import '../client_app.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import 'oa_customers_section.dart';
 
 /// Full inline Shop Workspace (Zero-Popup, Mobile-First, Baseline-First).
 /// Supports: Multi-Shop Self-Service (any user can create unlimited shops),
 /// Discover/Follow shops + Claim Coupons + Multi-Role Team Management
 /// (owner/admin/agent/marketer), Overview, 1-1 Inbox + Customer Tags/Notes,
 /// Bottom Quick Menu <=6, Auto-Reply rules, Coupons create/redeem, and News Broadcasts.
+///
+/// [shopApp] = true (แอป BCAiChatOA): เฉพาะจัดการ/สร้างร้าน; false (แอป BC Ai Chat):
+/// เฉพาะค้นหา/ติดตามร้านและรับคูปอง — ไม่มีส่วนจัดการร้านในแอปแชท
 class OaWorkspacePanel extends StatefulWidget {
   final AppUser currentUser;
   final ValueChanged<String>? onOpenConversationId;
   final VoidCallback? onClose;
+  final bool shopApp;
 
   const OaWorkspacePanel({
     super.key,
     required this.currentUser,
     this.onOpenConversationId,
     this.onClose,
+    this.shopApp = kIsShopApp,
   });
 
   @override
@@ -26,9 +33,10 @@ class OaWorkspacePanel extends StatefulWidget {
 }
 
 class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
-  String _topMode = 'discover'; // discover | manage | create
+  // แอปแชท: discover เท่านั้น · แอปร้านค้า: manage | create
+  late String _topMode = widget.shopApp ? 'manage' : 'discover';
   String _manageTab =
-      'chats'; // chats | overview | settings | rich_menu | auto_reply | coupons | broadcasts
+      'chats'; // chats | customers | overview | settings | rich_menu | auto_reply | coupons | broadcasts
 
   bool _loading = false;
   bool _showCreateAdvanced = false;
@@ -109,7 +117,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
   final TextEditingController _cpMaxCtrl = TextEditingController(text: '100');
 
   // Broadcast controllers
-  final TextEditingController _bcTagCtrl = TextEditingController();
+  List<String> _bcTags = const [];
   final TextEditingController _bcContentCtrl = TextEditingController();
   String? _bcCouponId;
 
@@ -159,7 +167,6 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
     _cpDiscountCtrl.dispose();
     _cpDescCtrl.dispose();
     _cpMaxCtrl.dispose();
-    _bcTagCtrl.dispose();
     _bcContentCtrl.dispose();
     super.dispose();
   }
@@ -201,6 +208,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
       case 'settings':
         return oa.canManage(uid);
       case 'chats':
+      case 'customers':
         return oa.canHandleChats(uid);
       case 'rich_menu':
         return oa.canEditRichMenu(uid);
@@ -220,17 +228,21 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
       _errorMsg = null;
     });
     try {
-      final results = await Future.wait([
-        ApiService.instance.discoverOas(q: _discoverSearchCtrl.text.trim()),
-        ApiService.instance.fetchMyOas(),
-      ]);
+      // แต่ละแอปโหลดเฉพาะของตัวเอง: แอปแชท = ร้านที่ค้นพบ, แอปร้านค้า = ร้านของฉัน
+      final disc = widget.shopApp
+          ? const <OaAccountDto>[]
+          : await ApiService.instance.discoverOas(
+              q: _discoverSearchCtrl.text.trim(),
+            );
+      final mine = widget.shopApp
+          ? await ApiService.instance.fetchMyOas()
+          : const <OaAccountDto>[];
       if (!mounted) return;
-      final disc = results[0];
-      final mine = results[1];
       setState(() {
         _discoverOas = disc;
         _myOas = mine;
         _loading = false;
+        if (widget.shopApp && mine.isEmpty) _topMode = 'create';
       });
       if (_selectedOa != null) {
         final refreshed = mine.where((o) => o.id == _selectedOa!.id).firstOrNull;
@@ -384,6 +396,12 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
       if (!mounted) return;
       setState(() => _errorMsg = e.toString().replaceFirst('Exception: ', ''));
     }
+  }
+
+  Future<void> _openCustomerChatFromCrm(OaCustomerChatDto chat) async {
+    setState(() => _manageTab = 'chats');
+    await _loadManageTabData();
+    await _openOaCustomerChat(chat);
   }
 
   Future<void> _followOrUnfollow(OaAccountDto oa) async {
@@ -778,9 +796,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
     try {
       final res = await ApiService.instance.sendOaBroadcast(
         oa.id,
-        targetTag: _bcTagCtrl.text.trim().isEmpty
-            ? null
-            : _bcTagCtrl.text.trim(),
+        targetTags: _bcTags,
         msgType: _bcCouponId != null ? 'rich_card' : 'text',
         content: content.isNotEmpty
             ? content
@@ -847,9 +863,9 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
           children: [
             Icon(Icons.storefront_rounded, size: 18, color: AppTheme.brandPrimary),
             const SizedBox(width: 6),
-            const Expanded(
+            Expanded(
               child: Text(
-                'ร้านค้า · บัญชีกิจการ',
+                widget.shopApp ? 'จัดการร้านค้า' : 'ค้นหาและติดตามร้านค้า',
                 style: TextStyle(
                   fontSize: 14.5,
                   fontWeight: FontWeight.w700,
@@ -874,17 +890,18 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
               ),
           ],
         ),
-        const SizedBox(height: 6),
-        Wrap(
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 6,
-          runSpacing: 0,
-          children: [
-            _modeChip('discover', 'ค้นพบ / ติดตาม (${_discoverOas.length})'),
-            _modeChip('manage', 'ร้านของฉัน (${_myOas.length})'),
-            _modeChip('create', '+ สร้างกิจการ / ร้านค้าใหม่'),
-          ],
-        ),
+        if (widget.shopApp) ...[
+          const SizedBox(height: 6),
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 6,
+            runSpacing: 0,
+            children: [
+              _modeChip('manage', 'ร้านของฉัน (${_myOas.length})'),
+              _modeChip('create', '+ สร้างกิจการ / ร้านค้าใหม่'),
+            ],
+          ),
+        ],
       ],
     );
   }
@@ -972,7 +989,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
           const Padding(
             padding: EdgeInsets.all(14),
             child: Text(
-              'ยังไม่มีร้านค้าในระบบ — กด "+ สร้างกิจการ / ร้านค้าใหม่" เพื่อเริ่มต้นได้เลย',
+              'ยังไม่พบร้านค้า ลองค้นหาด้วยชื่อร้านหรือ @ไอดีร้าน',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 12.5, color: AppTheme.slateMuted),
             ),
@@ -1050,20 +1067,6 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
                   ],
                 ),
               ),
-              if (oa.canManage(widget.currentUser.id))
-                IconButton(
-                  tooltip: 'จัดการร้านนี้',
-                  onPressed: () {
-                    setState(() => _topMode = 'manage');
-                    _selectOa(oa);
-                  },
-                  icon: Icon(
-                    Icons.settings_suggest_outlined,
-                    size: 18,
-                    color: AppTheme.brandPrimary,
-                  ),
-                  visualDensity: VisualDensity.compact,
-                ),
             ],
           ),
           if (oa.bio.isNotEmpty) ...[
@@ -1419,6 +1422,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
           children: [
             if (oa.canHandleChats(myId))
               _manageTabChip('chats', 'แชทลูกค้า'),
+            if (oa.canHandleChats(myId)) _manageTabChip('customers', 'ลูกค้า'),
             _manageTabChip('overview', 'ภาพรวม'),
             _manageTabChip('settings', 'ตั้งค่า & ทีม'),
             if (oa.canEditRichMenu(myId))
@@ -1454,6 +1458,11 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
         switch (_manageTab) {
           'overview' => _buildOverviewTab(),
           'chats' => _buildOaInboxTab(),
+          'customers' => OaCustomersSection(
+            key: ValueKey('customers-${oa.id}'),
+            oa: oa,
+            onOpenChat: _openCustomerChatFromCrm,
+          ),
           'settings' => _buildSettingsTab(oa),
           'rich_menu' => _buildRichMenuTab(),
           'auto_reply' => _buildAutoReplyTab(),
@@ -2531,13 +2540,19 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TextField(
-            controller: _bcTagCtrl,
-            decoration: const InputDecoration(
-              labelText: 'ส่งถึงแท็กเฉพาะกลุ่ม (เว้นว่าง = ทุกคนที่ติดตาม)',
-              isDense: true,
-            ),
+          const Text(
+            'ส่งถึงแท็กเฉพาะกลุ่ม (ไม่เลือก = ทุกคนที่ติดตาม)',
+            style: TextStyle(fontSize: 12, color: AppTheme.slateMuted),
           ),
+          const SizedBox(height: 4),
+          if (_selectedOa != null)
+            OaTagFilterChips(
+              key: ValueKey('bc-tags-${_selectedOa!.id}'),
+              oaId: _selectedOa!.id,
+              selected: _bcTags,
+              showMatch: true,
+              onChanged: (tags) => setState(() => _bcTags = tags),
+            ),
           const SizedBox(height: 6),
           TextField(
             controller: _bcContentCtrl,
@@ -2595,7 +2610,7 @@ class _OaWorkspacePanelState extends State<OaWorkspacePanel> {
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        '${b.targetTag.isNotEmpty ? "[${b.targetTag}] " : ""}${b.content}',
+                        '${b.audienceTags.isNotEmpty ? "[${b.audienceTags.join(", ")}] " : ""}${b.content}',
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontSize: 12),

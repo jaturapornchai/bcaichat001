@@ -245,7 +245,10 @@ pub async fn ensure_mongo_indexes(db: &mongodb::Database) {
         .await;
     let _ = db
         .collection::<Document>("oa_broadcasts")
-        .create_index(IndexModel::builder().keys(doc! { "oa_id": 1, "created_at": -1 }).build())
+        .create_indexes(vec![
+            IndexModel::builder().keys(doc! { "oa_id": 1, "created_at": -1 }).build(),
+            IndexModel::builder().keys(doc! { "oa_id": 1, "recipient_ids": 1 }).build(),
+        ])
         .await;
     let _ = db
         .collection::<Document>("call_sessions")

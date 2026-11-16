@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { api, openGoogleOAuthPopup } from "@/lib/api";
 import { usePwaInstall } from "@/lib/pwa";
+import { SITE_NAME, type SiteId } from "@/lib/site";
 import type { AuthConfig, OtpChallengeResponse, UserProfile } from "@/lib/types";
 import { UserAvatar } from "./StickerArt";
 
@@ -27,9 +28,16 @@ interface LoginViewProps {
   authConfig: AuthConfig | null;
   onAuthenticated: (token: string, user: UserProfile) => void;
   initialError?: string | null;
+  site?: SiteId;
 }
 
-export function LoginView({ authConfig, onAuthenticated, initialError }: LoginViewProps) {
+export function LoginView({
+  authConfig,
+  onAuthenticated,
+  initialError,
+  site = "chat",
+}: LoginViewProps) {
+  const siteName = SITE_NAME[site];
   const [phone, setPhone] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -355,14 +363,14 @@ export function LoginView({ authConfig, onAuthenticated, initialError }: LoginVi
   const handlePwaInstallClick = async () => {
     if (pwaInstalled) {
       setShowPwaGuide(false);
-      setInfoMsg("ติดตั้ง BC Ai Chat บนเครื่องนี้เรียบร้อยแล้ว");
+      setInfoMsg(`ติดตั้ง ${siteName} บนเครื่องนี้เรียบร้อยแล้ว`);
       return;
     }
     if (canPromptInstall) {
       const outcome = await promptInstall();
       if (outcome === "accepted") {
         setShowPwaGuide(false);
-        setInfoMsg("ติดตั้ง BC Ai Chat สำเร็จ เปิดใช้งานจากหน้าจอหลักได้ทันที");
+        setInfoMsg(`ติดตั้ง ${siteName} สำเร็จ เปิดใช้งานจากหน้าจอหลักได้ทันที`);
         return;
       }
       if (outcome === "dismissed") {
@@ -381,7 +389,7 @@ export function LoginView({ authConfig, onAuthenticated, initialError }: LoginVi
           <div className="mb-3.5 flex items-center gap-3">
             <img
               src="/icons/logo.png"
-              alt="โลโก้ BC Ai Chat"
+              alt={`โลโก้ ${siteName}`}
               width={48}
               height={48}
               data-testid="brand-logo-img"
@@ -389,10 +397,12 @@ export function LoginView({ authConfig, onAuthenticated, initialError }: LoginVi
             />
             <div className="min-w-0 flex-1">
               <h1 className="text-lg font-bold leading-tight tracking-tight text-[var(--bc-text)]">
-                BC Ai Chat
+                {siteName}
               </h1>
               <p className="mt-0.5 truncate text-xs text-[var(--bc-muted)]">
-                แชทกับครอบครัว เพื่อน ผู้ช่วย AI และร้านค้า
+                {site === "oa"
+                  ? "จัดการแชทลูกค้า คูปอง และข่าวสารของร้านคุณ"
+                  : "แชทกับครอบครัว เพื่อน ผู้ช่วย AI และร้านค้า"}
               </p>
             </div>
           </div>
@@ -604,7 +614,7 @@ export function LoginView({ authConfig, onAuthenticated, initialError }: LoginVi
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-bold leading-snug text-[var(--bc-deep)]">
                   {pwaInstalled
-                    ? "ติดตั้งแอป BC Ai Chat แล้ว (PWA)"
+                    ? `ติดตั้งแอป ${siteName} แล้ว (PWA)`
                     : "ติดตั้งจากเบราว์เซอร์ (PWA)"}
                 </span>
                 <span className="block text-[11px] leading-snug text-[var(--bc-primary)]">
@@ -621,7 +631,7 @@ export function LoginView({ authConfig, onAuthenticated, initialError }: LoginVi
                 className="space-y-1 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] px-3 py-2 text-[11px] leading-relaxed text-[var(--bc-text)]"
               >
                 <div className="font-bold text-[var(--bc-deep)]">
-                  วิธีติดตั้ง BC Ai Chat บน{isIos ? " iPhone / iPad (Safari)" : " Chrome / Edge / มือถือ"}
+                  วิธีติดตั้ง {siteName} บน{isIos ? " iPhone / iPad (Safari)" : " Chrome / Edge / มือถือ"}
                 </div>
                 {isIos ? (
                   <ol className="list-inside list-decimal space-y-0.5 text-[var(--bc-muted)]">
@@ -634,7 +644,7 @@ export function LoginView({ authConfig, onAuthenticated, initialError }: LoginVi
                       กดไอคอนติดตั้งแอปบนแถบที่อยู่ (ด้านขวาบน) หรือเมนู ⋮ ของเบราว์เซอร์
                     </li>
                     <li>
-                      เลือก &quot;ติดตั้ง BC Ai Chat&quot; หรือ &quot;เพิ่มลงในหน้าจอหลัก&quot; แล้วกดยืนยัน
+                      เลือก &quot;ติดตั้ง {siteName}&quot; หรือ &quot;เพิ่มลงในหน้าจอหลัก&quot; แล้วกดยืนยัน
                     </li>
                   </ol>
                 )}
@@ -1084,88 +1094,89 @@ export function LoginView({ authConfig, onAuthenticated, initialError }: LoginVi
         </section>
 
         {/* Collapsible SEO / GEO Details below the card */}
-        <details className="group rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)]/90 px-3.5 py-2.5 text-xs shadow-xs">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 font-semibold text-[var(--bc-primary)] [&::-webkit-details-marker]:hidden">
-            <span className="inline-flex items-center gap-1.5">
-              <Sparkles className="h-3.5 w-3.5 shrink-0" />
-              <span>รู้จัก BC Ai Chat</span>
-            </span>
-            <ChevronDown className="h-3.5 w-3.5 shrink-0 transition-transform group-open:rotate-180" />
-          </summary>
+        {site === "chat" && (
+          <details className="group rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)]/90 px-3.5 py-2.5 text-xs shadow-xs">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 font-semibold text-[var(--bc-primary)] [&::-webkit-details-marker]:hidden">
+              <span className="inline-flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5 shrink-0" />
+                <span>รู้จัก BC Ai Chat</span>
+              </span>
+              <ChevronDown className="h-3.5 w-3.5 shrink-0 transition-transform group-open:rotate-180" />
+            </summary>
 
-          <div className="mt-3 space-y-3 border-t border-[var(--bc-border)] pt-3">
-            <p className="leading-relaxed text-[var(--bc-muted)]">
-              BC Ai Chat ออกแบบด้วยโทนสีดินเผาบ้านเชียงร่วมสมัย ใช้งานลื่นไหลบนมือถือและคอมพิวเตอร์
-              พร้อมผู้ช่วย <strong className="font-semibold text-[var(--bc-primary)]">@bc.ai</strong>{" "}
-              โทรเสียงและวิดีโอคอล อัลบั้มรูปถาวร และร้านค้าในแอปเดียว
-            </p>
+            <div className="mt-3 space-y-3 border-t border-[var(--bc-border)] pt-3">
+              <p className="leading-relaxed text-[var(--bc-muted)]">
+                BC Ai Chat ออกแบบด้วยโทนสีดินเผาบ้านเชียงร่วมสมัย ใช้งานลื่นไหลบนมือถือและคอมพิวเตอร์
+                พร้อมผู้ช่วย <strong className="font-semibold text-[var(--bc-primary)]">@bc.ai</strong>{" "}
+                โทรเสียงและวิดีโอคอล อัลบั้มรูปถาวร และร้านค้าในแอปเดียว
+              </p>
 
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <div className="flex items-start gap-2 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2.5">
-                <Video className="mt-0.5 h-4 w-4 shrink-0 text-[var(--bc-primary)]" />
-                <div>
-                  <h2 className="text-xs font-bold text-[var(--bc-text)]">
-                    โทรเสียง &amp; วิดีโอคอล
-                  </h2>
-                  <p className="mt-0.5 text-[11px] text-[var(--bc-muted)]">
-                    โทร 1-1 และคอลกลุ่มชัดระดับ HD ไม่บังข้อความแชท
-                  </p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div className="flex items-start gap-2 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2.5">
+                  <Video className="mt-0.5 h-4 w-4 shrink-0 text-[var(--bc-primary)]" />
+                  <div>
+                    <h2 className="text-xs font-bold text-[var(--bc-text)]">
+                      โทรเสียง &amp; วิดีโอคอล
+                    </h2>
+                    <p className="mt-0.5 text-[11px] text-[var(--bc-muted)]">
+                      โทร 1-1 และคอลกลุ่มชัดระดับ HD ไม่บังข้อความแชท
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2.5">
+                  <Store className="mt-0.5 h-4 w-4 shrink-0 text-[var(--bc-primary)]" />
+                  <div>
+                    <h2 className="text-xs font-bold text-[var(--bc-text)]">ร้านค้า</h2>
+                    <p className="mt-0.5 text-[11px] text-[var(--bc-muted)]">
+                      ติดตามร้านค้า เก็บคูปองส่วนลด และคุยสอบถามได้ทันที
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2.5">
+                  <Bot className="mt-0.5 h-4 w-4 shrink-0 text-[var(--bc-primary)]" />
+                  <div>
+                    <h2 className="text-xs font-bold text-[var(--bc-text)]">ผู้ช่วย AI ประจำแชท</h2>
+                    <p className="mt-0.5 text-[11px] text-[var(--bc-muted)]">
+                      พิมพ์ @ai ถามได้ทุกเรื่อง ช่วยเกลาข้อความและสรุปนัดหมาย
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2.5">
+                  <Lock className="mt-0.5 h-4 w-4 shrink-0 text-[var(--bc-primary)]" />
+                  <div>
+                    <h2 className="text-xs font-bold text-[var(--bc-text)]">
+                      ข้อความลับ &amp; สมุดบันทึก
+                    </h2>
+                    <p className="mt-0.5 text-[11px] text-[var(--bc-muted)]">
+                      ล็อกข้อความด้วย PIN 4 หลัก และเก็บโน้ตในสมุดบันทึก BC ถาวร
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-start gap-2 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2.5">
-                <Store className="mt-0.5 h-4 w-4 shrink-0 text-[var(--bc-primary)]" />
-                <div>
-                  <h2 className="text-xs font-bold text-[var(--bc-text)]">ร้านค้า</h2>
-                  <p className="mt-0.5 text-[11px] text-[var(--bc-muted)]">
-                    ติดตามร้านค้า เก็บคูปองส่วนลด และคุยสอบถามได้ทันที
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2.5">
-                <Bot className="mt-0.5 h-4 w-4 shrink-0 text-[var(--bc-primary)]" />
-                <div>
-                  <h2 className="text-xs font-bold text-[var(--bc-text)]">ผู้ช่วย AI ประจำแชท</h2>
-                  <p className="mt-0.5 text-[11px] text-[var(--bc-muted)]">
-                    พิมพ์ @ai ถามได้ทุกเรื่อง ช่วยเกลาข้อความและสรุปนัดหมาย
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2.5">
-                <Lock className="mt-0.5 h-4 w-4 shrink-0 text-[var(--bc-primary)]" />
-                <div>
-                  <h2 className="text-xs font-bold text-[var(--bc-text)]">
-                    ข้อความลับ &amp; สมุดบันทึก
-                  </h2>
-                  <p className="mt-0.5 text-[11px] text-[var(--bc-muted)]">
-                    ล็อกข้อความด้วย PIN 4 หลัก และเก็บโน้ตในสมุดบันทึก BC ถาวร
-                  </p>
-                </div>
+              <div className="space-y-1.5 border-t border-[var(--bc-border)] pt-2.5 text-[11px] text-[var(--bc-muted)]">
+                <h3 className="flex items-center gap-1.5 text-xs font-bold text-[var(--bc-text)]">
+                  <MessageSquareText className="h-3.5 w-3.5 shrink-0 text-[var(--bc-primary)]" />
+                  <span>คำถามที่พบบ่อย</span>
+                </h3>
+                <p>
+                  <strong className="text-[var(--bc-text)]">เข้าสู่ระบบและเพิ่มเพื่อนได้อย่างไร?</strong>{" "}
+                  ใช้เบอร์มือถือรับรหัส OTP หรือบัญชี Google ที่ยืนยันแล้ว จากนั้นเชื่อมเบอร์กับ Gmail
+                  ในหน้าตั้งค่าและค้นหาเพื่อนด้วยเบอร์โทร อีเมล หรือ @BC ID ได้ทันที
+                </p>
+                <p>
+                  <strong className="text-[var(--bc-text)]">เรียกผู้ช่วย AI และติดตามร้านค้าได้อย่างไร?</strong>{" "}
+                  พิมพ์ <code className="rounded bg-[var(--bc-panel)] px-1">@ai</code> หรือ{" "}
+                  <code className="rounded bg-[var(--bc-panel)] px-1">@bc.ai</code> ในห้องแชท
+                  และเข้าแท็บ <strong className="text-[var(--bc-text)]">ร้านค้า</strong> เพื่อค้นหาและติดตามร้านค้า
+                </p>
               </div>
             </div>
-
-            <div className="space-y-1.5 border-t border-[var(--bc-border)] pt-2.5 text-[11px] text-[var(--bc-muted)]">
-              <h3 className="flex items-center gap-1.5 text-xs font-bold text-[var(--bc-text)]">
-                <MessageSquareText className="h-3.5 w-3.5 shrink-0 text-[var(--bc-primary)]" />
-                <span>คำถามที่พบบ่อย</span>
-              </h3>
-              <p>
-                <strong className="text-[var(--bc-text)]">เข้าสู่ระบบและเพิ่มเพื่อนได้อย่างไร?</strong>{" "}
-                ใช้เบอร์มือถือรับรหัส OTP หรือบัญชี Google ที่ยืนยันแล้ว จากนั้นเชื่อมเบอร์กับ Gmail
-                ในหน้าตั้งค่าและค้นหาเพื่อนด้วยเบอร์โทร อีเมล หรือ @BC ID ได้ทันที
-              </p>
-              <p>
-                <strong className="text-[var(--bc-text)]">เรียกผู้ช่วย AI และเปิดร้านค้าได้อย่างไร?</strong>{" "}
-                พิมพ์ <code className="rounded bg-[var(--bc-panel)] px-1">@ai</code> หรือ{" "}
-                <code className="rounded bg-[var(--bc-panel)] px-1">@bc.ai</code> ในห้องแชท
-                และเข้าแท็บ <strong className="text-[var(--bc-text)]">ร้านค้า</strong> (หรือ{" "}
-                <code className="rounded bg-[var(--bc-panel)] px-1">/oa</code>) เพื่อติดตามหรือเปิดร้านค้า
-              </p>
-            </div>
-          </div>
-        </details>
+          </details>
+        )}
       </main>
     </div>
   );

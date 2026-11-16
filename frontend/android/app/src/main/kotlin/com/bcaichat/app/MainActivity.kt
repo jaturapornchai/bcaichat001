@@ -242,6 +242,7 @@ class BcPushService : FirebaseMessagingService() {
                 .put("popup", popup)
                 .put("sound", sound)
                 .put("sounds", sounds)
+                .put("app", BuildConfig.CLIENT_APP)
                 .toString()
                 .toByteArray(Charsets.UTF_8)
 

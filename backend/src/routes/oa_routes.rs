@@ -1554,6 +1554,431 @@ pub async fn list_oa_chats_handler(
     Ok(Json(rows))
 }
 
+// =============================================================================
+// CRM v1: customer list / detail / tag summary
+// =============================================================================
+
+const MAX_CRM_TAGS: usize = 10;
+
+/// Trim, drop empty and the "all" placeholder, de-duplicate; more than MAX_CRM_TAGS is a 400.
+fn normalize_tags<'a>(raw: impl IntoIterator<Item = &'a str>) -> Result<Vec<String>, ApiError> {
+    let mut out: Vec<String> = Vec::new();
+    for t in raw {
+        let t = t.trim();
+        if !t.is_empty() && t != "ทั้งหมด" && !out.iter().any(|x| x == t) {
+            out.push(t.to_string());
+        }
+    }
+    if out.len() > MAX_CRM_TAGS {
+        return Err(ApiError::bad_request("เลือกแท็กได้ไม่เกิน 10 แท็ก"));
+    }
+    Ok(out)
+}
+
+fn parse_tags_param(raw: Option<&str>) -> Result<Vec<String>, ApiError> {
+    normalize_tags(raw.unwrap_or("").split(','))
+}
+
+/// Escape regex metacharacters so user text is matched literally (no `regex` crate here).
+fn escape_regex_literal(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 8);
+    for ch in s.chars() {
+        if "\\^$.|?*+()[]{}".contains(ch) {
+            out.push('\\');
+        }
+        out.push(ch);
+    }
+    out
+}
+
+fn bson_count(d: &bson::Document, key: &str) -> usize {
+    d.get_i32(key)
+        .map(|n| n.max(0) as usize)
+        .or_else(|_| d.get_i64(key).map(|n| n.max(0) as usize))
+        .unwrap_or(0)
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct CustomerUserRow {
+    #[serde(default)]
+    display_name: String,
+    #[serde(default)]
+    bc_id: String,
+    #[serde(default)]
+    avatar_url: String,
+    #[serde(default)]
+    phone: String,
+    #[serde(default)]
+    email: String,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct CustomerConvRow {
+    #[serde(default)]
+    last_message: Option<LastMessageSummary>,
+    #[serde(default)]
+    updated_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CustomerRow {
+    user_id: String,
+    #[serde(default)]
+    conversation_id: String,
+    #[serde(default)]
+    tags: Vec<String>,
+    #[serde(default)]
+    crm_note: String,
+    #[serde(default)]
+    ai_paused: bool,
+    #[serde(default)]
+    is_following: bool,
+    #[serde(default)]
+    followed_at: String,
+    #[serde(default)]
+    u: CustomerUserRow,
+    #[serde(default)]
+    c: Option<CustomerConvRow>,
+}
+
+/// followers -> users -> (optional text filter) -> conversations, trimmed to the fields the DTO needs.
+fn customer_stages(
+    oa_id: &str,
+    following: Option<bool>,
+    tags: &[String],
+    uid: Option<&str>,
+    q: Option<&str>,
+) -> Vec<bson::Document> {
+    let mut m = doc! { "oa_id": oa_id };
+    if let Some(f) = following {
+        m.insert("is_following", f);
+    }
+    if !tags.is_empty() {
+        m.insert("tags", doc! { "$in": tags });
+    }
+    if let Some(uid) = uid {
+        m.insert("user_id", uid);
+    }
+    let mut stages = vec![
+        doc! { "$match": m },
+        doc! { "$lookup": { "from": "users", "localField": "user_id", "foreignField": "_id", "as": "u" } },
+        doc! { "$unwind": "$u" },
+    ];
+    if let Some(q) = q {
+        let rx = doc! { "$regex": escape_regex_literal(q), "$options": "i" };
+        stages.push(doc! { "$match": { "$or": [
+            { "u.display_name": rx.clone() },
+            { "u.bc_id": rx.clone() },
+            { "u.phone": rx.clone() },
+            { "u.email": rx.clone() },
+            { "crm_note": rx },
+        ] } });
+    }
+    stages.push(doc! { "$lookup": { "from": "conversations", "localField": "conversation_id", "foreignField": "_id", "as": "c" } });
+    stages.push(doc! { "$unwind": { "path": "$c", "preserveNullAndEmptyArrays": true } });
+    stages.push(doc! { "$project": {
+        "user_id": 1, "conversation_id": 1, "tags": 1, "crm_note": 1, "ai_paused": 1,
+        "is_following": 1, "followed_at": 1,
+        "u.display_name": 1, "u.bc_id": 1, "u.avatar_url": 1, "u.phone": 1, "u.email": 1,
+        "c.last_message": 1, "c.updated_at": 1,
+    } });
+    stages
+}
+
+/// Unread customer messages per conversation for the given rows, in one aggregation.
+async fn unread_for_rows(
+    state: &AppState,
+    oa: &OaAccountDoc,
+    rows: &[CustomerRow],
+) -> HashMap<String, usize> {
+    let owner_by_conv: HashMap<&str, &str> = rows
+        .iter()
+        .map(|r| (r.conversation_id.as_str(), r.user_id.as_str()))
+        .collect();
+    let mut out = HashMap::new();
+    if owner_by_conv.is_empty() {
+        return out;
+    }
+    let conv_ids: Vec<&str> = owner_by_conv.keys().copied().collect();
+    let pipeline = vec![
+        doc! { "$match": {
+            "conversation_id": { "$in": conv_ids },
+            "is_unsent": false,
+            "read_by": { "$ne": &oa.bot_user_id },
+        } },
+        doc! { "$group": {
+            "_id": { "conv_id": "$conversation_id", "sender_id": "$sender_id" },
+            "count": { "$sum": 1_i32 },
+        } },
+    ];
+    let Ok(mut cursor) = state.db.collection::<MessageDoc>("messages").aggregate(pipeline).await else {
+        return out;
+    };
+    while let Ok(Some(row)) = cursor.try_next().await {
+        let Ok(id) = row.get_document("_id") else { continue };
+        let (cid, sid) = (id.get_str("conv_id").unwrap_or(""), id.get_str("sender_id").unwrap_or(""));
+        if owner_by_conv.get(cid) == Some(&sid) {
+            out.insert(cid.to_string(), bson_count(&row, "count"));
+        }
+    }
+    out
+}
+
+fn customer_to_json(oa_id: &str, r: &CustomerRow, unread: usize) -> Value {
+    let dto = OaCustomerChatDto {
+        conversation_id: r.conversation_id.clone(),
+        oa_id: oa_id.to_string(),
+        customer_id: r.user_id.clone(),
+        customer_name: r.u.display_name.clone(),
+        customer_avatar: r.u.avatar_url.clone(),
+        customer_bc_id: r.u.bc_id.clone(),
+        customer_phone: r.u.phone.clone(),
+        customer_email: r.u.email.clone(),
+        tags: r.tags.clone(),
+        crm_note: r.crm_note.clone(),
+        ai_paused: r.ai_paused,
+        unread_for_oa: unread,
+        last_message: r.c.as_ref().and_then(|c| c.last_message.clone()),
+        updated_at: r.c.as_ref().map(|c| c.updated_at.clone()).unwrap_or_default(),
+    };
+    let mut v = serde_json::to_value(dto).unwrap_or_default();
+    if let Some(obj) = v.as_object_mut() {
+        obj.insert("is_following".into(), json!(r.is_following));
+        obj.insert("followed_at".into(), json!(r.followed_at));
+    }
+    v
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListOaCustomersQuery {
+    pub q: Option<String>,
+    pub tags: Option<String>,
+    pub following: Option<String>,
+    pub sort: Option<String>,
+    pub page: Option<String>,
+    pub limit: Option<String>,
+}
+
+fn parse_in_range(raw: Option<&str>, default: i64, min: i64, max: i64, msg: &str) -> Result<i64, ApiError> {
+    let Some(s) = raw.map(str::trim).filter(|s| !s.is_empty()) else {
+        return Ok(default);
+    };
+    s.parse::<i64>()
+        .ok()
+        .filter(|n| (min..=max).contains(n))
+        .ok_or_else(|| ApiError::bad_request(msg))
+}
+
+pub async fn list_oa_customers_handler(
+    auth: AuthUser,
+    Path(oa_id): Path<String>,
+    Query(query): Query<ListOaCustomersQuery>,
+    State(state): State<AppState>,
+) -> Result<Json<Value>, ApiError> {
+    let oa = require_oa_chat_staff(&state, &oa_id, &auth.user_id).await?;
+    let q = query.q.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    if q.is_some_and(|s| s.chars().count() > 64) {
+        return Err(ApiError::bad_request("คำค้นหายาวเกิน 64 ตัวอักษร"));
+    }
+    let tags = parse_tags_param(query.tags.as_deref())?;
+    let following = match query.following.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        None => None,
+        Some("true") => Some(true),
+        Some("false") => Some(false),
+        Some(_) => return Err(ApiError::bad_request("ค่า following ต้องเป็น true หรือ false")),
+    };
+    let sort = match query.sort.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        None | Some("recent") => doc! { "c.updated_at": -1, "_id": 1 },
+        Some("name") => doc! { "u.display_name": 1, "_id": 1 },
+        Some("followed") => doc! { "followed_at": -1, "_id": 1 },
+        Some(_) => return Err(ApiError::bad_request("sort ต้องเป็น recent, name หรือ followed")),
+    };
+    let page = parse_in_range(query.page.as_deref(), 1, 1, i64::from(i32::MAX), "page ต้องเป็นเลขตั้งแต่ 1")?;
+    let limit = parse_in_range(query.limit.as_deref(), 30, 1, 100, "limit ต้องอยู่ระหว่าง 1 ถึง 100")?;
+
+    let mut pipeline = customer_stages(&oa.id, following, &tags, None, q);
+    pipeline.push(doc! { "$sort": sort });
+    pipeline.push(doc! { "$facet": {
+        "items": [{ "$skip": (page - 1) * limit }, { "$limit": limit }],
+        "total": [{ "$count": "n" }],
+    } });
+    let mut cursor = state
+        .db
+        .collection::<bson::Document>("oa_followers")
+        .aggregate(pipeline)
+        .await
+        .map_err(|e| ApiError::internal(e.to_string()))?;
+    let facet = cursor
+        .try_next()
+        .await
+        .map_err(|e| ApiError::internal(e.to_string()))?
+        .unwrap_or_default();
+
+    let rows: Vec<CustomerRow> = facet
+        .get_array("items")
+        .map(|a| {
+            a.iter()
+                .filter_map(|b| b.as_document())
+                .filter_map(|d| bson::from_document(d.clone()).ok())
+                .collect()
+        })
+        .unwrap_or_default();
+    let total = facet
+        .get_array("total")
+        .ok()
+        .and_then(|a| a.first())
+        .and_then(|b| b.as_document())
+        .map(|d| bson_count(d, "n"))
+        .unwrap_or(0);
+    let unread = unread_for_rows(&state, &oa, &rows).await;
+    let items: Vec<Value> = rows
+        .iter()
+        .map(|r| customer_to_json(&oa.id, r, unread.get(&r.conversation_id).copied().unwrap_or(0)))
+        .collect();
+
+    Ok(Json(json!({ "items": items, "total": total, "page": page, "limit": limit })))
+}
+
+fn customer_coupon_to_json(c: &OaCouponDoc, uid: &str) -> Value {
+    json!({
+        "id": c.id,
+        "code": c.code,
+        "title": c.title,
+        "discount_text": c.discount_text,
+        "expires_at": c.expires_at,
+        "is_redeemed": c.redeemed_by.iter().any(|u| u == uid),
+        "is_active": c.is_active,
+    })
+}
+
+fn customer_broadcast_to_json(b: &OaBroadcastDoc) -> Value {
+    json!({
+        "id": b.id,
+        "msg_type": b.msg_type,
+        "content": b.content,
+        "target_tags": b.target_tags,
+        "coupon_id": b.coupon_id,
+        "created_at": b.created_at,
+    })
+}
+
+pub async fn get_oa_customer_handler(
+    auth: AuthUser,
+    Path((oa_id, uid)): Path<(String, String)>,
+    State(state): State<AppState>,
+) -> Result<Json<Value>, ApiError> {
+    let oa = require_oa_chat_staff(&state, &oa_id, &auth.user_id).await?;
+    let mut cursor = state
+        .db
+        .collection::<bson::Document>("oa_followers")
+        .aggregate(customer_stages(&oa.id, None, &[], Some(&uid), None))
+        .await
+        .map_err(|e| ApiError::internal(e.to_string()))?;
+    let row: CustomerRow = cursor
+        .try_next()
+        .await
+        .map_err(|e| ApiError::internal(e.to_string()))?
+        .and_then(|d| bson::from_document(d).ok())
+        .ok_or_else(|| ApiError::not_found("ไม่พบข้อมูลลูกค้าในร้านนี้"))?;
+    let rows = [row];
+    let unread = unread_for_rows(&state, &oa, &rows).await;
+    let customer = customer_to_json(
+        &oa.id,
+        &rows[0],
+        unread.get(&rows[0].conversation_id).copied().unwrap_or(0),
+    );
+
+    let coupons: Vec<OaCouponDoc> = state
+        .db
+        .collection::<OaCouponDoc>("oa_coupons")
+        .find(doc! { "oa_id": &oa.id, "claimed_by": &uid })
+        .sort(doc! { "created_at": -1 })
+        .await
+        .map_err(|e| ApiError::internal(e.to_string()))?
+        .try_collect()
+        .await
+        .map_err(|e| ApiError::internal(e.to_string()))?;
+    let bc_coll = state.db.collection::<OaBroadcastDoc>("oa_broadcasts");
+    let bc_filter = doc! { "oa_id": &oa.id, "recipient_ids": &uid };
+    let broadcasts: Vec<OaBroadcastDoc> = bc_coll
+        .find(bc_filter.clone())
+        .sort(doc! { "created_at": -1 })
+        .limit(50)
+        .await
+        .map_err(|e| ApiError::internal(e.to_string()))?
+        .try_collect()
+        .await
+        .map_err(|e| ApiError::internal(e.to_string()))?;
+    let broadcasts_received = bc_coll
+        .count_documents(bc_filter)
+        .await
+        .map_err(|e| ApiError::internal(e.to_string()))?;
+
+    Ok(Json(json!({
+        "customer": customer,
+        "coupons": coupons.iter().map(|c| customer_coupon_to_json(c, &uid)).collect::<Vec<_>>(),
+        "broadcasts": broadcasts.iter().map(customer_broadcast_to_json).collect::<Vec<_>>(),
+        "stats": {
+            "coupons_claimed": coupons.len(),
+            "coupons_redeemed": coupons.iter().filter(|c| c.redeemed_by.contains(&uid)).count(),
+            "broadcasts_received": broadcasts_received,
+        },
+    })))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CustomerTagsQuery {
+    pub tags: Option<String>,
+}
+
+pub async fn list_oa_customer_tags_handler(
+    auth: AuthUser,
+    Path(oa_id): Path<String>,
+    Query(query): Query<CustomerTagsQuery>,
+    State(state): State<AppState>,
+) -> Result<Json<Value>, ApiError> {
+    let oa = require_oa_any_staff(&state, &oa_id, &auth.user_id).await?;
+    let tags = parse_tags_param(query.tags.as_deref())?;
+    let coll = state.db.collection::<bson::Document>("oa_followers");
+    let following = doc! { "oa_id": &oa.id, "is_following": true };
+
+    let mut cursor = coll
+        .aggregate(vec![
+            doc! { "$match": following.clone() },
+            doc! { "$unwind": "$tags" },
+            doc! { "$group": { "_id": "$tags", "count": { "$sum": 1_i32 } } },
+            doc! { "$sort": { "count": -1, "_id": 1 } },
+        ])
+        .await
+        .map_err(|e| ApiError::internal(e.to_string()))?;
+    let mut tag_rows = Vec::new();
+    while let Some(row) = cursor.try_next().await.map_err(|e| ApiError::internal(e.to_string()))? {
+        if let Ok(tag) = row.get_str("_id") {
+            tag_rows.push(json!({ "tag": tag, "count": bson_count(&row, "count") }));
+        }
+    }
+
+    let total_following = coll
+        .count_documents(following.clone())
+        .await
+        .map_err(|e| ApiError::internal(e.to_string()))?;
+    let match_count = if tags.is_empty() {
+        total_following
+    } else {
+        let mut f = following;
+        f.insert("tags", doc! { "$in": &tags });
+        coll.count_documents(f)
+            .await
+            .map_err(|e| ApiError::internal(e.to_string()))?
+    };
+
+    Ok(Json(json!({
+        "tags": tag_rows,
+        "total_following": total_following,
+        "match_count": match_count,
+    })))
+}
+
 pub async fn get_oa_chat_messages_handler(
     auth: AuthUser,
     Path((oa_id, conv_id)): Path<(String, String)>,
@@ -1741,6 +2166,7 @@ fn broadcast_to_json(b: &OaBroadcastDoc) -> Value {
         "_id": b.id,
         "oa_id": b.oa_id,
         "target_tag": b.target_tag,
+        "target_tags": b.target_tags,
         "msg_type": b.msg_type,
         "content": b.content,
         "card_payload": b.card_payload,
@@ -2095,6 +2521,8 @@ pub async fn list_oa_broadcasts_handler(
 #[derive(Debug, Deserialize)]
 pub struct SendBroadcastRequest {
     pub target_tag: Option<String>,
+    #[serde(default)]
+    pub target_tags: Vec<String>,
     pub msg_type: Option<String>,
     pub content: Option<String>,
     pub card_payload: Option<Value>,
@@ -2110,12 +2538,13 @@ pub async fn send_oa_broadcast_handler(
     let oa = require_oa_marketing_staff(&state, &oa_id, &auth.user_id).await?;
     let bot_user = get_oa_bot_user(&state, &oa).await;
 
-    let target_tag = payload
-        .target_tag
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty() && *s != "ทั้งหมด")
-        .map(str::to_string);
+    let tags = normalize_tags(
+        payload
+            .target_tags
+            .iter()
+            .map(String::as_str)
+            .chain(payload.target_tag.as_deref()),
+    )?;
 
     let mut msg_type = payload
         .msg_type
@@ -2158,8 +2587,8 @@ pub async fn send_oa_broadcast_handler(
     }
 
     let mut fol_filter = doc! { "oa_id": &oa.id, "is_following": true };
-    if let Some(ref tag) = target_tag {
-        fol_filter.insert("tags", tag);
+    if !tags.is_empty() {
+        fol_filter.insert("tags", doc! { "$in": &tags });
     }
 
     let followers: Vec<OaFollowerDoc> = state
@@ -2192,7 +2621,11 @@ pub async fn send_oa_broadcast_handler(
             .unwrap_or_default()
     };
 
-    let mut delivered = 0usize;
+    let owner_by_conv: HashMap<&str, &str> = followers
+        .iter()
+        .map(|f| (f.conversation_id.as_str(), f.user_id.as_str()))
+        .collect();
+    let mut recipient_ids: Vec<String> = Vec::new();
     for conv in convs.iter_mut() {
         if insert_oa_bot_message_raw(
             &state,
@@ -2205,14 +2638,19 @@ pub async fn send_oa_broadcast_handler(
         .await
         .is_ok()
         {
-            delivered += 1;
+            if let Some(uid) = owner_by_conv.get(conv.id.as_str()) {
+                recipient_ids.push(uid.to_string());
+            }
         }
     }
+    let delivered = recipient_ids.len();
 
     let broadcast = OaBroadcastDoc {
         id: Uuid::new_v4().to_string(),
         oa_id: oa.id.clone(),
-        target_tag,
+        target_tag: tags.first().cloned(),
+        target_tags: tags,
+        recipient_ids,
         msg_type,
         content,
         card_payload,

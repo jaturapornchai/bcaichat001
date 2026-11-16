@@ -555,10 +555,69 @@ export interface OaCoupon {
   created_at: string;
 }
 
+export interface OaCustomer {
+  conversation_id: string;
+  oa_id: string;
+  customer_id: string;
+  customer_name: string;
+  customer_avatar: string;
+  customer_bc_id: string;
+  customer_phone: string;
+  customer_email: string;
+  tags: string[];
+  crm_note: string;
+  ai_paused: boolean;
+  unread_for_oa: number;
+  last_message?: LastMessageSummary | null;
+  updated_at: string;
+  is_following: boolean;
+  followed_at: string;
+}
+
+export interface OaCustomerList {
+  items: OaCustomer[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface OaCustomerDetail {
+  customer: OaCustomer;
+  coupons: Array<{
+    id: string;
+    code: string;
+    title: string;
+    discount_text: string;
+    expires_at?: string | null;
+    is_redeemed: boolean;
+    is_active: boolean;
+  }>;
+  broadcasts: Array<{
+    id: string;
+    msg_type: string;
+    content: string;
+    target_tags: string[];
+    coupon_id?: string | null;
+    created_at: string;
+  }>;
+  stats: {
+    coupons_claimed: number;
+    coupons_redeemed: number;
+    broadcasts_received: number;
+  };
+}
+
+export interface OaCustomerTagStats {
+  tags: Array<{ tag: string; count: number }>;
+  total_following: number;
+  match_count: number;
+}
+
 export interface OaBroadcast {
   id: string;
   oa_id: string;
   target_tag: string;
+  target_tags?: string[];
   msg_type: string;
   content: string;
   recipient_count: number;

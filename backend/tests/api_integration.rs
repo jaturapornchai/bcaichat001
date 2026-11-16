@@ -1686,6 +1686,19 @@ async fn test_full_bcaichat_auth_oa_calls_minio_and_mongo_flow() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(redeemed["is_redeemed"], true);
 
+    crm_v1_checks(&CrmCtx {
+        app: &app,
+        oa: &oa1_id,
+        kong: &kong_token,
+        agent: &agent_tok,
+        mkt: &mkt_tok,
+        prae: &prae_token,
+        prae_id: &prae_id,
+        boss: &boss_token,
+        boss_id: &boss_id,
+    })
+    .await;
+
     // PUT /api/oa/:id/admins/:uid & DELETE /api/oa/:id/admins/:uid
     let (status, role_changed) = call(
         &app,
@@ -3341,4 +3354,158 @@ async fn call(
         .await
         .unwrap();
     (status, serde_json::from_slice(&bytes).unwrap_or(Value::Null))
+}
+
+fn pct(s: &str) -> String {
+    s.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' => (b as char).to_string(),
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+
+struct CrmCtx<'a> {
+    app: &'a Router,
+    oa: &'a str,
+    kong: &'a str,
+    agent: &'a str,
+    mkt: &'a str,
+    prae: &'a str,
+    prae_id: &'a str,
+    boss: &'a str,
+    boss_id: &'a str,
+}
+
+async fn crm_get(c: &CrmCtx<'_>, tok: &str, path: &str) -> (StatusCode, Value) {
+    call(c.app, "GET", &format!("/api/oa/{}/{path}", c.oa), Some(tok), None).await
+}
+
+async fn crm_broadcast(c: &CrmCtx<'_>, body: Value) -> (StatusCode, Value) {
+    call(c.app, "POST", &format!("/api/oa/{}/broadcasts", c.oa), Some(c.mkt), Some(body)).await
+}
+
+/// CRM v1: customer list/detail/tag summary + multi-tag broadcast (prae: VIP+สายกาแฟ, boss: สายกาแฟ+ใหม่).
+async fn crm_v1_checks(c: &CrmCtx<'_>) {
+    let ok = StatusCode::OK;
+    // boss follows and is tagged by the owner; the agent follows then unfollows (=> is_following false)
+    let (st, _) = call(c.app, "POST", &format!("/api/oa/{}/follow", c.oa), Some(c.boss), None).await;
+    assert_eq!(st, ok);
+    let (st, _) = call(c.app, "PUT", &format!("/api/oa/{}/followers/{}/crm", c.oa, c.boss_id), Some(c.kong),
+        Some(json!({ "tags": ["สายกาแฟ", "ใหม่"], "crm_note": "ลูกค้าใหม่ชอบโทนเข้ม" }))).await;
+    assert_eq!(st, ok);
+    let (st, _) = call(c.app, "POST", &format!("/api/oa/{}/follow", c.oa), Some(c.agent), None).await;
+    assert_eq!(st, ok);
+    let (st, _) = call(c.app, "POST", &format!("/api/oa/{}/unfollow", c.oa), Some(c.agent), None).await;
+    assert_eq!(st, ok);
+
+    // list: defaults, shape, filters, sort, paging
+    let (st, all) = crm_get(c, c.kong, "customers?following=true").await;
+    assert_eq!(st, ok, "{all}");
+    assert_eq!(all["total"], 2);
+    assert_eq!((all["page"].as_i64(), all["limit"].as_i64()), (Some(1), Some(30)));
+    let items = all["items"].as_array().unwrap();
+    assert_eq!(items.len(), 2);
+    assert!(items.iter().all(|i| i["is_following"] == true && i["followed_at"].is_string() && i["conversation_id"].is_string()));
+    let boss_item = items.iter().find(|i| i["customer_id"] == c.boss_id).unwrap();
+    let boss_name = boss_item["customer_name"].as_str().unwrap().to_string();
+    assert_eq!(boss_item["crm_note"], "ลูกค้าใหม่ชอบโทนเข้ม");
+
+    let (_, no_filter) = crm_get(c, c.kong, "customers").await;
+    assert_eq!(no_filter["total"], 3, "following omitted = followers incl. unfollowed");
+    let (_, gone) = crm_get(c, c.kong, "customers?following=false").await;
+    assert_eq!(gone["total"], 1);
+    assert_eq!(gone["items"][0]["is_following"], false);
+
+    for (tags, want) in [("VIP", 1), ("สายกาแฟ", 2), ("VIP,ใหม่", 2), ("ไม่มีแท็กนี้", 0)] {
+        let (st, r) = crm_get(c, c.kong, &format!("customers?tags={}", pct(tags))).await;
+        assert_eq!((st, r["total"].as_i64(), r["items"].as_array().map(Vec::len)), (ok, Some(want), Some(want as usize)), "tags={tags}");
+    }
+    let (_, by_note) = crm_get(c, c.kong, &format!("customers?q={}", pct("เมล็ดคั่ว"))).await;
+    assert_eq!(by_note["total"], 1);
+    assert_eq!(by_note["items"][0]["customer_id"], c.prae_id);
+    let (_, by_name) = crm_get(c, c.kong, &format!("customers?q={}", pct(&boss_name.to_uppercase()))).await;
+    assert!(by_name["items"].as_array().unwrap().iter().any(|i| i["customer_id"] == c.boss_id), "q is case-insensitive");
+    let (st, rx) = crm_get(c, c.kong, &format!("customers?q={}", pct(".*("))).await;
+    assert_eq!((st, rx["total"].as_i64()), (ok, Some(0)), "regex chars must be literal: {rx}");
+
+    let (_, by_name_sort) = crm_get(c, c.kong, "customers?sort=name").await;
+    let names: Vec<String> = by_name_sort["items"].as_array().unwrap().iter()
+        .map(|i| i["customer_name"].as_str().unwrap().to_string()).collect();
+    let mut sorted = names.clone();
+    sorted.sort();
+    assert_eq!(names, sorted);
+    let (_, by_followed) = crm_get(c, c.kong, "customers?sort=followed&following=true").await;
+    assert_eq!(by_followed["items"][0]["customer_id"], c.boss_id, "boss followed after prae");
+    let (st, _) = crm_get(c, c.kong, "customers?sort=recent").await;
+    assert_eq!(st, ok);
+
+    let (_, p2) = crm_get(c, c.kong, "customers?following=true&limit=1&page=2").await;
+    assert_eq!((p2["items"].as_array().unwrap().len(), p2["total"].as_i64()), (1, Some(2)));
+    let (_, p3) = crm_get(c, c.kong, "customers?following=true&limit=1&page=3").await;
+    assert_eq!((p3["items"].as_array().unwrap().len(), p3["total"].as_i64()), (0, Some(2)));
+
+    let too_many_tags = (0..11).map(|i| format!("t{i}")).collect::<Vec<_>>().join(",");
+    let long_q = "ก".repeat(65);
+    for bad in ["sort=x", "following=maybe", "page=0", "page=abc", "limit=0", "limit=101"] {
+        let (st, _) = crm_get(c, c.kong, &format!("customers?{bad}")).await;
+        assert_eq!(st, StatusCode::BAD_REQUEST, "{bad}");
+    }
+    for bad in [format!("customers?tags={too_many_tags}"), format!("customers?q={}", pct(&long_q)), format!("customer-tags?tags={too_many_tags}")] {
+        let (st, _) = crm_get(c, c.kong, &bad).await;
+        assert_eq!(st, StatusCode::BAD_REQUEST, "{bad}");
+    }
+
+    // multi-tag broadcast: each matching follower exactly once, non-matching none
+    let (st, b1) = crm_broadcast(c, json!({ "content": "โปรสายกาแฟ", "target_tags": ["VIP", "ใหม่", " VIP ", "ทั้งหมด", ""] })).await;
+    assert_eq!(st, ok, "{b1}");
+    assert_eq!(b1["recipient_count"], 2);
+    assert_eq!(b1["broadcast"]["target_tags"], json!(["VIP", "ใหม่"]));
+    assert_eq!(b1["broadcast"]["target_tag"], "VIP");
+    assert!(b1["broadcast"].get("recipient_ids").is_none());
+    let (_, b2) = crm_broadcast(c, json!({ "content": "เฉพาะ VIP", "target_tags": ["VIP"], "target_tag": "VIP" })).await;
+    assert_eq!(b2["recipient_count"], 1);
+    let (_, b3) = crm_broadcast(c, json!({ "content": "แท็กเดียวแบบเดิม", "target_tag": "ใหม่" })).await;
+    assert_eq!((b3["recipient_count"].as_i64(), b3["broadcast"]["target_tags"].clone()), (Some(1), json!(["ใหม่"])));
+    let (_, b4) = crm_broadcast(c, json!({ "content": "ไม่มีใครมีแท็กนี้", "target_tags": ["ไม่มีแท็กนี้"] })).await;
+    assert_eq!(b4["recipient_count"], 0);
+    let (st, _) = crm_broadcast(c, json!({ "content": "x", "target_tags": (0..11).map(|i| format!("t{i}")).collect::<Vec<_>>() })).await;
+    assert_eq!(st, StatusCode::BAD_REQUEST);
+
+    // detail: coupon claimed+redeemed, broadcasts received (first coupon broadcast + b1 + b2), stats
+    let (st, d) = crm_get(c, c.kong, &format!("customers/{}", c.prae_id)).await;
+    assert_eq!(st, ok, "{d}");
+    assert_eq!(d["customer"]["customer_id"], c.prae_id);
+    assert_eq!(d["customer"]["tags"], json!(["VIP", "สายกาแฟ"]));
+    assert_eq!(d["coupons"].as_array().unwrap().len(), 1);
+    assert_eq!(d["coupons"][0]["is_redeemed"], true);
+    assert_eq!(d["stats"]["coupons_claimed"], 1);
+    assert_eq!(d["stats"]["coupons_redeemed"], 1);
+    assert_eq!(d["stats"]["broadcasts_received"], 3);
+    let bcs = d["broadcasts"].as_array().unwrap();
+    assert_eq!(bcs.len(), 3);
+    assert_eq!(bcs[0]["content"], "เฉพาะ VIP", "newest first");
+    let (_, db) = crm_get(c, c.kong, &format!("customers/{}", c.boss_id)).await;
+    assert_eq!((db["stats"]["coupons_claimed"].as_i64(), db["stats"]["broadcasts_received"].as_i64()), (Some(0), Some(2)));
+    let (st, _) = crm_get(c, c.kong, "customers/user_never_followed").await;
+    assert_eq!(st, StatusCode::NOT_FOUND);
+
+    // tag summary (marketer allowed) with overlapping tags
+    let (st, t) = crm_get(c, c.mkt, "customer-tags").await;
+    assert_eq!(st, ok, "{t}");
+    assert_eq!(t["tags"], json!([{ "tag": "สายกาแฟ", "count": 2 }, { "tag": "VIP", "count": 1 }, { "tag": "ใหม่", "count": 1 }]));
+    assert_eq!((t["total_following"].as_i64(), t["match_count"].as_i64()), (Some(2), Some(2)));
+    let (_, t2) = crm_get(c, c.mkt, &format!("customer-tags?tags={}", pct("VIP,สายกาแฟ,ใหม่"))).await;
+    assert_eq!(t2["match_count"], 2, "overlapping tags count each customer once");
+    let (_, t3) = crm_get(c, c.mkt, "customer-tags?tags=VIP").await;
+    assert_eq!(t3["match_count"], 1);
+
+    // roles
+    for path in ["customers".to_string(), format!("customers/{}", c.prae_id)] {
+        assert_eq!(crm_get(c, c.mkt, &path).await.0, StatusCode::FORBIDDEN, "marketer {path}");
+        assert_eq!(crm_get(c, c.prae, &path).await.0, StatusCode::FORBIDDEN, "non-staff {path}");
+        assert_eq!(crm_get(c, c.agent, &path).await.0, ok, "agent {path}");
+    }
+    assert_eq!(crm_get(c, c.prae, "customer-tags").await.0, StatusCode::FORBIDDEN);
+    assert_eq!(crm_get(c, c.agent, "customer-tags").await.0, ok);
 }

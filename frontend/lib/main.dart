@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'client_app.dart';
 import 'models/models.dart';
 import 'screens/call_inline_panel.dart';
 import 'screens/login_screen.dart';
@@ -120,7 +121,9 @@ class _BCAiChatAppState extends State<BCAiChatApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'BC Ai Chat — แชทส่วนตัว ครอบครัว & เพื่อนสนิท',
+      title: isShopApp
+          ? 'BC Ai Chat OA — แอปสำหรับร้านค้า'
+          : 'BC Ai Chat — แชทส่วนตัว ครอบครัว & เพื่อนสนิท',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.buildTheme(),
       // เต็มจอทุกขนาด — MainShell เป็นผู้จัด layout แคบ/กว้างเอง (auto resize)
@@ -196,8 +199,10 @@ class _SplashLoadingView extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text(
-                  'กำลังซิงค์ข้อมูลแชทส่วนตัว ครอบครัว & เพื่อนสนิท...',
+                Text(
+                  isShopApp
+                      ? 'กำลังเปิดแอปร้านค้า...'
+                      : 'กำลังซิงค์ข้อมูลแชทส่วนตัว ครอบครัว & เพื่อนสนิท...',
                   style: TextStyle(
                     color: Colors.white70,
                     fontSize: 13.5,

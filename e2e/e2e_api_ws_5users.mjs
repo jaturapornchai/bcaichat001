@@ -903,6 +903,32 @@ async function main() {
     );
     console.log("✅ Multi-Shop & Multi-Role ร้านค้า + Follow + Auto-Reply + Coupon + Targeted Broadcast passed");
 
+    // CRM v1: customer list/detail/tag summary + multi-tag broadcast (U4 = VIP, U5 = ใหม่)
+    await api("PUT", `/api/oa/${shopA.id}/followers/${U5.user.id}/crm`, { tags: ["ใหม่"] }, U1.token);
+    const crmList = (await api("GET", `/api/oa/${shopA.id}/customers?following=true&sort=name`, undefined, U2.token)).data;
+    assert.equal(crmList.total, crmList.items.length);
+    const crmU4 = crmList.items.find((c) => c.customer_id === U4.user.id);
+    assert.ok(crmU4 && crmU4.is_following === true && crmU4.followed_at && crmU4.tags.includes("VIP"));
+    const crmVip = (await api("GET", `/api/oa/${shopA.id}/customers?tags=VIP&limit=1`, undefined, U2.token)).data;
+    assert.deepEqual([crmVip.total, crmVip.items.length, crmVip.page, crmVip.limit], [1, 1, 1, 1]);
+    const crmRegex = (await api("GET", `/api/oa/${shopA.id}/customers?q=${encodeURIComponent(".*(")}`, undefined, U2.token)).data;
+    assert.equal(crmRegex.total, 0);
+    await api("GET", `/api/oa/${shopA.id}/customers?sort=bogus`, undefined, U2.token, 400);
+    const crmTags = (await api("GET", `/api/oa/${shopA.id}/customer-tags?tags=${encodeURIComponent("VIP,ใหม่")}`, undefined, U3.token)).data;
+    assert.deepEqual(crmTags.tags.map((t) => t.tag).sort(), ["VIP", "ใหม่"].sort());
+    assert.equal(crmTags.match_count, 2);
+    const crmBc = (
+      await api("POST", `/api/oa/${shopA.id}/broadcasts`, { target_tags: ["VIP", "ใหม่"], content: "ข่าวหลายแท็ก E2E" }, U3.token)
+    ).data;
+    assert.equal(crmBc.recipient_count, 2);
+    assert.deepEqual(crmBc.broadcast.target_tags, ["VIP", "ใหม่"]);
+    const crmDetail = (await api("GET", `/api/oa/${shopA.id}/customers/${U4.user.id}`, undefined, U1.token)).data;
+    assert.equal(crmDetail.customer.customer_id, U4.user.id);
+    assert.equal(crmDetail.stats.coupons_claimed, 1);
+    assert.equal(crmDetail.stats.coupons_redeemed, 1);
+    assert.ok(crmDetail.broadcasts.some((b) => b.content === "ข่าวหลายแท็ก E2E") && crmDetail.stats.broadcasts_received >= 2);
+    await api("GET", `/api/oa/${shopA.id}/customers`, undefined, U4.token, 403);
+
     // 7b. บัญชีเดียวเปิดสองแอป: U2 (พนักงานร้าน A) เปิดแอปแชทและแอปร้านค้าพร้อมกัน
     // Every socket gets events in broadcast order, so once a later event has arrived
     // an earlier one that is missing was filtered out, not delayed.

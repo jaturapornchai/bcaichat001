@@ -2426,16 +2426,23 @@ class OaBroadcast {
   final String id;
   final String oaId;
   final String targetTag;
+  final List<String> targetTags;
   final String msgType;
   final String content;
   final String? couponId;
   final int recipientCount;
   final String createdAt;
 
+  /// แท็กปลายทางที่แสดงผล: `target_tags` ก่อน ไม่มีค่อยใช้ `target_tag` เดิม
+  List<String> get audienceTags => targetTags.isNotEmpty
+      ? targetTags
+      : (targetTag.isNotEmpty ? [targetTag] : const []);
+
   const OaBroadcast({
     required this.id,
     required this.oaId,
     this.targetTag = '',
+    this.targetTags = const [],
     this.msgType = 'text',
     required this.content,
     this.couponId,
@@ -2447,12 +2454,216 @@ class OaBroadcast {
     id: _extractId(json),
     oaId: (json['oa_id'] ?? '').toString(),
     targetTag: (json['target_tag'] ?? '').toString(),
+    targetTags: _toStringList(json['target_tags']),
     msgType: (json['msg_type'] ?? 'text').toString(),
     content: (json['content'] ?? '').toString(),
     couponId: json['coupon_id']?.toString(),
     recipientCount: _toInt(json['recipient_count'], 0),
     createdAt: (json['created_at'] ?? '').toString(),
   );
+}
+
+List<String> _toStringList(dynamic raw) =>
+    raw is List ? raw.map((e) => e.toString()).toList() : const [];
+
+/// ลูกค้าในหน้า CRM: ข้อมูลแถวแชทลูกค้าเดิม + สถานะการติดตามร้าน
+class OaCustomer {
+  final OaCustomerChatDto chat;
+  final bool isFollowing;
+  final String followedAt;
+
+  const OaCustomer({
+    required this.chat,
+    this.isFollowing = false,
+    this.followedAt = '',
+  });
+
+  String get id => chat.customerId;
+  String get name => chat.customerName;
+  List<String> get tags => chat.tags;
+
+  factory OaCustomer.fromJson(Map<String, dynamic> json) => OaCustomer(
+    chat: OaCustomerChatDto.fromJson(json),
+    isFollowing: _toBool(json['is_following'], false),
+    followedAt: (json['followed_at'] ?? '').toString(),
+  );
+}
+
+class OaCustomerPage {
+  final List<OaCustomer> items;
+  final int total;
+  final int page;
+  final int limit;
+
+  const OaCustomerPage({
+    this.items = const [],
+    this.total = 0,
+    this.page = 1,
+    this.limit = 30,
+  });
+
+  factory OaCustomerPage.fromJson(Map<String, dynamic> json) {
+    final raw = json['items'];
+    final items = raw is List
+        ? raw
+              .whereType<Map>()
+              .map((e) => OaCustomer.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+        : <OaCustomer>[];
+    return OaCustomerPage(
+      items: items,
+      total: _toInt(json['total'], items.length),
+      page: _toInt(json['page'], 1),
+      limit: _toInt(json['limit'], 30),
+    );
+  }
+}
+
+class OaCustomerCoupon {
+  final String id;
+  final String code;
+  final String title;
+  final String discountText;
+  final String expiresAt;
+  final bool isRedeemed;
+  final bool isActive;
+
+  const OaCustomerCoupon({
+    this.id = '',
+    this.code = '',
+    this.title = '',
+    this.discountText = '',
+    this.expiresAt = '',
+    this.isRedeemed = false,
+    this.isActive = true,
+  });
+
+  factory OaCustomerCoupon.fromJson(Map<String, dynamic> json) =>
+      OaCustomerCoupon(
+        id: _extractId(json),
+        code: (json['code'] ?? '').toString(),
+        title: (json['title'] ?? '').toString(),
+        discountText: (json['discount_text'] ?? '').toString(),
+        expiresAt: (json['expires_at'] ?? '').toString(),
+        isRedeemed: _toBool(json['is_redeemed'], false),
+        isActive: _toBool(json['is_active'], true),
+      );
+}
+
+class OaCustomerBroadcast {
+  final String id;
+  final String msgType;
+  final String content;
+  final List<String> targetTags;
+  final String? couponId;
+  final String createdAt;
+
+  const OaCustomerBroadcast({
+    this.id = '',
+    this.msgType = 'text',
+    this.content = '',
+    this.targetTags = const [],
+    this.couponId,
+    this.createdAt = '',
+  });
+
+  factory OaCustomerBroadcast.fromJson(Map<String, dynamic> json) =>
+      OaCustomerBroadcast(
+        id: _extractId(json),
+        msgType: (json['msg_type'] ?? 'text').toString(),
+        content: (json['content'] ?? '').toString(),
+        targetTags: _toStringList(json['target_tags']),
+        couponId: json['coupon_id']?.toString(),
+        createdAt: (json['created_at'] ?? '').toString(),
+      );
+}
+
+class OaCustomerDetail {
+  final OaCustomer customer;
+  final List<OaCustomerCoupon> coupons;
+  final List<OaCustomerBroadcast> broadcasts;
+  final int couponsClaimed;
+  final int couponsRedeemed;
+  final int broadcastsReceived;
+
+  const OaCustomerDetail({
+    required this.customer,
+    this.coupons = const [],
+    this.broadcasts = const [],
+    this.couponsClaimed = 0,
+    this.couponsRedeemed = 0,
+    this.broadcastsReceived = 0,
+  });
+
+  factory OaCustomerDetail.fromJson(Map<String, dynamic> json) {
+    final stats = json['stats'] is Map
+        ? Map<String, dynamic>.from(json['stats'] as Map)
+        : const <String, dynamic>{};
+    final rawCoupons = json['coupons'];
+    final rawBroadcasts = json['broadcasts'];
+    final coupons = rawCoupons is List
+        ? rawCoupons
+              .whereType<Map>()
+              .map(
+                (e) => OaCustomerCoupon.fromJson(Map<String, dynamic>.from(e)),
+              )
+              .toList()
+        : <OaCustomerCoupon>[];
+    final broadcasts = rawBroadcasts is List
+        ? rawBroadcasts
+              .whereType<Map>()
+              .map(
+                (e) =>
+                    OaCustomerBroadcast.fromJson(Map<String, dynamic>.from(e)),
+              )
+              .toList()
+        : <OaCustomerBroadcast>[];
+    return OaCustomerDetail(
+      customer: OaCustomer.fromJson(
+        json['customer'] is Map
+            ? Map<String, dynamic>.from(json['customer'] as Map)
+            : const <String, dynamic>{},
+      ),
+      coupons: coupons,
+      broadcasts: broadcasts,
+      couponsClaimed: _toInt(stats['coupons_claimed'], coupons.length),
+      couponsRedeemed: _toInt(
+        stats['coupons_redeemed'],
+        coupons.where((c) => c.isRedeemed).length,
+      ),
+      broadcastsReceived: _toInt(
+        stats['broadcasts_received'],
+        broadcasts.length,
+      ),
+    );
+  }
+}
+
+class OaTagSummary {
+  final List<OaTagCount> tags;
+  final int totalFollowing;
+  final int matchCount;
+
+  const OaTagSummary({
+    this.tags = const [],
+    this.totalFollowing = 0,
+    this.matchCount = 0,
+  });
+
+  factory OaTagSummary.fromJson(Map<String, dynamic> json) {
+    final raw = json['tags'];
+    return OaTagSummary(
+      tags: raw is List
+          ? raw
+                .whereType<Map>()
+                .map((e) => OaTagCount.fromJson(Map<String, dynamic>.from(e)))
+                .where((t) => t.tag.isNotEmpty)
+                .toList()
+          : const [],
+      totalFollowing: _toInt(json['total_following'], 0),
+      matchCount: _toInt(json['match_count'], 0),
+    );
+  }
 }
 
 class CallParticipantState {

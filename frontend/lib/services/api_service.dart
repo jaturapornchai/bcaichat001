@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import '../client_app.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
 import 'push_service.dart';
@@ -230,11 +231,29 @@ class ApiService {
     return decoded is Map<String, dynamic> ? decoded : const {};
   }
 
+  /// ตัวเครื่องแจ้งแอปที่ใช้ (`chat`/`oa`) ให้หลังบ้านส่งอีเวนต์/push ถูกแอป
+  static Map<String, dynamic> deviceRegistrationBody(
+    Map<String, dynamic> body,
+    String deviceId, {
+    String app = kClientApp,
+  }) => {...body, 'device_id': deviceId, 'app': app};
+
+  /// URL เชื่อม WebSocket พร้อมชื่อแอป
+  static String wsConnectUrl(
+    String wsBase,
+    String jwt,
+    String device, {
+    String app = kClientApp,
+  }) =>
+      '$wsBase?token=${Uri.encodeComponent(jwt)}&device=$device&app=$app';
+
   Future<void> registerDevice(Map<String, dynamic> body) async {
     final res = await http.post(
       Uri.parse('$baseUrl/api/devices'),
       headers: _headers,
-      body: jsonEncode({...body, 'device_id': await deviceId()}),
+      body: jsonEncode(
+        deviceRegistrationBody(body, await deviceId()),
+      ),
     );
     if (res.statusCode != 200) {
       throw Exception('register device: ${res.statusCode}');
@@ -274,9 +293,7 @@ class ApiService {
     if (gen != _wsGen) return; // disconnected while reading the id
 
     try {
-      final uri = Uri.parse(
-        '$wsBaseUrl?token=${Uri.encodeComponent(jwt)}&device=$device',
-      );
+      final uri = Uri.parse(wsConnectUrl(wsBaseUrl, jwt, device));
       _wsChannel = WebSocketChannel.connect(uri);
       _wsSub = _wsChannel!.stream.listen(
         (raw) {
@@ -2702,6 +2719,69 @@ class ApiService {
     return OaCoupon.fromJson(merged.isEmpty ? decoded : merged);
   }
 
+  Future<OaCustomerPage> fetchOaCustomers(
+    String oaId, {
+    String q = '',
+    List<String> tags = const [],
+    bool? following,
+    String sort = 'recent',
+    int page = 1,
+    int limit = 30,
+  }) async {
+    final uri = Uri.parse('$baseUrl/api/oa/$oaId/customers').replace(
+      queryParameters: {
+        if (q.trim().isNotEmpty) 'q': q.trim(),
+        if (tags.isNotEmpty) 'tags': tags.join(','),
+        'following': ?following?.toString(),
+        'sort': sort,
+        'page': '$page',
+        'limit': '$limit',
+      },
+    );
+    final res = await http.get(uri, headers: _headers);
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception(_extractApiError(res, 'โหลดรายชื่อลูกค้าไม่สำเร็จ'));
+    }
+    final raw = jsonDecode(utf8.decode(res.bodyBytes));
+    return OaCustomerPage.fromJson(
+      raw is Map ? Map<String, dynamic>.from(raw) : const {},
+    );
+  }
+
+  Future<OaCustomerDetail> fetchOaCustomerDetail(
+    String oaId,
+    String uid,
+  ) async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/api/oa/$oaId/customers/$uid'),
+      headers: _headers,
+    );
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception(_extractApiError(res, 'โหลดข้อมูลลูกค้าไม่สำเร็จ'));
+    }
+    final raw = jsonDecode(utf8.decode(res.bodyBytes));
+    return OaCustomerDetail.fromJson(
+      raw is Map ? Map<String, dynamic>.from(raw) : const {},
+    );
+  }
+
+  Future<OaTagSummary> fetchOaCustomerTags(
+    String oaId, {
+    List<String> tags = const [],
+  }) async {
+    final uri = Uri.parse('$baseUrl/api/oa/$oaId/customer-tags').replace(
+      queryParameters: {if (tags.isNotEmpty) 'tags': tags.join(',')},
+    );
+    final res = await http.get(uri, headers: _headers);
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception(_extractApiError(res, 'โหลดแท็กลูกค้าไม่สำเร็จ'));
+    }
+    final raw = jsonDecode(utf8.decode(res.bodyBytes));
+    return OaTagSummary.fromJson(
+      raw is Map ? Map<String, dynamic>.from(raw) : const {},
+    );
+  }
+
   Future<List<OaBroadcast>> fetchOaBroadcasts(String oaId) async {
     final res = await http.get(
       Uri.parse('$baseUrl/api/oa/$oaId/broadcasts'),
@@ -2720,7 +2800,7 @@ class ApiService {
 
   Future<({OaBroadcast broadcast, int recipientCount})> sendOaBroadcast(
     String oaId, {
-    String? targetTag,
+    List<String> targetTags = const [],
     String msgType = 'text',
     String content = '',
     Map<String, dynamic>? cardPayload,
@@ -2730,8 +2810,7 @@ class ApiService {
       Uri.parse('$baseUrl/api/oa/$oaId/broadcasts'),
       headers: _headers,
       body: jsonEncode({
-        if (targetTag != null && targetTag.trim().isNotEmpty)
-          'target_tag': targetTag.trim(),
+        'target_tags': targetTags,
         'msg_type': msgType,
         'content': content.trim(),
         'card_payload': ?cardPayload,

@@ -25,7 +25,11 @@ import type {
   OaAutoReplyRule,
   OaBroadcast,
   OaCoupon,
+  OaCustomer,
   OaCustomerChat,
+  OaCustomerDetail,
+  OaCustomerList,
+  OaCustomerTagStats,
   OaFollowerCrm,
   OaOverview,
   OaRichMenuItem,
@@ -84,20 +88,20 @@ export function saveRoomTone(tone: RoomToneId): void {
   window.localStorage.setItem(STORAGE_ROOM_TONE_KEY, tone);
 }
 
-export function getWsUrl(token: string, deviceId = "web_tab"): string {
+export function getWsUrl(token: string, deviceId = "web_tab", app: "chat" | "oa" = "chat"): string {
   const configured = process.env.NEXT_PUBLIC_WS_URL?.trim();
   let base = configured || "ws://127.0.0.1:8096/ws";
   if (!configured && typeof window !== "undefined") {
     const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
     const hostname = window.location.hostname || "127.0.0.1";
-    if (hostname === "localhost" || hostname === "127.0.0.1") {
+    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname.endsWith(".localhost")) {
       base = `${proto}//${hostname}:8096/ws`;
     } else {
       base = `${proto}//${window.location.host}/ws`;
     }
   }
   const sep = base.includes("?") ? "&" : "?";
-  return `${base}${sep}token=${encodeURIComponent(token)}&device=${encodeURIComponent(deviceId)}`;
+  return `${base}${sep}token=${encodeURIComponent(token)}&device=${encodeURIComponent(deviceId)}&app=${app}`;
 }
 
 export function resolveLiveKitUrl(rawUrl?: string | null): string {
@@ -141,6 +145,27 @@ function normalizeOaCustomerChat(raw: Record<string, unknown>): OaCustomerChat {
     unread_for_oa: Number(raw.unread_for_oa ?? 0),
     last_message: (raw.last_message as OaCustomerChat["last_message"]) ?? null,
     updated_at: String(raw.updated_at ?? ""),
+  };
+}
+
+function normalizeOaCustomer(raw: Record<string, unknown>): OaCustomer {
+  return {
+    conversation_id: String(raw.conversation_id ?? ""),
+    oa_id: String(raw.oa_id ?? ""),
+    customer_id: String(raw.customer_id ?? raw.follower_user_id ?? ""),
+    customer_name: String(raw.customer_name ?? raw.follower_name ?? "ลูกค้า"),
+    customer_avatar: String(raw.customer_avatar ?? raw.follower_avatar ?? ""),
+    customer_bc_id: String(raw.customer_bc_id ?? raw.follower_bc_id ?? ""),
+    customer_phone: String(raw.customer_phone ?? raw.follower_phone ?? ""),
+    customer_email: String(raw.customer_email ?? raw.follower_email ?? ""),
+    tags: Array.isArray(raw.tags) ? raw.tags.map(String) : [],
+    crm_note: String(raw.crm_note ?? ""),
+    ai_paused: Boolean(raw.ai_paused),
+    unread_for_oa: Number(raw.unread_for_oa ?? 0),
+    last_message: (raw.last_message as OaCustomer["last_message"]) ?? null,
+    updated_at: String(raw.updated_at ?? ""),
+    is_following: Boolean(raw.is_following),
+    followed_at: String(raw.followed_at ?? ""),
   };
 }
 
@@ -1445,10 +1470,73 @@ export class ApiClient {
     return list.map((b) => normalizeIdDoc(b));
   }
 
+  async listOaCustomers(
+    oaId: string,
+    params: {
+      q?: string;
+      tags?: string[];
+      following?: boolean;
+      sort?: "recent" | "name" | "followed";
+      page?: number;
+      limit?: number;
+    }
+  ): Promise<OaCustomerList> {
+    const qs = new URLSearchParams();
+    if (params.q?.trim()) qs.set("q", params.q.trim());
+    if (params.tags?.length) qs.set("tags", params.tags.join(","));
+    if (params.following !== undefined) qs.set("following", String(params.following));
+    if (params.sort) qs.set("sort", params.sort);
+    qs.set("page", String(params.page ?? 1));
+    qs.set("limit", String(params.limit ?? 30));
+    const res = await this.request<{
+      items?: Array<Record<string, unknown>>;
+      total?: number;
+      page?: number;
+      limit?: number;
+    }>(`/api/oa/${encodeURIComponent(oaId)}/customers?${qs.toString()}`);
+    return {
+      items: (res.items ?? []).map(normalizeOaCustomer),
+      total: Number(res.total ?? 0),
+      page: Number(res.page ?? 1),
+      limit: Number(res.limit ?? 30),
+    };
+  }
+
+  async getOaCustomer(oaId: string, userId: string): Promise<OaCustomerDetail> {
+    const res = await this.request<Record<string, unknown> & OaCustomerDetail>(
+      `/api/oa/${encodeURIComponent(oaId)}/customers/${encodeURIComponent(userId)}`
+    );
+    return {
+      customer: normalizeOaCustomer((res.customer ?? {}) as unknown as Record<string, unknown>),
+      coupons: res.coupons ?? [],
+      broadcasts: (res.broadcasts ?? []).map((b) => ({
+        ...b,
+        target_tags: Array.isArray(b.target_tags) ? b.target_tags : [],
+      })),
+      stats: {
+        coupons_claimed: Number(res.stats?.coupons_claimed ?? 0),
+        coupons_redeemed: Number(res.stats?.coupons_redeemed ?? 0),
+        broadcasts_received: Number(res.stats?.broadcasts_received ?? 0),
+      },
+    };
+  }
+
+  async getOaCustomerTags(oaId: string, tags: string[] = []): Promise<OaCustomerTagStats> {
+    const qs = tags.length ? `?tags=${encodeURIComponent(tags.join(","))}` : "";
+    const res = await this.request<Partial<OaCustomerTagStats>>(
+      `/api/oa/${encodeURIComponent(oaId)}/customer-tags${qs}`
+    );
+    return {
+      tags: res.tags ?? [],
+      total_following: Number(res.total_following ?? 0),
+      match_count: Number(res.match_count ?? 0),
+    };
+  }
+
   async createOaBroadcast(
     oaId: string,
     payload: {
-      target_tag?: string;
+      target_tags?: string[];
       msg_type?: string;
       content?: string;
       card_payload?: RichCardPayload;

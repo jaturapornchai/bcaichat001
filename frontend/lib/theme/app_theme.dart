@@ -432,16 +432,16 @@ class AppTheme {
         checkmarkColor: brandDeep,
         side: const BorderSide(color: borderSubtle),
         shape: const StadiumBorder(),
-        labelStyle: WidgetStateTextStyle.resolveWith(
-          (states) => GoogleFonts.prompt(
-            fontSize: 13,
-            fontWeight: states.contains(WidgetState.selected)
-                ? FontWeight.w600
-                : FontWeight.w500,
-            height: 1.2,
-            color: states.contains(WidgetState.selected)
-                ? brandDeep
-                : slateBody,
+        // A chip resolves only the colour of its label style by state. A
+        // state-dependent style as a whole is never resolved and leaves the
+        // label with no colour at all (white on the white chip).
+        labelStyle: GoogleFonts.prompt(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          height: 1.2,
+          color: WidgetStateColor.resolveWith(
+            (states) =>
+                states.contains(WidgetState.selected) ? brandDeep : slateBody,
           ),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 6),

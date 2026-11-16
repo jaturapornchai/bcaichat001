@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../client_app.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
@@ -16,10 +17,14 @@ class LoginScreen extends StatefulWidget {
   final ValueChanged<AppUser> onLoggedIn;
   final AuthConfig? initialAuthConfig;
 
+  /// true = หัวหน้าล็อกอินของแอปร้านค้า BCAiChatOA
+  final bool shopApp;
+
   const LoginScreen({
     super.key,
     required this.onLoggedIn,
     this.initialAuthConfig,
+    this.shopApp = kIsShopApp,
   });
 
   @override
@@ -454,9 +459,9 @@ class _LoginScreenState extends State<LoginScreen> {
           crossAxisAlignment: CrossAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
-              'BC Ai Chat',
-              style: TextStyle(
+            Text(
+              widget.shopApp ? 'BC Ai Chat OA' : 'BC Ai Chat',
+              style: const TextStyle(
                 fontSize: 21,
                 fontWeight: FontWeight.w700,
                 color: AppTheme.slateDark,
@@ -477,8 +482,10 @@ class _LoginScreenState extends State<LoginScreen> {
           ],
         ),
         const SizedBox(height: 3),
-        const Text(
-          'แชทส่วนตัว ครอบครัว เพื่อน & ร้านค้าในที่เดียว',
+        Text(
+          widget.shopApp
+              ? 'แอปสำหรับร้านค้า — จัดการลูกค้าและตอบแชทร้าน'
+              : 'แชทส่วนตัว ครอบครัว และเพื่อนสนิท',
           textAlign: TextAlign.center,
           style: TextStyle(fontSize: 12.5, color: AppTheme.slateMuted),
         ),

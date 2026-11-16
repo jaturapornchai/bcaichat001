@@ -86,7 +86,9 @@ import type {
 } from "@/lib/types";
 import { CallWorkspaceBar } from "./CallWorkspaceBar";
 import { ChatRoomView, resolveMiniAppIframeUrl } from "./ChatRoomView";
+import { SITE_NAME, getShopSiteUrl, type SiteId } from "@/lib/site";
 import { OaConsoleWorkspace } from "./OaConsoleWorkspace";
+import { OaDiscoverView } from "./OaDiscoverView";
 import { QrCodeSvg } from "./QrCodeSvg";
 import { UserAvatar } from "./StickerArt";
 
@@ -154,7 +156,8 @@ const RECOVERY_ACTION_LABELS: Record<string, string> = {
 };
 
 interface MainShellProps {
-  initialTab?: MainTabId;
+  /** oa = เว็บร้านค้า: แสดงเฉพาะคอนโซลร้านค้า + ตั้งค่า ไม่โหลดรายการแชทส่วนตัว */
+  site?: SiteId;
   authConfig?: AuthConfig | null;
   currentUser: UserProfile;
   testUsers?: QuickTestUserItem[];
@@ -173,7 +176,7 @@ interface MainShellProps {
 }
 
 export function MainShell({
-  initialTab = "chats",
+  site = "chat",
   authConfig = null,
   currentUser,
   testUsers = [],
@@ -190,11 +193,12 @@ export function MainShell({
   latestIncomingNotice = null,
   onConversationsSynced,
 }: MainShellProps) {
+  const initialTab: MainTabId = site === "oa" ? "oa" : "chats";
   const [activeTab, setActiveTab] = useState<MainTabId>(initialTab);
   const isWide = useIsWide();
   // แท็บรายการล่าสุด (home/chats) ที่ฝั่งซ้ายค้างไว้ขณะเปิดห้องบนจอกว้าง
   // แท็บรายการ (หน้าหลัก/แชท) ล่าสุด — ใช้แสดงฝั่งซ้ายขณะเปิดห้องบนจอกว้าง
-  const [lastListTab, setLastListTab] = useState<"home" | "chats">(initialTab === "home" ? "home" : "chats");
+  const [lastListTab, setLastListTab] = useState<"home" | "chats">("chats");
   useEffect(() => {
     if (activeTab === "home" || activeTab === "chats") setLastListTab(activeTab);
   }, [activeTab]);
@@ -300,6 +304,22 @@ export function MainShell({
   // Inline Mini-App runner (inside Settings or active ChatRoom)
   const [runningMiniApp, setRunningMiniApp] = useState<MiniAppItem | null>(null);
 
+  // เจ้าของ/ทีมงานร้านค้า: ใช้โชว์ลิงก์ไปเว็บร้านค้าในแท็บตั้งค่า
+  const [ownsShop, setOwnsShop] = useState(false);
+  useEffect(() => {
+    if (site !== "chat" || activeTab !== "services") return;
+    let active = true;
+    api
+      .listMyOas()
+      .then((list) => {
+        if (active) setOwnsShop(list.length > 0);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [site, activeTab]);
+
   // Toast notice
   const [toast, setToast] = useState<string | null>(null);
 
@@ -311,6 +331,7 @@ export function MainShell({
   }, []);
 
   const refreshCore = useCallback(async () => {
+    if (site === "oa") return; // เว็บร้านค้าไม่แสดงแชทส่วนตัว จึงไม่โหลดรายการ
     try {
       const [fr, convs, apps, notes] = await Promise.all([
         api.listFriends(),
@@ -330,7 +351,7 @@ export function MainShell({
     } catch {
       // Ignore transient errors
     }
-  }, [onConversationsSynced]);
+  }, [onConversationsSynced, site]);
 
   const refreshAdmin = useCallback(async () => {
     if (currentUser.role !== "admin") return;
@@ -1114,7 +1135,7 @@ export function MainShell({
   };
 
   // 5 Thumb-Friendly Nav Items (เพื่อน / แชท / ร้านค้า / สมุดบันทึก / ตั้งค่า)
-  const navItems: Array<{
+  const allNavItems: Array<{
     id: MainTabId;
     label: string;
     icon: React.ReactNode;
@@ -1131,6 +1152,10 @@ export function MainShell({
     { id: "notes", label: "สมุดบันทึก", icon: <StickyNote className="h-5 w-5" /> },
     { id: "services", label: "ตั้งค่า", icon: <Settings className="h-5 w-5" /> },
   ];
+  const navItems =
+    site === "oa"
+      ? allNavItems.filter((i) => i.id === "oa" || i.id === "services")
+      : allNavItems;
 
   const hasCallOverlay = Boolean(incomingCall || activeJoin);
   const isCallFullScreen = hasCallOverlay && callExpanded;
@@ -1150,14 +1175,14 @@ export function MainShell({
         <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
           <img
             src="/icons/logo.png"
-            alt="โลโก้ BC Ai Chat"
+            alt={`โลโก้ ${SITE_NAME[site]}`}
             width={32}
             height={32}
             data-testid="shell-brand-logo"
             className="h-8 w-8 shrink-0 rounded-full object-cover shadow-2xs"
           />
           <h1 className="shrink-0 whitespace-nowrap text-sm font-bold leading-tight text-[var(--bc-text)] sm:text-base">
-            BC Ai Chat
+            {SITE_NAME[site]}
           </h1>
           <span className="hidden text-[var(--bc-muted)] sm:inline" aria-hidden="true">
             ·
@@ -2685,14 +2710,21 @@ export function MainShell({
           {listTab === "oa" && (
             <div className="flex-1 overflow-y-auto p-2 sm:p-3">
               <div className="mx-auto max-w-5xl">
-                <OaConsoleWorkspace
-                  currentUser={currentUser}
-                  wsTick={wsTick}
-                  onOpenConversation={handleOpenRoom}
-                  onStartCall={handleStartCall}
-                  onConversationsChanged={refreshCore}
-                  onShowToast={notify}
-                />
+                {site === "oa" ? (
+                  <OaConsoleWorkspace
+                    currentUser={currentUser}
+                    wsTick={wsTick}
+                    onStartCall={handleStartCall}
+                    onConversationsChanged={refreshCore}
+                    onShowToast={notify}
+                  />
+                ) : (
+                  <OaDiscoverView
+                    onOpenConversation={handleOpenRoom}
+                    onConversationsChanged={refreshCore}
+                    onShowToast={notify}
+                  />
+                )}
               </div>
             </div>
           )}
@@ -3211,6 +3243,7 @@ export function MainShell({
                     </div>
 
                     {/* 2. Privacy & Hidden/Blocked Friends */}
+                    {site === "chat" && (
                     <div className="overflow-hidden rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)]">
                       <button
                         type="button"
@@ -3455,6 +3488,8 @@ export function MainShell({
                         </div>
                       )}
                     </div>
+
+                    )}
 
                     {/* 3. Account Linking & Recovery PIN */}
                     <div className="overflow-hidden rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)]">
@@ -3979,6 +4014,7 @@ export function MainShell({
                     </div>
 
                     {/* 4. Room Tone & Lifestyle Tools */}
+                    {site === "chat" && (
                     <div className="overflow-hidden rounded-2xl border border-[var(--bc-border)] bg-[var(--bc-card)]">
                       <button
                         type="button"
@@ -4087,6 +4123,8 @@ export function MainShell({
                         </div>
                       )}
                     </div>
+
+                    )}
 
                     {/* 5. Admin Settings (Only for Admin Role) */}
                     {currentUser.role === "admin" && (
@@ -4463,6 +4501,17 @@ export function MainShell({
                           </div>
                         )}
                       </div>
+                    )}
+
+                    {site === "chat" && ownsShop && (
+                      <a
+                        href={getShopSiteUrl()}
+                        data-testid="settings-shop-site-link"
+                        className="flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-xl border border-[var(--bc-primary)] bg-[var(--bc-soft)] px-3 py-1.5 text-sm font-bold text-[var(--bc-deep)] hover:brightness-95"
+                      >
+                        <Store className="h-4 w-4 shrink-0" />
+                        <span>สำหรับร้านค้า: จัดการร้านที่ BC Ai Chat OA</span>
+                      </a>
                     )}
 
                     {/* ออกจากระบบ: แถวสุดท้ายของแท็บตั้งค่า (ย้ายจากแถบบนที่กดพลาดง่าย) */}

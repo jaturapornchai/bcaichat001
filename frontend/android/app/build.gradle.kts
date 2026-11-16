@@ -1,9 +1,26 @@
+import java.util.Base64
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// One project builds two apps: the chat app by default and the shop app
+// (BC Ai Chat OA) with `--dart-define=CLIENT_APP=oa`. Flutter hands dart-defines
+// to Gradle as comma-separated base64 `KEY=VALUE` entries.
+val clientApp: String = (project.findProperty("dart-defines") as String?)
+    ?.split(",")
+    ?.map { String(Base64.getDecoder().decode(it)) }
+    ?.firstOrNull { it.startsWith("CLIENT_APP=") }
+    ?.substringAfter("=")
+    ?: "chat"
+if (clientApp != "chat" && clientApp != "oa") {
+    // The server refuses connections from an app name it does not know.
+    throw GradleException("CLIENT_APP must be chat or oa, got: $clientApp")
+}
+val isShopApp = clientApp == "oa"
 
 android {
     namespace = "com.bcaichat.app"
@@ -21,9 +38,18 @@ android {
         jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
+    buildFeatures {
+        buildConfig = true
+        resValues = true
+    }
+
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.bcaichat.app"
+        applicationId = if (isShopApp) "com.bcaichat.oa" else "com.bcaichat.app"
+        resValue("string", "app_name", if (isShopApp) "BC Ai Chat OA" else "BC Ai Chat")
+        buildConfigField("String", "CLIENT_APP", "\"$clientApp\"")
+        manifestPlaceholders["appIcon"] =
+            if (isShopApp) "@mipmap/ic_launcher_oa" else "@mipmap/ic_launcher"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

@@ -324,7 +324,7 @@ class BcRealtimeAlertService : Service() {
         )
         val notification = NotificationCompat.Builder(this, FOREGROUND_CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("BC Ai Chat พร้อมรับข้อความตลอดเวลา")
+            .setContentTitle("${getString(R.string.app_name)} พร้อมรับข้อความตลอดเวลา")
             .setContentText("แจ้งเตือนทันทีแม้ปิดแอปหรือปิดหน้าจอ")
             .setOngoing(true)
             .setSilent(true)
@@ -403,7 +403,7 @@ class BcRealtimeAlertService : Service() {
             .build()
         val callChannel = NotificationChannel(
             CALL_CHANNEL_ID,
-            "สายโทรเข้า BC Ai Chat",
+            "สายโทรเข้า ${getString(R.string.app_name)}",
             NotificationManager.IMPORTANCE_HIGH,
         ).apply {
             description = "แจ้งเตือนสายโทรเข้าด้วยเสียงและวิดีโอ"
@@ -645,7 +645,7 @@ class BcRealtimeAlertService : Service() {
         val encodedToken = URLEncoder.encode(jwt, "UTF-8")
         val rawDevice = "${session.deviceId}_bg".take(64)
         val encodedDevice = URLEncoder.encode(rawDevice, "UTF-8")
-        val wsUrl = "${deriveWsUrl(session.apiBase)}?token=$encodedToken&device=$encodedDevice"
+        val wsUrl = "${deriveWsUrl(session.apiBase)}?token=$encodedToken&device=$encodedDevice&app=${BuildConfig.CLIENT_APP}"
 
         val request = Request.Builder().url(wsUrl).build()
         val client = wsClient ?: return
@@ -836,7 +836,9 @@ class BcRealtimeAlertService : Service() {
             if (isTimestampInFuture(session.dndUntil)) return
 
             var room = roomCache[convId]
-            if (room == null && !session.jwt.isNullOrEmpty()) {
+            // The shop app only gets customer chats, which the personal room
+            // list never contains, so looking them up there is a wasted request.
+            if (room == null && BuildConfig.CLIENT_APP != "oa" && !session.jwt.isNullOrEmpty()) {
                 refreshRoomsCache(session.apiBase, session.jwt)
                 room = roomCache[convId]
             }

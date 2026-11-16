@@ -1,14 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Prompt } from "next/font/google";
-import { PwaBootstrap } from "@/components/PwaBootstrap";
-import "./globals.css";
-
-const promptFont = Prompt({
-  subsets: ["thai", "latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-prompt",
-  display: "swap",
-});
+import { SiteShell } from "../SiteShell";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://www.bcaichat.com";
 
@@ -123,7 +114,7 @@ export default function RootLayout({
             name: "BC Ai Chat เหมาะกับการคุยกับครอบครัวและเพื่อนสนิทอย่างไร?",
             acceptedAnswer: {
               "@type": "Answer",
-              text: "จัดหมวดแชทส่วนตัว ครอบครัว และกลุ่มเพื่อนได้ชัดเจน พร้อมอัลบั้มรูป คลังไฟล์ถาวรที่ไม่หมดอายุ โทรเสียงและวิดีโอคอลชัดระดับ HD เข้าสู่ระบบด้วยเบอร์โทร OTP หรือบัญชี Gmail ที่ยืนยันแล้ว และค้นหา/ติดตามร้านค้าได้ผ่าน /oa",
+              text: "จัดหมวดแชทส่วนตัว ครอบครัว และกลุ่มเพื่อนได้ชัดเจน พร้อมอัลบั้มรูป คลังไฟล์ถาวรที่ไม่หมดอายุ โทรเสียงและวิดีโอคอลชัดระดับ HD เข้าสู่ระบบด้วยเบอร์โทร OTP หรือบัญชี Gmail ที่ยืนยันแล้ว และค้นหา/ติดตามร้านค้าแล้วแชทกับร้านได้ในแอปเดียว",
             },
           },
           {
@@ -147,16 +138,5 @@ export default function RootLayout({
     ],
   };
 
-  return (
-    <html lang="th" className={promptFont.variable}>
-      <body className="bc-spiral-bg min-h-[100dvh] overflow-x-hidden antialiased">
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
-        <PwaBootstrap />
-        {children}
-      </body>
-    </html>
-  );
+  return <SiteShell jsonLd={jsonLd}>{children}</SiteShell>;
 }

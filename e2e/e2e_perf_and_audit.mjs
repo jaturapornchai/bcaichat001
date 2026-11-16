@@ -36,6 +36,8 @@ const TEST_DB = process.env.PERF_MONGODB_DB || "bcaichat_perf";
 const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
 const WS_BASE = `ws://127.0.0.1:${BACKEND_PORT}/ws`;
 const WEB_URL = `http://127.0.0.1:${WEB_PORT}`;
+// ไซต์ร้านค้า (BC Ai Chat OA) = host ขึ้นต้น oa. ; Chromium แปลง *.localhost เป็น 127.0.0.1 เอง
+const OA_URL = `http://oa.localhost:${WEB_PORT}`;
 
 const MOCK_OTP_CODE = "654321";
 const MOCK_GOOGLE_CLIENT_ID = "perf-mock-google-client.apps.googleusercontent.com";
@@ -602,12 +604,12 @@ async function createTrackedContext(browser, label, viewport) {
   const apiFailures = [];
   ctx._perfApiLog = [];
 
-  const apiRoutePattern = new RegExp(`^http://(?:127\\.0\\.0\\.1|localhost):${WEB_PORT}/(?:api|miniapp)/`);
+  const apiRoutePattern = new RegExp(`^http://(?:127\\.0\\.0\\.1|localhost|oa\\.localhost):${WEB_PORT}/(?:api|miniapp)/`);
   await ctx.route(apiRoutePattern, async (route) => {
     try {
       const reqUrl = route.request().url();
       const targetUrl = reqUrl.replace(
-        new RegExp(`^http://(?:127\\.0\\.0\\.1|localhost):${WEB_PORT}/`),
+        new RegExp(`^http://(?:127\\.0\\.0\\.1|localhost|oa\\.localhost):${WEB_PORT}/`),
         `${BACKEND_URL}/`
       );
       const response = await route.fetch({ url: targetUrl });
@@ -1409,16 +1411,31 @@ async function runSuiteD_PlaywrightWebVitalsAndLayout(ctxData) {
         assert.deepEqual(roomOverflow.misaligned, [], `${vp.name}_room misaligned rows: ${JSON.stringify(roomOverflow.misaligned)}`);
         console.log(`✅ [Suite D:${vp.name}_room] overflow=0px | maxDelta=${roomOverflow.maxCenterDeltaPx}px | h1=${roomOverflow.h1Count} dialogs=0 overlays=0`);
 
-        // Audit `/oa`
+        // Audit ไซต์ร้านค้า (oa.localhost): origin แยก -> ใส่เซสชันเจ้าของร้านใน origin นี้ก่อน
+        await tc.page.goto(`${OA_URL}/robots.txt`, { waitUntil: "domcontentloaded" });
+        await tc.page.evaluate(
+          ({ token, user }) => {
+            sessionStorage.setItem("bcaichat_tab_token", token);
+            sessionStorage.setItem("bcaichat_tab_user", JSON.stringify(user));
+          },
+          { token: owner.token, user: owner.user }
+        );
         const oaAudit = await auditPageLayoutAndVitals(
           tc.ctx,
           tc.page,
-          `${WEB_URL}/oa`,
+          OA_URL,
           `${vp.name}_oa`,
-          '[data-testid="oa-mode-console"]'
+          '[data-testid="oa-subtab-inbox"]'
         );
-        await tc.page.getByTestId("oa-mode-console").click();
-        await tc.page.getByTestId("oa-subtab-inbox").waitFor({ state: "visible", timeout: 8000 });
+        for (const t of ["home", "chats", "notes"]) {
+          assert.equal(await tc.page.locator(`[data-testid$="nav-tab-${t}"]`).count(), 0, `${vp.name}_oa: shop site must not show ${t} tab`);
+        }
+        // CRM ลูกค้า: ผู้ติดตามหลายคนต้องแสดงรายการและจำนวน "แสดง x จาก y"
+        await tc.page.getByTestId("oa-subtab-customers").click();
+        await tc.page.getByTestId("oa-crm").waitFor({ state: "visible", timeout: 10000 });
+        await tc.page.locator('[data-testid^="oa-crm-row-"]').first().waitFor({ state: "visible", timeout: 10000 });
+        assert.match(await tc.page.getByTestId("oa-crm-count").innerText(), /แสดง\s*\d+\s*จาก\s*\d+/, `${vp.name}_oa: customers count text`);
+        await tc.page.getByTestId("oa-subtab-inbox").click();
         assert.equal(await tc.page.getByTestId("oa-customer-tags-input").count(), 0, `${vp.name}_oa: customer tag/note bar folded initially`);
         await tc.page.waitForTimeout(300);
         const oaConsoleOverflow = await tc.page.evaluate(() => ({
@@ -1694,7 +1711,10 @@ async function runSuiteE_SecurityRbacFuzzAndSeo(ctxData) {
     pass();
   }
 
-  assert.ok(sitemapXml.includes("/oa") && sitemapXml.includes("</urlset>"), "/sitemap.xml must include / and /oa");
+  assert.ok(!sitemapXml.includes("/oa") && sitemapXml.includes("</urlset>"), "chat /sitemap.xml must include / and not /oa");
+  const oaRedirect = await fetch(`http://localhost:${WEB_PORT}/oa`, { redirect: "manual" });
+  assert.equal(oaRedirect.status, 307, "/oa on chat host must redirect to shop site");
+  assert.ok((oaRedirect.headers.get("location") || "").startsWith(`${OA_URL}/`), "/oa redirects to shop site root");
   assert.ok(!sitemapXml.includes("multi-demo"), "/sitemap.xml must exclude /multi-demo");
   assert.ok(llmsTxt.includes("BC Ai Chat") && llmsTxt.length > 50, "/llms.txt must be valid");
   pass();

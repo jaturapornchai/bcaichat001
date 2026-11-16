@@ -1,6 +1,6 @@
 # AGENTS.md — BC Ai Chat (`D:\bcaichat`)
 
-คู่มือสถาปัตยกรรมและกติกาสำหรับ AI และนักพัฒนาในโปรเจกต์ **BC Ai Chat** (แอปแชทส่วนตัว ครอบครัว แก๊งเพื่อน ผู้ช่วย AI โทร LiveKit และ BCAiChatOA · Mobile-First & Zero-Popup)
+คู่มือสถาปัตยกรรมและกติกาสำหรับ AI และนักพัฒนาในโปรเจกต์ **BC Ai Chat** (แอปแชทส่วนตัว ครอบครัว แก๊งเพื่อน ผู้ช่วย AI โทร LiveKit และ BC Ai Chat OA · Mobile-First & Zero-Popup)
 
 ---
 
@@ -10,30 +10,32 @@
 | :--- | :--- | :--- | :--- |
 | **Infrastructure** | Docker Compose (`mongo:7.0`, `minio/minio:latest`, `livekit/livekit-server`) | `docker-compose.yml`, `livekit.yaml` | MongoDB `:27030` (`bcaichat`) · MinIO `:9130`/`:9131` (`bcaichat-storage`) · LiveKit `:7880-7882` |
 | **Backend API & WS** | Rust (`axum`, `tokio`, `mongodb`, `reqwest`, `jsonwebtoken`, `hmac`, `sha2`) แพ็กเกจ `bcaichat-backend` | `backend/` | HTTP `http://127.0.0.1:8096` · WS `ws://127.0.0.1:8096/ws` |
-| **Web App** | Next.js 15 (`^15.3.3`), React 19 (`^19.1.0`), TypeScript, Tailwind CSS v4, `livekit-client`, `lucide-react` | `web/` | `http://localhost:3096` (`/` และ `/oa` — **ไม่มี `/multi-demo` และ Demo login**) |
-| **Native App (4 Platforms)** | Flutter (`android`, `ios`, `windows`, `macos`) แพ็กเกจ `bcaichat_app` / ID `com.bcaichat.app` | `frontend/` | เชื่อมต่อ `:8096` (`livekit_client`, `audioplayers`, `qr_flutter`) |
+| **Web App** | Next.js 15 (`^15.3.3`), React 19 (`^19.1.0`), TypeScript, Tailwind CSS v4, `livekit-client`, `lucide-react` | `web/` | โปรเจกต์เดียว 2 ไซต์แยกตามโฮสต์: ไซต์แชท `http://localhost:3096` · ไซต์ร้านค้า `http://oa.localhost:3096` (production `oa.bcaichat.com`) — **ไม่มี `/multi-demo` และ Demo login** |
+| **Native App (4 Platforms)** | Flutter (`android`, `ios`, `windows`, `macos`) แพ็กเกจ `bcaichat_app` / ID `com.bcaichat.app` · แอปร้านค้า build ด้วย `--dart-define=CLIENT_APP=oa` (Android ID `com.bcaichat.oa`) | `frontend/` | เชื่อมต่อ `:8096` (`livekit_client`, `audioplayers`, `qr_flutter`) |
 | **Apple CI Build** | GitHub Actions (`workflow_dispatch` บน `macos-latest`) | `.github/workflows/build-apple.yml` | สร้าง artifact `bcaichat-apple-builds` (`iOS` unsigned + `macOS`) |
 | **E2E Suites** | Isolated Node.js API/WS & Playwright Multi-Context Tests (ใช้ Mock SMSMKT + Mock Google ในตัว) | `e2e/` | `e2e_api_ws_5users.mjs`, `e2e_playwright_web_5users.mjs`, `e2e_perf_and_audit.mjs` |
 
 ### โครงสร้างโมดูลหลัก (Backend / Web / Flutter)
-- **Backend (`backend/src/`)**: `main.rs`, `lib.rs`, `config.rs`, `models.rs`, `auth.rs` (O(1) `AppState.token_versions` session revocation), `sms.rs` (SMSMKT + Thai phone normalizer `08...`), `minio.rs`, `push.rs` (กรอง DND/Mute/Silent Block), `ws.rs` (ตรวจสิทธิ์ห้องและ `excluded_user_ids`), `seed.rs` (สร้าง index และล้างบัญชี Demo เก่า คงเฉพาะ `user_ai`, `user_official` และบัญชีจริง), และ `routes/`:
+- **Backend (`backend/src/`)**: `main.rs`, `lib.rs`, `config.rs`, `models.rs`, `auth.rs` (O(1) `AppState.token_versions` session revocation), `sms.rs` (SMSMKT + Thai phone normalizer `08...`), `minio.rs`, `push.rs` (กรอง DND/Mute/Silent Block), `ws.rs` (ตรวจสิทธิ์ห้องและ `excluded_user_ids`), `client_app.rs` (กฎกลางว่าเหตุการณ์ของห้องใดส่งเข้าแอป `chat` หรือ `oa` ใช้ทั้ง WS และ push), `seed.rs` (สร้าง index และล้างบัญชี Demo เก่า คงเฉพาะ `user_ai`, `user_official` และบัญชีจริง), และ `routes/`:
   - `auth_routes.rs`: `GET /api/auth/config`, Phone OTP (`POST /api/auth/otp/request`, `POST /api/auth/otp/verify`), Verified Google OAuth (`POST /api/auth/google`), Owner Bootstrap (`POST /api/auth/bootstrap-admin`), Account Linking/Unlink (`POST /api/auth/link/phone`, `DELETE /api/auth/link/google`), Recovery Setup/Logs (`POST /api/auth/recovery/setup`, `GET /api/auth/recovery/logs`), Self-Service Recovery (`POST /api/auth/recover/change-phone`, `POST /api/auth/recover/change-google`)
   - `admin_routes.rs`: ธีมระบบ และ `GET|PUT /api/admin/auth-settings` (รวมตรวจเครดิต SMSMKT)
   - `chat_routes.rs`: ค้นหาและเพิ่มเพื่อน 4 ช่องทาง + ความเป็นส่วนตัว, Reset QR, ลบเพื่อน, Timed Mute, Block/Unblock, ข้อความ Location/Contact/Ladder/Edit/Forward/Keep Memo/Silent/Expire, และ MongoDB `$group` batch unread
-  - `oa_routes.rs`: Multi-Shop & Multi-Role **BCAiChatOA** (`POST /api/oa`, `GET /api/oa/mine`, ทีม `owner`/`admin`/`agent`/`marketer`, Follow, Rich Menu, Keyword Auto-Reply, Coupons `create/claim/redeem`, Targeted Broadcast)
+  - `oa_routes.rs`: Multi-Shop & Multi-Role **BC Ai Chat OA** (`POST /api/oa`, `GET /api/oa/mine`, ทีม `owner`/`admin`/`agent`/`marketer`, Follow, Rich Menu, Keyword Auto-Reply, Coupons `create/claim/redeem`, Targeted Broadcast หลายป้าย `target_tags`, CRM ลูกค้า `GET /api/oa/:id/customers`, `/customers/:uid`, `/customer-tags`)
   - `call_routes.rs`: LiveKit signaling (`/api/calls/start`, `/active`, `/:id/accept`, `/:id/token`, `/:id/decline`, `/:id/hangup`) พร้อม WS (`call_incoming`, `call_accepted`, `call_declined`, `call_ended`) และข้อความ `call_log`
   - `ai_routes.rs`, `file_routes.rs`, `miniapp_routes.rs`, `push_routes.rs`
 - **Web (`web/src/`)**:
   - SEO & GEO: `public/robots.txt`, `public/llms.txt`, `src/app/sitemap.ts`, `src/app/layout.tsx` (`SocialNetworkingApplication` JSON-LD, ฟอนต์ `Prompt` OFL, `<h1>` เดียวต่อหน้า)
   - หน้า `/` (`MainShell`, `LoginView`, `ChatRoomView`, `RoomSideModal`, `CallWorkspaceBar`): 4 แท็บหลัก (`เพื่อน`, `แชท` default, `สมุดบันทึก`, `ตั้งค่า`) + Immersive Room บน `< md` + Inline Trays/Panels (`room-side-panel`, `plus-attach-tray`, `rich-card-inline-tray`, `ai-inline-tray`, `active-call-dock`, `incoming-call-banner` — **0** `[role="dialog"]` และ **0** `.fixed.inset-0`)
-  - หน้า `/oa` (`OaConsoleWorkspace.tsx`): ค้นหาร้านค้า, สร้างหลายร้านค้าต่อผู้ใช้, Multi-Shop Switcher, จัดการทีมตามสิทธิ์ Role, Inbox ตอบลูกค้า, Auto-Reply, Coupons, Broadcast
+  - แยกไซต์ด้วย `src/middleware.ts` + `src/lib/site.ts` (โฮสต์ที่ป้ายแรกเป็น `oa` = ไซต์ร้านค้า; `/oa` บนไซต์แชทส่งต่อไป `oa.<โฮสต์>`; โฮสต์ที่เป็น IP ใช้ `/oa` ที่เดิม) และ route group `src/app/(chat)/`, `src/app/(oa)/` (layout, SEO, manifest แยกกัน)
+  - ไซต์ร้านค้า (`OaConsoleWorkspace.tsx`, `OaCrmCustomers.tsx`): สร้างหลายร้านค้าต่อผู้ใช้, Multi-Shop Switcher, จัดการทีมตามสิทธิ์ Role, Inbox ตอบลูกค้า, ลูกค้า (CRM), Auto-Reply, Coupons, Broadcast — ไซต์แชทเหลือเฉพาะค้นหา/ติดตามร้าน (`OaDiscoverView.tsx`)
 - **Flutter (`frontend/lib/`)**:
   - เฉพาะ Native 4 แพลตฟอร์ม (`android/`, `ios/`, `windows/`, `macos/`) — **ห้ามสร้าง `frontend/web/` หรือไฟล์ `push_web*.dart`**
   - 4 แท็บหลัก (`0: หน้าหลัก`, `1: แชท` default, `2: สมุดบันทึก`, `3: ตั้งค่า`) + Inline Panels/Trays บน `login_screen.dart`, `main_shell.dart`, `chat_room_screen.dart`, `oa_workspace_screen.dart`, `mini_app_runner_screen.dart` (**0** `showDialog` / `showModalBottomSheet`, zero `this@` in Kotlin)
+  - โปรเจกต์เดียว 2 แอป: `lib/client_app.dart` (`kClientApp` จาก `--dart-define=CLIENT_APP` ค่าเริ่มต้น `chat`); แอปร้านค้าแสดงเฉพาะหน้าจัดการร้าน (`oa_workspace_panel.dart`, `oa_customers_section.dart`); Android แยกรหัสแอป/ชื่อ/ไอคอนใน `android/app/build.gradle.kts`; ทั้ง Dart และ Kotlin ต้องส่ง `app` ตอนลงทะเบียนอุปกรณ์และต่อ WS
 
 ---
 
-## 2. ระบบยืนยันตัวตน, กู้คืนบัญชี, BCAiChatOA และแชทยุคใหม่
+## 2. ระบบยืนยันตัวตน, กู้คืนบัญชี, BC Ai Chat OA และแชทยุคใหม่
 
 1. **Production Auth (ไม่มี Demo Login และ `/multi-demo` แล้ว)**:
    - **Phone OTP (SMSMKT)**: กรอกเบอร์ไทยแปลงเป็น `08...` ขอ OTP ได้ทั้ง `purpose="login"|"link"|"recovery"` แสดง `ref_code` และคูลดาวน์ 60 วินาที (`429` เมื่อยิงซ้ำเร็วเกิน)
@@ -48,9 +50,11 @@
    - ปิดเสียงห้องแบบตั้งเวลา (`off | 1h | 8h | until_8am | forever`), DND ทั้งระบบ, และ LINE-style Silent Block (`deleted_for` + `excluded_user_ids` ซ่อนข้อความ/สายโทร/Push โดยผู้ถูกบล็อกไม่รู้ตัว)
 4. **Rich Chat, Keep Memo & Personal Mini-Apps**:
    - ส่งตำแหน่งที่ตั้ง (`location_data`), แนะนำเพื่อน (`contact_data`), เกมสุ่มบันได (`ladder_data`), แก้ไขข้อความสด (`PUT /api/messages/:id` + WS `message_edited`), ส่งต่อหลายห้อง (`POST /api/messages/:id/forward`), **สมุดบันทึก Keep ส่วนตัว** (`/api/conversations/keep` + `save-to-keep`), ข้อความเงียบ/หมดอายุ (`priority="silent"`, `expire_at`), เร่งสปีดเสียง `1x/1.5x/2x`, รายชื่อผู้อ่านในกลุ่ม, ผู้ช่วย `@ai`, และ 5 Mini-Apps (`/miniapp/ai`, `/split`, `/trip`, `/wishlist`, `/hangout`)
-5. **Multi-Shop & Multi-Role BCAiChatOA (`/oa`)**:
+5. **Multi-Shop & Multi-Role BC Ai Chat OA (แอป/เว็บร้านค้า แยกจากแอปแชท หลังบ้านตัวเดียว)**:
+   - **งานของร้านค้าอยู่ฝั่งแอป/เว็บร้านค้าเท่านั้น ห้ามเพิ่มในแอปแชท** (แอปแชทมีแค่ค้นหา/ติดตามร้าน ห้องแชทกับร้าน และคูปอง); บัญชีเดียวเข้าได้ทั้งสองแอป หลังบ้านส่งงานพนักงานร้านเข้า `app=oa` งานส่วนตัวเข้า `app=chat` (เครื่องรุ่นเก่าที่ไม่ส่ง `app` ได้ทุกอย่าง)
    - ผู้ใช้ทั่วไป (`role: "user"`) เปิดร้านค้า OA ได้หลายร้านและสลับร้านได้จาก Multi-Shop Switcher
    - มอบหมายทีม (`owner`, `admin`, `agent`, `marketer`): `agent` ดูร้านที่ได้รับมอบหมายและตอบแชทลูกค้าได้ แต่จะถูกจำกัดสิทธิ์ `403` เมื่อพยายามแก้โปรไฟล์ร้าน ตั้งข้อความตอบกลับ คูปอง หรือ Broadcast
+   - CRM ลูกค้า: รายชื่อผู้ติดตาม (ค้นหา, กรองหลายป้าย, สถานะติดตาม, เรียง, แบ่งหน้า), รายละเอียดลูกค้า + คูปอง + ประวัติข่าวที่ได้รับ, ส่งข่าวหลายป้าย (`owner`/`admin`/`agent` เห็นรายชื่อลูกค้า; `marketer` เห็นเฉพาะสรุปป้าย)
 6. **LiveKit Voice & Video Call**:
    - สัญญาณเรียกสายผ่าน HTTP + WS (`call_incoming`, `call_accepted`, `call_declined`, `call_ended`), แจก LiveKit Token (`LIVEKIT_URL` / `7880-7882`) และบันทึกฟอง `call_log` พร้อมปุ่มโทรกลับ
 
@@ -62,7 +66,7 @@
    - สีหลัก: Primary `#812920`, Deep `#681F18`, Ring `#A04035`, Ochre `#83280E`, Gold Clay `#D4A373`, Surface `#FBF9F8`, Panel `#F6F3F2`, Sand `#E4DFD1`, Card `#FFFFFF`, Border `#DCC0BC`, Soft `#FFDAD5`, Sent Bubble `#FADBD4`
    - รองรับ 7 ธีมไทยร่วมสมัย (`ban_chiang`, `silk_amber`, `indigo_kram`, `jade_celadon`, `lotus_rose`, `spice_cinnamon`, `royal_amethyst`) ซิงค์สดผ่าน WS `theme_changed` และ 3 โทนห้องแชท (`ban_chiang_cream` `#F5EFEA`, `terracotta_night` `#1C1412`, `ivory_white` `#FBF9F8`)
 2. **ปลอดลิขสิทธิ์ 100% (Zero-Copyright Policy)**:
-   - ใช้เฉพาะแบรนด์ **BC Ai Chat**, **BCAiChatOA**, **สมุดบันทึก BC**, **Keep ส่วนตัว**, **การ์ดโต้ตอบ** (`rich_card`), **ข่าวสาร BC Ai Chat**, ชุดสติกเกอร์ต้นฉบับ *"อารมณ์ดีดินเผาไทย"*
+   - ใช้เฉพาะแบรนด์ **BC Ai Chat**, **BC Ai Chat OA**, **สมุดบันทึก BC**, **Keep ส่วนตัว**, **การ์ดโต้ตอบ** (`rich_card`), **ข่าวสาร BC Ai Chat**, ชุดสติกเกอร์ต้นฉบับ *"อารมณ์ดีดินเผาไทย"*
    - ห้ามใช้ชื่อแบรนด์ เครื่องหมายการค้า ชื่อฟีเจอร์ หรือชุดสีเขียว (`#06C755`, `#00B900`) ของแพลตฟอร์มแชทภายนอกโดยเด็ดขาด
    - ห้ามนำภาพถ่ายโบราณวัตถุจากกรมศิลปากรหรือแหล่งภายนอกมาใช้ (ตกแต่งด้วยลวดลายเส้นเกลียวคลื่นประยุกต์ CSS/SVG ต้นฉบับเท่านั้น)
    - ใช้ฟอนต์ `Prompt` (SIL OFL), ไอคอน `lucide-react` (MIT) / Material Icons (Apache-2.0), และเสียงสังเคราะห์ต้นฉบับใน `frontend/assets/sounds/`
@@ -83,7 +87,7 @@
 
 ## 4. คำสั่งตรวจสอบและทดสอบ E2E (Verification & Test Commands)
 
-> **สำคัญ**: สคริปต์ใน `e2e/` สตาร์ท Mock SMSMKT + Mock Google OAuth ในโปรเซสและแยกพอร์ต/ฐานข้อมูลทดสอบ (`bcaichat_e2e`) อัตโนมัติ จึงไม่ใช้เครดิต SMSMKT จริงและไม่ปนข้อมูลหลัก และจะปิดโปรเซสลูกพร้อมลบ DB ทดสอบใน `finally` เสมอ
+> **สำคัญ**: สคริปต์ใน `e2e/` สตาร์ท Mock SMSMKT + Mock Google OAuth ในโปรเซสและแยกพอร์ต/ฐานข้อมูลทดสอบ (`bcaichat_e2e`) อัตโนมัติ จึงไม่ใช้เครดิต SMSMKT จริงและไม่ปนข้อมูลหลัก (ชุดเว็บเปิดไซต์ร้านค้าที่ `oa.localhost:<พอร์ต>`) และจะปิดโปรเซสลูกพร้อมลบ DB ทดสอบใน `finally` เสมอ
 
 ```powershell
 # 1. Infrastructure (MongoDB :27030, MinIO :9130, LiveKit :7880-7882 ที่ D:\bcaichat)
@@ -113,4 +117,5 @@ flutter analyze
 flutter test
 flutter build windows --release
 flutter build apk --release
+flutter build apk --release --dart-define=CLIENT_APP=oa   # แอปร้านค้า BC Ai Chat OA (com.bcaichat.oa)
 ```

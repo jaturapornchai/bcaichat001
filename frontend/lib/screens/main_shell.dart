@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../client_app.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
 import '../services/notification_service.dart';
@@ -25,6 +26,9 @@ class MainShell extends StatefulWidget {
   final ValueChanged<AppUser>? onSwitchUser;
   final AuthConfig? initialAuthConfig;
 
+  /// true = แอปร้านค้า BCAiChatOA (มีแต่คอนโซลร้านค้า) · false = แอป BC Ai Chat
+  final bool shopApp;
+
   const MainShell({
     super.key,
     required this.currentUser,
@@ -32,6 +36,7 @@ class MainShell extends StatefulWidget {
     required this.onUserChanged,
     this.onSwitchUser,
     this.initialAuthConfig,
+    this.shopApp = kIsShopApp,
   });
 
   @override
@@ -61,6 +66,8 @@ class _MainShellState extends State<MainShell> {
   AuthSettingsDto? _authSettings;
   bool _showSwitchUserBar = false;
   bool _switchingTestUser = false;
+  bool _ownsShop = false; // แอปแชท: เจ้าของร้าน → แสดงแถวชวนไปใช้แอป BCAiChatOA
+  bool _shopSettingsOpen = false; // แอปร้านค้า: แผงตั้งค่าแจ้งเตือน
 
   // Progressive disclosure state
   String? _expandedFriendActionId;
@@ -126,7 +133,7 @@ class _MainShellState extends State<MainShell> {
         }
         return;
       }
-      _refreshConversationsAndFriends();
+      if (!widget.shopApp) _refreshConversationsAndFriends();
       final convId = event['conversation_id']?.toString();
       NotificationService.instance.handleWsEvent(
         event,
@@ -243,6 +250,12 @@ class _MainShellState extends State<MainShell> {
   }
 
   Future<void> _loadAllData() async {
+    if (widget.shopApp) {
+      // แอปร้านค้าไม่แสดงแชทส่วนตัว จึงไม่โหลดรายชื่อเพื่อน/ห้อง/สมุดบันทึก
+      setState(() => _isLoadingInitial = false);
+      _loadAuthAndCallsQuietly();
+      return;
+    }
     setState(() => _isLoadingInitial = true);
     try {
       final results = await Future.wait([
@@ -340,6 +353,12 @@ class _MainShellState extends State<MainShell> {
       final cfg = await ApiService.instance.fetchAuthConfig();
       if (mounted) setState(() => _authConfig = cfg);
     } catch (_) {}
+    if (!widget.shopApp) {
+      try {
+        final mine = await ApiService.instance.fetchMyOas();
+        if (mounted) setState(() => _ownsShop = mine.isNotEmpty);
+      } catch (_) {}
+    }
     await CallInlineManager.instance.refreshActiveCalls();
   }
 
@@ -1058,8 +1077,100 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
+  /// แอป BCAiChatOA: สายเรียกเข้า + หัวแอป (ตั้งค่าแจ้งเตือน/ออกจากระบบ) + คอนโซลร้านค้า
+  Widget _buildShopScaffold() {
+    return Scaffold(
+      body: SafeArea(
+        child: Column(
+          children: [
+            const CallInlinePanel(),
+            Container(
+              height: 48,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(bottom: BorderSide(color: AppTheme.borderSubtle)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  ClipOval(
+                    child: Image.asset(
+                      'assets/images/bc_logo.png',
+                      width: 30,
+                      height: 30,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'BC Ai Chat OA',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 17,
+                        height: 1.3,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.slateDark,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () =>
+                        setState(() => _shopSettingsOpen = !_shopSettingsOpen),
+                    tooltip: 'ตั้งค่าการแจ้งเตือน',
+                    icon: Icon(
+                      Icons.notifications_active_outlined,
+                      color: _shopSettingsOpen
+                          ? AppTheme.brandPrimary
+                          : AppTheme.slateDark,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: widget.onLoggedOut,
+                    tooltip: 'ออกจากระบบ',
+                    icon: const Icon(
+                      Icons.logout_rounded,
+                      color: AppTheme.dangerRed,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(10),
+                children: [
+                  if (_shopSettingsOpen)
+                    _buildInlinePanelWrapper(
+                      child: _InlineNotificationPanel(
+                        user: _user,
+                        onUserUpdated: (updated) {
+                          setState(() => _user = updated);
+                          widget.onUserChanged(updated);
+                        },
+                        onClose: () =>
+                            setState(() => _shopSettingsOpen = false),
+                      ),
+                    ),
+                  OaWorkspacePanel(
+                    key: ValueKey('shop-console-${_user.id}'),
+                    currentUser: _user,
+                    shopApp: true,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (widget.shopApp) return _buildShopScaffold();
     final isWide = MediaQuery.sizeOf(context).width >= _wideBreakpoint;
     _isWideLayout = isWide;
     final selected = _selectedIndex.clamp(0, 3);
@@ -2295,7 +2406,7 @@ class _MainShellState extends State<MainShell> {
               const SizedBox(width: 2),
               IconButton(
                 onPressed: () => _toggleChatPanel('oa'),
-                tooltip: 'ศูนย์รวมร้านค้า',
+                tooltip: 'ค้นหาและติดตามร้านค้า',
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 30, minHeight: 32),
@@ -3338,7 +3449,7 @@ class _MainShellState extends State<MainShell> {
                   id: 'security',
                   icon: Icons.shield_outlined,
                   title: 'ผูกบัญชี & กู้คืน',
-                  subtitle: 'เบอร์มือถือ Google รหัส PIN กู้คืน และเปิดร้านค้า',
+                  subtitle: 'เบอร์มือถือ Google และรหัส PIN กู้คืน',
                   child: _InlineAccountLinkCard(
                     user: _user,
                     authConfig: _authConfig,
@@ -3346,10 +3457,7 @@ class _MainShellState extends State<MainShell> {
                       setState(() => _user = updated);
                       widget.onUserChanged(updated);
                     },
-                    onOpenOaWorkspace: () => setState(() {
-                      _selectedIndex = 1;
-                      _chatInlinePanel = 'oa';
-                    }),
+                    ownsShop: _ownsShop,
                   ),
                 ),
 
@@ -3540,8 +3648,6 @@ class _MainShellState extends State<MainShell> {
                                       if (_user.isAdmin) ...[
                                         Switch(
                                           value: app.enabled,
-                                          activeThumbColor:
-                                              AppTheme.brandPrimary,
                                           onChanged: (val) async {
                                             await ApiService.instance
                                                 .updateAdminMiniApp(app.id, {
@@ -5857,7 +5963,6 @@ class _InlineNotificationPanelState extends State<_InlineNotificationPanel>
           contentPadding: EdgeInsets.zero,
           dense: true,
           value: _n.popupEnabled,
-          activeThumbColor: AppTheme.brandPrimary,
           title: const Text(
             'แจ้งเตือนเมื่อมีแชทเข้า',
             style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
@@ -5868,7 +5973,6 @@ class _InlineNotificationPanelState extends State<_InlineNotificationPanel>
           contentPadding: EdgeInsets.zero,
           dense: true,
           value: _n.soundEnabled,
-          activeThumbColor: AppTheme.brandPrimary,
           title: const Text(
             'เปิดเสียงแจ้งเตือน',
             style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
@@ -5935,7 +6039,6 @@ class _InlineNotificationPanelState extends State<_InlineNotificationPanel>
             contentPadding: EdgeInsets.zero,
             dense: true,
             value: _effectiveUser!.notifyPreview,
-            activeThumbColor: AppTheme.brandPrimary,
             title: const Text(
               'แสดงตัวอย่างข้อความแจ้งเตือน',
               style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
@@ -5952,7 +6055,6 @@ class _InlineNotificationPanelState extends State<_InlineNotificationPanel>
             contentPadding: EdgeInsets.zero,
             dense: true,
             value: _effectiveUser!.notifyOnMention,
-            activeThumbColor: AppTheme.brandPrimary,
             title: const Text(
               'เตือนเมื่อถูก @กล่าวถึง (แม้ปิดเสียงห้อง)',
               style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
@@ -6097,7 +6199,6 @@ class _InlinePrivacyAndBlockedCardState
             contentPadding: EdgeInsets.zero,
             dense: true,
             value: widget.user.allowAddByPhone,
-            activeThumbColor: AppTheme.brandPrimary,
             title: const Text(
               'อนุญาตเพิ่มเพื่อนด้วยเบอร์โทร',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
@@ -6108,7 +6209,6 @@ class _InlinePrivacyAndBlockedCardState
             contentPadding: EdgeInsets.zero,
             dense: true,
             value: widget.user.allowAddById,
-            activeThumbColor: AppTheme.brandPrimary,
             title: const Text(
               'อนุญาตเพิ่มเพื่อนด้วย @BC ID',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
@@ -6119,7 +6219,6 @@ class _InlinePrivacyAndBlockedCardState
             contentPadding: EdgeInsets.zero,
             dense: true,
             value: widget.user.allowAddByEmail,
-            activeThumbColor: AppTheme.brandPrimary,
             title: const Text(
               'อนุญาตเพิ่มเพื่อนด้วยอีเมล',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
@@ -6623,13 +6722,13 @@ class _InlineAccountLinkCard extends StatefulWidget {
   final AppUser user;
   final AuthConfig authConfig;
   final ValueChanged<AppUser> onUserUpdated;
-  final VoidCallback onOpenOaWorkspace;
+  final bool ownsShop;
 
   const _InlineAccountLinkCard({
     required this.user,
     required this.authConfig,
     required this.onUserUpdated,
-    required this.onOpenOaWorkspace,
+    this.ownsShop = false,
   });
 
   @override
@@ -6924,21 +7023,41 @@ class _InlineAccountLinkCardState extends State<_InlineAccountLinkCard> {
               const SizedBox(width: 6),
               const Expanded(
                 child: Text(
-                  'บัญชี การกู้คืนข้อมูล & ร้านค้า',
+                  'บัญชี & การกู้คืนข้อมูล',
                   style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800),
                 ),
               ),
-              OutlinedButton.icon(
-                onPressed: widget.onOpenOaWorkspace,
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  minimumSize: const Size(0, 32),
-                ),
-                icon: const Icon(Icons.storefront_rounded, size: 16),
-                label: const Text('จัดการ / เปิดร้านค้า', style: TextStyle(fontSize: 12)),
-              ),
             ],
           ),
+          if (widget.ownsShop) ...[
+            const SizedBox(height: 6),
+            InkWell(
+              onTap: () => launchUrl(
+                Uri.parse('https://oa.bcaichat.com'),
+                mode: LaunchMode.externalApplication,
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.storefront_rounded,
+                    size: 16,
+                    color: AppTheme.brandPrimary,
+                  ),
+                  const SizedBox(width: 6),
+                  const Expanded(
+                    child: Text(
+                      'สำหรับร้านค้า: ใช้แอป BC Ai Chat OA',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
           if (_errorMsg != null) ...[
             Text(

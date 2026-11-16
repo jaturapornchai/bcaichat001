@@ -1,6 +1,6 @@
 # BC Ai Chat
 
-แอปแชทส่วนตัว ครอบครัว และแก๊งเพื่อนภาษาไทย พร้อมผู้ช่วย AI (`DeepSeek`), คลังรูปภาพและไฟล์ถาวร (`MinIO`), การโทรด้วยเสียงและวิดีโอ (`LiveKit SFU`), บัญชีทางการร้านค้าและทีมแอดมิน (`BCAiChatOA`), และห้องแชทข้ามแพลตฟอร์ม (`Web`, `Android`, `iOS`, `Windows`, `macOS`) แบบ **Mobile-First ไร้ Popup รบกวน** บนอัตลักษณ์ศิลปะร่วมสมัย **ธีมดินเผาบ้านเชียง (`ban_chiang`)** ปลอดลิขสิทธิ์ 100%
+แอปแชทส่วนตัว ครอบครัว และแก๊งเพื่อนภาษาไทย พร้อมผู้ช่วย AI (`DeepSeek`), คลังรูปภาพและไฟล์ถาวร (`MinIO`), การโทรด้วยเสียงและวิดีโอ (`LiveKit SFU`), บัญชีทางการร้านค้าและทีมแอดมิน (`BC Ai Chat OA`), และห้องแชทข้ามแพลตฟอร์ม (`Web`, `Android`, `iOS`, `Windows`, `macOS`) แบบ **Mobile-First ไร้ Popup รบกวน** บนอัตลักษณ์ศิลปะร่วมสมัย **ธีมดินเผาบ้านเชียง (`ban_chiang`)** ปลอดลิขสิทธิ์ 100%
 
 ---
 
@@ -26,9 +26,9 @@
 
 ![หน้าเลือกตำแหน่งเมื่อกดปุ่มสลับเป็นภาพดาวเทียม พร้อมเครดิตแหล่งภาพ](docs/screenshots/web-location-satellite.png)
 
-**BCAiChatOA: หลายร้านค้า ทีมงาน และคูปอง (`/oa`)**
+**BC Ai Chat OA: หลายร้านค้า ทีมงาน ลูกค้า และคูปอง (ไซต์ร้านค้า `oa.<โดเมน>`)**
 
-![หน้าจัดการร้านค้า BCAiChatOA พร้อมตัวสลับร้านและคูปอง](docs/screenshots/web-oa-console.png)
+![หน้าจัดการร้านค้า BC Ai Chat OA พร้อมตัวสลับร้านและคูปอง](docs/screenshots/web-oa-console.png)
 
 **มือถือ: รายการแชท และ QR ของฉันแบบเต็มจอ**
 
@@ -43,10 +43,11 @@
 
 ## Objective
 
-**BC Ai Chat** พัฒนาขึ้นเพื่อเป็นพื้นที่สื่อสารส่วนตัวที่ปลอดภัย ใช้งานง่าย และครบครันสำหรับครอบครัว แก๊งเพื่อน และร้านค้ารายย่อย โดยผสานการยืนยันตัวตนด้วย **เบอร์โทรศัพท์ OTP (SMSMKT)** และ **Google OAuth2**, ระบบ **กู้คืนบัญชีด้วยตนเอง (PIN 6 หลัก + รหัสสำรองใช้ครั้งเดียว)**, การโทรเสียง/วิดีโอผ่าน **LiveKit**, บัญชีร้านค้า **BCAiChatOA** แบบหลายร้านและแบ่งสิทธิ์ทีม, สมุดบันทึกส่วนตัว **Keep**, และผู้ช่วย **DeepSeek AI** ภายใต้การออกแบบ **Mobile-First 4 แท็บ** ที่ใช้ Inline Trays/Panels โดยไม่เปิด Popup ซ้อนหน้าจอ
+**BC Ai Chat** พัฒนาขึ้นเพื่อเป็นพื้นที่สื่อสารส่วนตัวที่ปลอดภัย ใช้งานง่าย และครบครันสำหรับครอบครัว แก๊งเพื่อน และร้านค้ารายย่อย โดยผสานการยืนยันตัวตนด้วย **เบอร์โทรศัพท์ OTP (SMSMKT)** และ **Google OAuth2**, ระบบ **กู้คืนบัญชีด้วยตนเอง (PIN 6 หลัก + รหัสสำรองใช้ครั้งเดียว)**, การโทรเสียง/วิดีโอผ่าน **LiveKit**, บัญชีร้านค้า **BC Ai Chat OA** แบบหลายร้านและแบ่งสิทธิ์ทีม, สมุดบันทึกส่วนตัว **Keep**, และผู้ช่วย **DeepSeek AI** ภายใต้การออกแบบ **Mobile-First 4 แท็บ** ที่ใช้ Inline Trays/Panels โดยไม่เปิด Popup ซ้อนหน้าจอ
 
 - **7 ธีมสีไทยร่วมสมัย + 3 โทนห้องแชท**: ค่าเริ่มต้น **บ้านเชียง (`ban_chiang`: `#812920` / `#FBF9F8`)** พร้อมชุดสี **ไหมทองอำพัน (`silk_amber`)**, **ครามสุโขทัย (`indigo_kram`)**, **หยกสังคโลก (`jade_celadon`)**, **บัวหลวงชมพู (`lotus_rose`)**, **อบเชยเครื่องเทศ (`spice_cinnamon`)**, และ **มณีม่วงไทย (`royal_amethyst`)** รวมถึง 3 โทนห้องแชท (`ban_chiang_cream` `#F5EFEA`, `terracotta_night` `#1C1412`, `ivory_white` `#FBF9F8`) ซิงค์สดข้ามหน้าจอผ่าน WebSocket (`theme_changed`)
-- **นโยบายทรัพย์สินทางปัญญาปลอดลิขสิทธิ์ 100%**: ใช้แบรนด์ **BC Ai Chat**, **BCAiChatOA**, **สมุดบันทึก BC**, **Keep ส่วนตัว**, **การ์ดโต้ตอบ (`rich_card`)**, และชุดสติกเกอร์ข้อความต้นฉบับ (*"อารมณ์ดีดินเผาไทย"*) พร้อมลวดลายเส้นเกลียวคลื่นประยุกต์ CSS/SVG ต้นฉบับ ฟอนต์ `Prompt` (**SIL OFL**), ไอคอน `lucide-react` (**MIT**) / Material Icons (**Apache-2.0**) และเสียงแจ้งเตือน WAV สังเคราะห์ในโปรเจกต์
+- **แยก 2 แอป หลังบ้านตัวเดียว**: **BC Ai Chat** สำหรับคนทั่วไป (ไม่มีเมนูจัดการกิจการ มีเพียงค้นหา/ติดตามร้าน ห้องแชทกับร้าน และคูปอง) และ **BC Ai Chat OA** สำหรับร้านค้า (จัดการร้าน ทีม กล่องแชทลูกค้า ลูกค้า (CRM) คูปอง ส่งข่าว) ทั้งบนเว็บ (2 ไซต์แยกตามโฮสต์) และบนมือถือ (2 แอป 2 ไอคอน) ใช้บัญชีเดียวกันและ Backend/ฐานข้อมูลชุดเดียวกัน
+- **นโยบายทรัพย์สินทางปัญญาปลอดลิขสิทธิ์ 100%**: ใช้แบรนด์ **BC Ai Chat**, **BC Ai Chat OA**, **สมุดบันทึก BC**, **Keep ส่วนตัว**, **การ์ดโต้ตอบ (`rich_card`)**, และชุดสติกเกอร์ข้อความต้นฉบับ (*"อารมณ์ดีดินเผาไทย"*) พร้อมลวดลายเส้นเกลียวคลื่นประยุกต์ CSS/SVG ต้นฉบับ ฟอนต์ `Prompt` (**SIL OFL**), ไอคอน `lucide-react` (**MIT**) / Material Icons (**Apache-2.0**) และเสียงแจ้งเตือน WAV สังเคราะห์ในโปรเจกต์
 
 ---
 
@@ -54,8 +55,8 @@
 
 ```mermaid
 flowchart LR
-  WEB["Next.js 15 Web (:3096 / /oa)"]
-  FLUTTER["Flutter App (Android / iOS / Windows / macOS)"]
+  WEB["Next.js 15 Web :3096 (ไซต์แชท + ไซต์ร้านค้า oa.*)"]
+  FLUTTER["Flutter 2 แอป: แชท + ร้านค้า (Android / iOS / Windows / macOS)"]
   API["Rust Axum Backend (:8096 REST / /ws / /miniapp)"]
   MONGO["MongoDB (:27030)"]
   MINIO["MinIO S3 (:9130 / :9131)"]
@@ -90,8 +91,10 @@ flowchart LR
    - ภายในห้องแชทรองรับข้อความ **แก้ไขสด** (`PUT /api/messages/:id` + WS `message_edited`), **ส่งต่อหลายห้อง**, **ส่งตำแหน่งที่ตั้ง (`location_data`)** พร้อมแผนที่ฟรี OpenStreetMap ในการ์ด โดยกดปุ่ม "ตำแหน่ง" แล้วเข้าหน้าแผนที่เต็มจอทันที (แตะแผนที่เพื่อย้ายหมุดแบบ animation, กดที่หมุดแล้วลากได้โดยแผนที่เลื่อนตามเองเมื่อถึงขอบ, ปุ่มสลับ "ดาวเทียม/แผนที่", ปุ่มจับตำแหน่งปัจจุบันจาก GPS แล้วกด "ส่งตำแหน่งนี้"), **การ์ดแนะนำเพื่อน (`contact_data`)**, **เกมสุ่มบันได (`ladder_data`)**, **ส่งแบบเงียบ & ข้อความลบอัตโนมัติ**, **สมุดบันทึก Keep ส่วนตัว**, ปรับสปีดเสียง `1x / 1.5x / 2x`, อัลบั้ม, โพล, นัดหมาย, ข้อความลับ PIN, Mini-Apps ส่วนตัว 5 ตัว, และผู้ช่วย `@ai`
    - **ขั้นตอนใช้งานแบบที่คุ้นมือ (Web + Flutter)**: ปุ่ม `+` ในห้องแชทเปิดเมนูไอคอนล้วน (ตำแหน่ง, แนะนำเพื่อน, สุ่มบันได, การ์ดโต้ตอบ, ตัวเลือกการส่ง — ส่งแบบเงียบ/ลบอัตโนมัติอยู่ในเมนู "ตัวเลือกการส่ง"); มีป้ายคั่นวัน (`วันนี้`, `เมื่อวาน`, `ส. 14 พ.ย.`) ระหว่างข้อความ; เมนูข้อความมี **ตอบกลับ / คัดลอก / ลบ / ยกเลิกการส่ง**; ช่องพิมพ์ว่างแสดงปุ่มไมค์ พิมพ์แล้วเปลี่ยนเป็นปุ่มส่ง และปุ่มสติกเกอร์อยู่ในช่องพิมพ์; **กดค้างที่แถวแชท** (เว็บบนคอมพิวเตอร์ใช้คลิกขวา) เพื่อ ปักหมุด / ปิดเสียง / เก็บถาวร / อ่านแล้ว; เมนู `⋯` ของเพื่อนมีปุ่ม **โทร / วิดีโอคอล**; ปุ่ม **ออกจากระบบ** อยู่ท้ายแท็บตั้งค่า
 
-4. **BCAiChatOA (หลายร้านค้าต่อผู้ใช้ & แบ่งสิทธิ์ทีม) และ LiveKit Call**:
-   - ผู้ใช้ทั่วไปสร้างร้านค้า Official Account ได้หลายร้านที่หน้า `/oa` (และหน้าจัดการ OA ใน Flutter) สลับร้านผ่าน **Multi-Shop Switcher** และเชิญทีมงานในบทบาท `owner`, `admin`, `agent` (ตอบ inbox ลูกค้าได้อย่างเดียว), และ `marketer` พร้อมค้นหา/ติดตามร้านค้า Rich Menu, Auto-Reply คีย์เวิร์ด, คูปอง (สร้าง/เก็บ/ใช้) และ Broadcast
+4. **BC Ai Chat OA (หลายร้านค้าต่อผู้ใช้ & แบ่งสิทธิ์ทีม) และ LiveKit Call**:
+   - ผู้ใช้ทั่วไปสร้างร้านค้า Official Account ได้หลายร้านที่ไซต์ร้านค้า `oa.<โดเมน>` (หรือแอป **BC Ai Chat OA**) สลับร้านผ่าน **Multi-Shop Switcher** และเชิญทีมงานในบทบาท `owner`, `admin`, `agent` (ตอบ inbox ลูกค้าได้อย่างเดียว), และ `marketer` พร้อมค้นหา/ติดตามร้านค้า Rich Menu, Auto-Reply คีย์เวิร์ด, คูปอง (สร้าง/เก็บ/ใช้) และ Broadcast
+   - **แยกแอปแชทกับแอปร้านค้า**: เว็บโปรเจกต์เดียวให้บริการ 2 ไซต์ตามชื่อโฮสต์ (`web/src/middleware.ts` + `web/src/lib/site.ts`) — โฮสต์ที่ขึ้นต้นด้วย `oa.` คือไซต์ร้านค้า ส่วน `/oa` บนไซต์แชทจะถูกส่งต่อไป `oa.<โฮสต์>`; Flutter โปรเจกต์เดียว build ได้ 2 แอปด้วย `--dart-define=CLIENT_APP=oa` (`frontend/lib/client_app.dart`); ทุกเครื่องแจ้ง `app=chat|oa` ตอนต่อ `/ws` และตอนลงทะเบียน Push แล้ว Backend (`backend/src/client_app.rs`) ส่งเหตุการณ์ของพนักงานร้านเข้าแอปร้านค้า และเรื่องส่วนตัวเข้าแอปแชท (เครื่องรุ่นเก่าที่ไม่แจ้ง `app` ได้รับทุกอย่าง)
+   - **ลูกค้า (CRM)**: รายชื่อผู้ติดตามร้านพร้อมค้นหา กรองหลายป้าย กรองสถานะติดตาม เรียงลำดับ และแบ่งหน้า; หน้ารายละเอียดลูกค้าแสดงป้าย โน้ต คูปองที่เก็บ/ใช้ และประวัติข่าวที่ได้รับ; ส่งข่าวเลือกได้หลายป้าย (`target_tags` ตรงป้ายใดป้ายหนึ่งก็ได้รับ สูงสุด 10 ป้าย) พร้อมจำนวนผู้รับล่วงหน้า — `owner`/`admin`/`agent` เห็นรายชื่อลูกค้า ส่วน `marketer` เห็นเฉพาะสรุปจำนวนต่อป้าย
    - โทรด้วยเสียงและวิดีโอแบบ 1-1 และกลุ่มผ่าน LiveKit SFU พร้อมแถบสายเข้า/สายที่กำลังคุยแบบ Inline และบันทึกการ์ด `call_log` ในห้องแชท
    - ระหว่างวิดีโอคอลมีปุ่ม **สลับกล้องหน้า-หลัง** และถาด **เลือกกล้อง / ไมโครโฟน / ลำโพง** เมื่อมีอุปกรณ์มากกว่า 1 ตัว; การปิดกล้องปิดเฉพาะกล้องของตนเอง ภาพของคู่สนทนายังแสดงตามปกติ
 
@@ -107,7 +110,7 @@ flowchart LR
 | **MinIO S3 API & Console** | `bcaichat-minio` | `9130` / `9131` | Object Storage (`bcaichat-storage`) และหน้า Console |
 | **LiveKit SFU** | `bcaichat-livekit` | `7880-7882` | WebSocket signaling (`:7880`) และ WebRTC media (`7881/tcp`, `7882/udp`) |
 | **Rust Backend & WS** | `bcaichat-backend` | `8096` | HTTP API `/api/*`, `/miniapp/*` และ WebSocket `/ws` |
-| **Next.js Web App** | `bcaichat-web` | `3096` | เว็บแอป (`/` และ `/oa`) |
+| **Next.js Web App** | `bcaichat-web` | `3096` | เว็บแอป 2 ไซต์แยกตามโฮสต์: ไซต์แชท `localhost:3096` · ไซต์ร้านค้า `oa.localhost:3096` |
 
 ### ตัวแปรสภาพแวดล้อมสำคัญ (`.env.example` / `backend/src/config.rs`)
 
@@ -127,6 +130,11 @@ flowchart LR
 | `FCM_SERVICE_ACCOUNT_FILE` | *(เว้นว่างเพื่อปิด Push)* | พาธไฟล์ Service Account JSON ของ Firebase Cloud Messaging |
 | `BACKEND_URL` / `NEXT_PUBLIC_APP_URL` / `NEXT_PUBLIC_WS_URL` | `http://127.0.0.1:8096` / `http://localhost:3096` / `ws://127.0.0.1:8096/ws` | ค่าเชื่อมต่อ Backend, Metadata/Sitemap และ WebSocket ของ Next.js |
 | `API_BASE_URL` | *(ส่งผ่าน `--dart-define`)* | Override Server URL สำหรับ Flutter ตอน compile/run |
+| `CLIENT_APP` | `chat` *(ส่งผ่าน `--dart-define`)* | เลือกแอปที่ build: `chat` = BC Ai Chat (`com.bcaichat.app`), `oa` = BC Ai Chat OA (Android `com.bcaichat.oa` ชื่อและไอคอนแยก) |
+
+### ไซต์ร้านค้าบนเซิร์ฟเวอร์จริง
+
+ไซต์ร้านค้าไม่มีตัวแปรสภาพแวดล้อมเพิ่ม: ชี้ DNS ของ `oa.<โดเมน>` มาที่เซิร์ฟเวอร์เดียวกับไซต์แชท แล้วเพิ่มบล็อกของโฮสต์นั้นใน reverse proxy ให้ส่งต่อเหมือนไซต์แชททุกเส้นทาง (`/api/*`, `/miniapp/*`, `/ws` ไป Backend · `/rtc` ไป LiveKit · ที่เหลือไป Next.js ตัวเดียวกัน) โดยคงหัวข้อ `Host` เดิมไว้ เพราะเว็บแยกไซต์จากชื่อโฮสต์
 
 ---
 
@@ -164,7 +172,7 @@ docker compose ps
 cd D:\bcaichat\backend
 cargo run
 
-# เทอร์มินัล 2 — Next.js Web App (เข้าใช้งาน / และ /oa ที่ http://localhost:3096)
+# เทอร์มินัล 2 — Next.js Web App (ไซต์แชท http://localhost:3096 · ไซต์ร้านค้า http://oa.localhost:3096)
 cd D:\bcaichat\web
 npm install
 npm run dev
@@ -177,7 +185,7 @@ curl http://127.0.0.1:8096/api/health
 curl http://127.0.0.1:8096/api/auth/config
 ```
 
-### 3. รันและ Build Flutter ทั้ง 4 แพลตฟอร์ม (`com.bcaichat.app`)
+### 3. รันและ Build Flutter ทั้ง 4 แพลตฟอร์ม (แอปแชท `com.bcaichat.app` + แอปร้านค้า `com.bcaichat.oa`)
 
 ```powershell
 cd D:\bcaichat\frontend
@@ -197,11 +205,18 @@ flutter build ios --release --no-codesign
 # Build สำหรับเชื่อมต่อเซิร์ฟเวอร์จริง ให้ระบุโดเมนของ Backend ผ่าน dart-define
 flutter build apk --release --dart-define=API_BASE_URL=https://www.bcaichat.com
 flutter build windows --release --dart-define=API_BASE_URL=https://www.bcaichat.com
+
+# แอปร้านค้า BC Ai Chat OA: เพิ่ม CLIENT_APP=oa (ไฟล์ผลลัพธ์ชื่อเดิม ให้คัดลอกเก็บก่อน build อีกแอป)
+flutter build apk --release --dart-define=CLIENT_APP=oa --dart-define=API_BASE_URL=https://www.bcaichat.com
+Copy-Item build\app\outputs\flutter-apk\app-release.apk build\bcaichat-oa.apk
+
+# ติดตั้งลงเครื่อง Android (สองแอปอยู่ร่วมเครื่องเดียวกันได้ มี 2 ไอคอน)
+adb install -r build\bcaichat-oa.apk
 ```
 
 ### 4. รันชุดทดสอบอัตโนมัติ (ปลอดภัย ไม่ใช้เครดิต SMSMKT จริง)
 
-ชุดทดสอบ E2E ใน `e2e/` จะเปิดเซิร์ฟเวอร์จำลอง SMSMKT & Google OAuth ในโปรเซส แยกพอร์ต (`:8098` / `:3098`) และแยกฐานข้อมูล `bcaichat_e2e` แล้วทำความสะอาดอัตโนมัติเมื่อจบ:
+ชุดทดสอบ E2E ใน `e2e/` จะเปิดเซิร์ฟเวอร์จำลอง SMSMKT & Google OAuth ในโปรเซส แยกพอร์ต (`:8098` / `:3098`) และแยกฐานข้อมูล `bcaichat_e2e` แล้วทำความสะอาดอัตโนมัติเมื่อจบ (ชุดเว็บเปิดไซต์ร้านค้าที่ `http://oa.localhost:<พอร์ต>`; รันทีละชุด เพราะบางชุดใช้พอร์ตเดียวกัน):
 
 ```powershell
 # 1. ทดสอบ Rust Backend Unit & Integration Tests
@@ -218,7 +233,30 @@ npx tsc --noEmit
 npm run build
 cd D:\bcaichat
 node e2e/e2e_playwright_web_5users.mjs
+
+# 4. ชุดเสริม: ไล่ทุกหน้าจอ/ทุกปุ่ม (:8095/:3095), จำลองแชท-โทร-ร้านค้า 5 คน และวัดความเร็ว+ตรวจรวม (:8099/:3099)
+node e2e/e2e_all_screens_buttons_audit.mjs
+node e2e/e2e_random_chat_call_oa_5users.mjs
+node e2e/e2e_perf_and_audit.mjs
 ```
+
+### 5. เรียกดูลูกค้าของร้าน (CRM) ผ่าน API
+
+ใช้ JWT ของสมาชิกทีมร้าน (`Authorization: Bearer <JWT>`) และรหัสร้านจาก `GET /api/oa/mine`:
+
+```powershell
+# รายชื่อลูกค้า: ค้นหา + กรองหลายป้าย (คั่นด้วย ,) + สถานะติดตาม + เรียง (recent | name | followed) + แบ่งหน้า (limit 1-100 ค่าเริ่มต้น 30)
+curl -H "Authorization: Bearer <JWT>" "http://127.0.0.1:8096/api/oa/<OA_ID>/customers?q=สมชาย&tags=vip,ขาประจำ&following=true&sort=recent&page=1&limit=30"
+# ตอบกลับ { items, total, page, limit }
+
+# รายละเอียดลูกค้า 1 คน: { customer, coupons, broadcasts, stats }
+curl -H "Authorization: Bearer <JWT>" "http://127.0.0.1:8096/api/oa/<OA_ID>/customers/<USER_ID>"
+
+# สรุปป้ายและจำนวนผู้รับก่อนส่งข่าว: { tags: [{ tag, count }], total_following, match_count }
+curl -H "Authorization: Bearer <JWT>" "http://127.0.0.1:8096/api/oa/<OA_ID>/customer-tags?tags=vip,ขาประจำ"
+```
+
+ส่งข่าวเฉพาะกลุ่มใช้ `POST /api/oa/<OA_ID>/broadcasts` โดยใส่ `target_tags` เป็นรายการป้าย (เว้นว่าง = ส่งถึงผู้ติดตามทุกคน)
 
 ---
 
@@ -234,3 +272,6 @@ node e2e/e2e_playwright_web_5users.mjs
 - **แชร์ตำแหน่ง**: เลือกได้จากการปักหมุดบนแผนที่หรือปุ่ม GPS เท่านั้น ไม่มีช่องค้นหาชื่อสถานที่ วางลิงก์แผนที่ หรือพิมพ์ชื่อ/ที่อยู่/พิกัดเอง; การ์ดที่ส่งใช้ชื่อ "ตำแหน่งที่ปักหมุด"
 - **ตำแหน่งปัจจุบัน (GPS)**: ต้องอนุญาตสิทธิ์ตำแหน่งและเปิดบริการตำแหน่งของเครื่อง; บนเว็บต้องเปิดผ่าน HTTPS หรือ `localhost`
 - **Push Notification & DeepSeek Fallback**: Push ผ่าน FCM ถูกปิดเป็นค่าเริ่มต้นหากเว้นว่าง `FCM_SERVICE_ACCOUNT_FILE` และเมื่อยังไม่ตั้ง `DEEPSEEK_API_KEY` ผู้ช่วย `@ai` จะตอบกลับด้วย fallback engine ภายใน (`generate_smart_context_reply`)
+- **แอปร้านค้าบน Windows / iOS / macOS**: `--dart-define=CLIENT_APP=oa` เปลี่ยนเฉพาะหน้าจอเป็นแอปร้านค้า ส่วนชื่อโปรแกรม รหัสแอป และไอคอนที่แยกจากแอปแชทมีเฉพาะ Android จึงติดตั้ง 2 แอปคู่กันได้เฉพาะ Android
+- **ไซต์ร้านค้าต้องมีชื่อโฮสต์**: เมื่อเปิดเว็บด้วยเลข IP ตรงๆ จะไม่มีโฮสต์ย่อย `oa.` ให้ใช้ ระบบจึงเปิดหน้าร้านค้าที่ `/oa` บนโฮสต์เดิมแทน
+- **ประวัติข่าวของลูกค้า (CRM)**: แสดงเฉพาะข่าวที่ส่งหลังจากระบบเริ่มบันทึกรายชื่อผู้รับของแต่ละครั้ง ข่าวที่ส่งก่อนหน้านั้นไม่มีรายชื่อผู้รับจึงไม่ปรากฏในหน้ารายละเอียดลูกค้า

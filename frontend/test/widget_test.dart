@@ -156,14 +156,14 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: SingleChildScrollView(
-              child: OaWorkspacePanel(currentUser: user),
+              child: OaWorkspacePanel(currentUser: user, shopApp: true),
             ),
           ),
         ),
       );
       await tester.pump();
 
-      expect(find.text('ร้านค้า · บัญชีกิจการ'), findsOneWidget);
+      expect(find.text('จัดการร้านค้า'), findsOneWidget);
       expect(find.textContaining('BCAiChatOA'), findsNothing);
       expect(find.textContaining('ร้านค้า OA'), findsNothing);
 

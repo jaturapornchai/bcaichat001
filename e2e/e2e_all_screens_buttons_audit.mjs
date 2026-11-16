@@ -32,6 +32,8 @@ const WEB_PORT = Number(process.env.E2E_AUDIT_WEB_PORT || 3095);
 const TEST_DB = process.env.E2E_AUDIT_MONGODB_DB || "bcaichat_e2e_audit";
 const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
 const WEB_URL = `http://127.0.0.1:${WEB_PORT}`;
+// ไซต์ร้านค้า (BC Ai Chat OA) = host ขึ้นต้น oa. ; Chromium แปลง *.localhost เป็น 127.0.0.1 เอง
+const OA_URL = `http://oa.localhost:${WEB_PORT}`;
 
 const MOCK_OTP_CODE = "654321";
 const MOCK_GOOGLE_CLIENT_ID = "e2e-audit-google-client.apps.googleusercontent.com";
@@ -475,13 +477,13 @@ async function createTrackedContext(
   const ctx = await browser.newContext({ viewport });
 
   const apiRoutePattern = new RegExp(
-    `^http://(?:127\\.0\\.0\\.1|localhost):${WEB_PORT}/(?:api|miniapp)/`
+    `^http://(?:127\\.0\\.0\\.1|localhost|oa\\.localhost):${WEB_PORT}/(?:api|miniapp)/`
   );
   await ctx.route(apiRoutePattern, async (route) => {
     try {
       const reqUrl = route.request().url();
       const targetUrl = reqUrl.replace(
-        new RegExp(`^http://(?:127\\.0\\.0\\.1|localhost):${WEB_PORT}/`),
+        new RegExp(`^http://(?:127\\.0\\.0\\.1|localhost|oa\\.localhost):${WEB_PORT}/`),
         `${BACKEND_URL}/`
       );
       const isOAuthStart = targetUrl.includes("/api/auth/google/start");
@@ -579,6 +581,22 @@ async function loginWithPhoneUi(page, phone, displayName) {
   }
   await page.getByTestId("verify-otp-btn").click();
   await page.getByTestId("nav-tab-chats").waitFor({ state: "visible", timeout: 15000 });
+}
+
+// เปิดไซต์ร้านค้าในแท็บใหม่ของ context เดียวกัน โดยยกเซสชันจากแท็บไซต์แชท (sessionStorage แยกตาม origin)
+async function openShopSite(srcPage) {
+  const sess = await srcPage.evaluate(() => ({
+    token: window.sessionStorage.getItem("bcaichat_tab_token") || "",
+    user: window.sessionStorage.getItem("bcaichat_tab_user") || "",
+  }));
+  const p = await srcPage.context().newPage();
+  await p.goto(OA_URL, { waitUntil: "domcontentloaded" });
+  await p.evaluate(({ token, user }) => {
+    window.sessionStorage.setItem("bcaichat_tab_token", token);
+    window.sessionStorage.setItem("bcaichat_tab_user", user);
+  }, sess);
+  await p.goto(OA_URL, { waitUntil: "domcontentloaded" });
+  return p;
 }
 
 async function getStoredToken(page) {
@@ -1342,55 +1360,69 @@ async function main() {
     // =========================================================================
     // 7. `/oa` (`OaConsoleWorkspace`): Wording ("ร้านค้า"), Multi-Shop, Staff Roles, Inbox, Auto-Reply, Coupons, Broadcast
     // =========================================================================
-    await userAS.page.goto(`${WEB_URL}/oa`, { waitUntil: "domcontentloaded" });
-    await userAS.page.getByTestId("oa-mode-console").waitFor({ state: "visible", timeout: 12000 });
-    const oaLandingText = await assertScreenClean(userAS.page, "/oa OaConsoleWorkspace");
-    assert.ok(oaLandingText.includes("ร้านค้า"), '/oa must display "ร้านค้า"');
+    // 7.0 ไซต์แชท: ไม่มี console/สร้างร้าน และ /oa เด้งไปไซต์ร้านค้า
+    await userAS.page.getByTestId("nav-tab-oa").click();
+    await userAS.page.getByTestId("oa-discover-search").waitFor({ state: "visible", timeout: 12000 });
+    assert.equal(await userAS.page.getByTestId("toggle-create-oa-btn").count(), 0, "chat site has no create-shop UI");
+    assert.equal(await userAS.page.getByTestId("oa-subtab-inbox").count(), 0, "chat site has no shop console");
+    assert.equal(await userAS.page.getByTestId("oa-mode-console").count(), 0, "chat site has no console toggle");
+    await userAS.page.getByTestId("nav-tab-chats").click();
+    const oaRedirect = await fetch(`http://localhost:${WEB_PORT}/oa`, { redirect: "manual" });
+    assert.equal(oaRedirect.status, 307, "/oa on chat host must redirect");
+    assert.ok((oaRedirect.headers.get("location") || "").startsWith(`${OA_URL}/`), "/oa redirects to shop site");
 
-    // Create 2 shops under User A and switch between them
-    await userAS.page.getByTestId("oa-mode-console").click();
-    await userAS.page.getByTestId("toggle-create-oa-btn").click();
-    assert.equal(await userAS.page.locator('input[placeholder="คำอธิบายร้านสั้นๆ"]').count(), 0, "OA advanced create folded initially");
-    await userAS.page.getByTestId("toggle-oa-create-advanced").click();
-    await userAS.page.locator('input[placeholder="คำอธิบายร้านสั้นๆ"]').waitFor({ state: "visible" });
-    await userAS.page.getByTestId("toggle-oa-create-advanced").click();
-    await userAS.page.getByTestId("create-oa-handle").fill("ban_chiang_tea");
-    await userAS.page.getByTestId("create-oa-name").fill("ชาบ้านเชียง สาขา 1");
-    await userAS.page.getByTestId("submit-create-oa-btn").click();
-    await userAS.page.getByTestId("oa-shop-switch-ban_chiang_tea").waitFor({ state: "visible", timeout: 10000 });
+    // 7.1 ไซต์ร้านค้า: ล็อกอินของ origin นี้ (ยกเซสชันผู้ใช้ A) ไม่มีแท็บเพื่อน/แชท/สมุดบันทึก
+    const shopA = await openShopSite(userAS.page);
+    await shopA.getByTestId("toggle-create-oa-btn").waitFor({ state: "visible", timeout: 15000 });
+    for (const t of ["home", "chats", "notes"]) {
+      assert.equal(await shopA.getByTestId(`nav-tab-${t}`).count(), 0, `shop site must not show ${t} tab`);
+    }
+    const oaLandingText = await assertScreenClean(shopA, "BC Ai Chat OA site OaConsoleWorkspace");
+    assert.ok(oaLandingText.includes("ร้านค้า"), 'shop site must display "ร้านค้า"');
+    assert.ok(oaLandingText.includes("BC Ai Chat OA"), 'shop site must display "BC Ai Chat OA"');
 
-    await userAS.page.getByTestId("toggle-create-oa-btn").click();
-    await userAS.page.getByTestId("create-oa-handle").fill("ban_chiang_craft");
-    await userAS.page.getByTestId("create-oa-name").fill("เครื่องปั้นบ้านเชียง สาขา 2");
-    await userAS.page.getByTestId("submit-create-oa-btn").click();
-    await userAS.page.getByTestId("oa-shop-switch-ban_chiang_craft").waitFor({ state: "visible", timeout: 10000 });
+    // Create 2 shops under User A and switch between them (ผู้ใช้ไม่มีร้าน ฟอร์มเปิดเองครั้งแรก)
+    await shopA.getByTestId("create-oa-handle").waitFor({ state: "visible", timeout: 10000 });
+    assert.equal(await shopA.locator('input[placeholder="คำอธิบายร้านสั้นๆ"]').count(), 0, "OA advanced create folded initially");
+    await shopA.getByTestId("toggle-oa-create-advanced").click();
+    await shopA.locator('input[placeholder="คำอธิบายร้านสั้นๆ"]').waitFor({ state: "visible" });
+    await shopA.getByTestId("toggle-oa-create-advanced").click();
+    await shopA.getByTestId("create-oa-handle").fill("ban_chiang_tea");
+    await shopA.getByTestId("create-oa-name").fill("ชาบ้านเชียง สาขา 1");
+    await shopA.getByTestId("submit-create-oa-btn").click();
+    await shopA.getByTestId("oa-shop-switch-ban_chiang_tea").waitFor({ state: "visible", timeout: 10000 });
+
+    await shopA.getByTestId("toggle-create-oa-btn").click();
+    await shopA.getByTestId("create-oa-handle").fill("ban_chiang_craft");
+    await shopA.getByTestId("create-oa-name").fill("เครื่องปั้นบ้านเชียง สาขา 2");
+    await shopA.getByTestId("submit-create-oa-btn").click();
+    await shopA.getByTestId("oa-shop-switch-ban_chiang_craft").waitFor({ state: "visible", timeout: 10000 });
 
     // Switch back to Shop 1
-    await userAS.page.getByTestId("oa-shop-switch-ban_chiang_tea").click();
+    await shopA.getByTestId("oa-shop-switch-ban_chiang_tea").click();
 
     // Add User G as `agent` staff role
-    await userAS.page.getByTestId("oa-subtab-team").click();
-    await userAS.page.getByTestId("oa-team-query-input").fill("audit.g1@bcaichat.local");
-    await userAS.page.getByTestId("oa-team-role-select").selectOption("agent");
-    await userAS.page.getByTestId("oa-team-add-btn").click();
-    await userAS.page.getByTestId(`oa-staff-row-${userGMe.id}`).waitFor({ state: "visible", timeout: 8000 });
+    await shopA.getByTestId("oa-subtab-team").click();
+    await shopA.getByTestId("oa-team-query-input").fill("audit.g1@bcaichat.local");
+    await shopA.getByTestId("oa-team-role-select").selectOption("agent");
+    await shopA.getByTestId("oa-team-add-btn").click();
+    await shopA.getByTestId(`oa-staff-row-${userGMe.id}`).waitFor({ state: "visible", timeout: 8000 });
 
     // Configure Auto-Reply & Coupon on Shop 1
-    await userAS.page.getByTestId("oa-subtab-auto_reply").click();
-    await userAS.page.getByTestId("oa-ar-keyword").fill("ราคาชา");
-    await userAS.page.getByTestId("oa-ar-reply").fill("ชาอู่หลงบ้านเชียงแก้วละ 55 บาทครับ");
-    await userAS.page.getByTestId("oa-ar-submit").click();
-    await userAS.page.getByText("ชาอู่หลงบ้านเชียงแก้วละ 55 บาทครับ").first().waitFor({ state: "visible", timeout: 8000 });
+    await shopA.getByTestId("oa-subtab-auto_reply").click();
+    await shopA.getByTestId("oa-ar-keyword").fill("ราคาชา");
+    await shopA.getByTestId("oa-ar-reply").fill("ชาอู่หลงบ้านเชียงแก้วละ 55 บาทครับ");
+    await shopA.getByTestId("oa-ar-submit").click();
+    await shopA.getByText("ชาอู่หลงบ้านเชียงแก้วละ 55 บาทครับ").first().waitFor({ state: "visible", timeout: 8000 });
 
-    await userAS.page.getByTestId("oa-subtab-coupons").click();
-    await userAS.page.getByTestId("oa-coupon-code").fill("TEA25");
-    await userAS.page.getByTestId("oa-coupon-title").fill("ส่วนลดชา 25 บาท");
-    await userAS.page.getByTestId("oa-coupon-submit").click();
-    await userAS.page.getByText("TEA25").first().waitFor({ state: "visible", timeout: 8000 });
+    await shopA.getByTestId("oa-subtab-coupons").click();
+    await shopA.getByTestId("oa-coupon-code").fill("TEA25");
+    await shopA.getByTestId("oa-coupon-title").fill("ส่วนลดชา 25 บาท");
+    await shopA.getByTestId("oa-coupon-submit").click();
+    await shopA.getByText("TEA25").first().waitFor({ state: "visible", timeout: 8000 });
 
     // Customer User B discovers Shop 1, follows & opens shop chat room
     await userBS.page.getByTestId("nav-tab-oa").click();
-    await userBS.page.getByTestId("oa-mode-discover").click();
     await userBS.page.getByTestId("oa-discover-search").fill("ชาบ้านเชียง");
     await userBS.page.getByTestId("oa-follow-btn-ban_chiang_tea").waitFor({ state: "visible", timeout: 8000 });
     await userBS.page.getByTestId("oa-follow-btn-ban_chiang_tea").click();
@@ -1406,25 +1438,40 @@ async function main() {
     await userBS.page.getByText("ชาอู่หลงบ้านเชียงแก้วละ 55 บาทครับ").first().waitFor({ state: "visible", timeout: 10000 });
 
     // Shop owner switches shop switcher (refreshing customer chats), saves CRM, replies from Inbox + sends Broadcast
-    await userAS.page.getByTestId("oa-shop-switch-ban_chiang_craft").click();
-    await userAS.page.getByTestId("oa-shop-switch-ban_chiang_tea").click();
-    await userAS.page.getByTestId("oa-subtab-coupons").click();
-    await userAS.page.getByText(/เก็บแล้ว 0/).first().waitFor({ state: "visible", timeout: 8000 });
-    await userAS.page.getByTestId("oa-subtab-inbox").click();
-    await userAS.page.getByRole("button", { name: /บดินทร์ ผู้ตรวจ B/ }).first().click();
-    assert.equal(await userAS.page.getByTestId("oa-customer-tags-input").count(), 0, "Customer tag/note bar folded initially");
-    await userAS.page.getByTestId("toggle-oa-crm-bar").click();
-    await userAS.page.getByTestId("oa-customer-tags-input").fill("VIP, ชาร้อน");
-    await userAS.page.getByTestId("oa-customer-note-input").fill("ลูกค้าประจำบ้านเชียง");
-    await userAS.page.getByTestId("oa-save-customer-note-btn").click();
-    await userAS.page.getByText("#VIP").first().waitFor({ state: "visible", timeout: 8000 });
-    await userAS.page.locator('input[placeholder="พิมพ์ตอบกลับลูกค้าในนามร้าน..."]').fill("รับออเดอร์ชาเรียบร้อยครับ");
-    await userAS.page.getByRole("button", { name: "ส่งในนามร้าน" }).click();
+    await shopA.getByTestId("oa-shop-switch-ban_chiang_craft").click();
+    await shopA.getByTestId("oa-shop-switch-ban_chiang_tea").click();
+    await shopA.getByTestId("oa-subtab-coupons").click();
+    await shopA.getByText(/เก็บแล้ว 0/).first().waitFor({ state: "visible", timeout: 8000 });
+    await shopA.getByTestId("oa-subtab-inbox").click();
+    await shopA.getByRole("button", { name: /บดินทร์ ผู้ตรวจ B/ }).first().click();
+    assert.equal(await shopA.getByTestId("oa-customer-tags-input").count(), 0, "Customer tag/note bar folded initially");
+    await shopA.getByTestId("toggle-oa-crm-bar").click();
+    await shopA.getByTestId("oa-customer-tags-input").fill("VIP, ชาร้อน");
+    await shopA.getByTestId("oa-customer-note-input").fill("ลูกค้าประจำบ้านเชียง");
+    await shopA.getByTestId("oa-save-customer-note-btn").click();
+    await shopA.getByText("#VIP").first().waitFor({ state: "visible", timeout: 8000 });
+    await shopA.locator('input[placeholder="พิมพ์ตอบกลับลูกค้าในนามร้าน..."]').fill("รับออเดอร์ชาเรียบร้อยครับ");
+    await shopA.getByRole("button", { name: "ส่งในนามร้าน" }).click();
     await userBS.page.getByText("รับออเดอร์ชาเรียบร้อยครับ").first().waitFor({ state: "visible", timeout: 10000 });
 
-    await userAS.page.getByTestId("oa-subtab-broadcast").click();
-    await userAS.page.getByTestId("oa-broadcast-content").fill("โปรพิเศษประจำสัปดาห์ ซื้อ 2 แถม 1!");
-    await userAS.page.getByTestId("oa-broadcast-submit").click();
+    // CRM ลูกค้า: รายชื่อผู้ติดตาม, กรองด้วยแท็ก, เปิดรายละเอียด
+    await shopA.getByTestId("oa-subtab-customers").click();
+    await shopA.getByTestId("oa-crm").waitFor({ state: "visible", timeout: 10000 });
+    const crmRow = shopA.locator('[data-testid^="oa-crm-row-"]').filter({ hasText: "บดินทร์ ผู้ตรวจ B" }).first();
+    await crmRow.waitFor({ state: "visible", timeout: 10000 });
+    await shopA.locator('[data-testid^="oa-crm-tag-"]').first().click();
+    await crmRow.waitFor({ state: "visible", timeout: 8000 });
+    await crmRow.click();
+    await shopA.getByTestId("oa-crm-detail").waitFor({ state: "visible", timeout: 8000 });
+    await assertScreenClean(shopA, "OA CRM customers tab");
+
+    await shopA.getByTestId("oa-subtab-broadcast").click();
+    // ส่งข่าวหลายแท็ก: เลือก 2 แท็กแล้วต้องเห็นจำนวนผู้รับ
+    await shopA.locator('[data-testid^="oa-broadcast-tag-"]').nth(0).click();
+    await shopA.locator('[data-testid^="oa-broadcast-tag-"]').nth(1).click();
+    assert.match(await shopA.getByTestId("oa-broadcast-recipient-count").innerText(), /จะส่งถึง\s*\d+\s*คน/, "multi-tag broadcast shows recipient count");
+    await shopA.getByTestId("oa-broadcast-content").fill("โปรพิเศษประจำสัปดาห์ ซื้อ 2 แถม 1!");
+    await shopA.getByTestId("oa-broadcast-submit").click();
     await userBS.page.getByText("โปรพิเศษประจำสัปดาห์ ซื้อ 2 แถม 1!").first().waitFor({ state: "visible", timeout: 10000 });
 
     // Verify Agent role restriction (403 on creating coupon)
@@ -1437,7 +1484,7 @@ async function main() {
     });
     assert.equal(agentCouponAttempt.status, 403, "Agent role must receive 403 when creating coupons");
 
-    await assertScreenClean(userAS.page, "/oa Final Console Check");
+    await assertScreenClean(shopA, "/oa Final Console Check");
     console.log("✅ 7. /oa (ร้านค้า wording, Discover, Multi-Shop Switcher, Staff Roles, Inbox, Auto-Reply, Coupons, Broadcast) passed");
 
     // =========================================================================
@@ -1515,9 +1562,8 @@ async function main() {
     await quickS.page.getByText("แก๊งเพื่อนวันหยุด").first().waitFor({ state: "visible", timeout: 8000 });
 
     await quickS.page.setViewportSize({ width: 1440, height: 900 });
-    await quickS.page.getByTestId("nav-tab-oa").click();
-    await quickS.page.getByTestId("oa-mode-console").click();
-    await quickS.page.getByTestId("oa-shop-switch-cha_banchiang").waitFor({ state: "visible", timeout: 10000 });
+    const slot1Shop = await openShopSite(quickS.page);
+    await slot1Shop.getByTestId("oa-shop-switch-cha_banchiang").waitFor({ state: "visible", timeout: 10000 });
     const slot1Oas = (await apiFetch("/api/oa/mine", slot1Token)).data;
     const chaShop = slot1Oas.find((o) => o.handle === "cha_banchiang");
     assert.ok(chaShop, "Slot 1 must see ชาบ้านเชียง in /api/oa/mine");

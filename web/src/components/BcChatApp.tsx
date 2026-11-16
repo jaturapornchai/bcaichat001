@@ -25,13 +25,15 @@ import type {
   WsEvent,
 } from "@/lib/types";
 import { LoginView } from "./LoginView";
-import { MainShell, type MainTabId } from "./MainShell";
+import { SITE_NAME, type SiteId } from "@/lib/site";
+import { MainShell } from "./MainShell";
 
 interface BcChatAppProps {
-  initialTab?: Exclude<MainTabId, "room">;
+  /** chat = แอปแชททั่วไป, oa = เว็บร้านค้า (เฉพาะคอนโซลร้านค้า) */
+  site?: SiteId;
 }
 
-export function BcChatApp({ initialTab = "chats" }: BcChatAppProps) {
+export function BcChatApp({ site = "chat" }: BcChatAppProps) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [authConfig, setAuthConfig] = useState<AuthConfig | null>(null);
   const [booting, setBooting] = useState(true);
@@ -177,7 +179,7 @@ export function BcChatApp({ initialTab = "chats" }: BcChatAppProps) {
 
     const connect = () => {
       if (cancelled) return;
-      const socket = new WebSocket(getWsUrl(token, deviceId));
+      const socket = new WebSocket(getWsUrl(token, deviceId, site));
       wsRef.current = socket;
 
       socket.onmessage = (ev) => {
@@ -276,7 +278,7 @@ export function BcChatApp({ initialTab = "chats" }: BcChatAppProps) {
       wsRef.current?.close();
       wsRef.current = null;
     };
-  }, [user, applyAndSaveTheme]);
+  }, [user, applyAndSaveTheme, site]);
 
   const handleAuthenticated = (token: string, nextUser: UserProfile) => {
     setLoginError(null);
@@ -317,9 +319,9 @@ export function BcChatApp({ initialTab = "chats" }: BcChatAppProps) {
           >
             BC
           </div>
-          <h1 className="text-base font-bold text-[var(--bc-text)]">BC Ai Chat</h1>
+          <h1 className="text-base font-bold text-[var(--bc-text)]">{SITE_NAME[site]}</h1>
           <p className="mt-1 text-xs text-[var(--bc-muted)]">
-            กำลังเตรียมห้องแชทและธีมบ้านเชียง...
+            {site === "oa" ? "กำลังเตรียมหน้าจัดการร้านค้า..." : "กำลังเตรียมห้องแชทและธีมบ้านเชียง..."}
           </p>
         </div>
       </div>
@@ -332,6 +334,7 @@ export function BcChatApp({ initialTab = "chats" }: BcChatAppProps) {
         authConfig={authConfig}
         onAuthenticated={handleAuthenticated}
         initialError={loginError}
+        site={site}
       />
     );
   }
@@ -339,7 +342,7 @@ export function BcChatApp({ initialTab = "chats" }: BcChatAppProps) {
   return (
     <MainShell
       key={user.id}
-      initialTab={initialTab}
+      site={site}
       authConfig={authConfig}
       currentUser={user}
       testUsers={authConfig?.test_users_enabled ? authConfig.test_users ?? [] : []}

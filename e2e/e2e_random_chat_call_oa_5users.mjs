@@ -31,6 +31,8 @@ const WEB_PORT = TARGET_LIVE ? 3096 : 3099;
 const MOCK_AUTH_PORT = 18099;
 const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
 const WEB_URL = TARGET_LIVE ? `http://localhost:${WEB_PORT}` : `http://127.0.0.1:${WEB_PORT}`;
+// ไซต์ร้านค้า (BC Ai Chat OA) = host ขึ้นต้น oa. ; Chromium แปลง *.localhost เป็น 127.0.0.1 เอง
+const OA_URL = `http://oa.localhost:${WEB_PORT}`;
 const MONGO_URI = "mongodb://127.0.0.1:27030";
 const TEST_DB_NAME = "bcaichat_e2e_sim";
 
@@ -377,9 +379,59 @@ class TabSession {
     return apiJson(method, urlPath, token, body);
   }
 
+  isOnShopSite() {
+    try {
+      return new URL(this.page.url()).hostname.startsWith("oa.");
+    } catch {
+      return false;
+    }
+  }
+
+  // ไซต์ร้านค้าเป็นคนละ origin กับไซต์แชท (sessionStorage แยกกัน) -> ยกเซสชันของผู้ใช้ไปใส่ก่อนเปิดคอนโซล
+  async gotoShopSite() {
+    if (this.isOnShopSite()) return;
+    const sess = await this.page
+      .evaluate(() => ({
+        token: sessionStorage.getItem("bcaichat_tab_token") || "",
+        user: sessionStorage.getItem("bcaichat_tab_user") || "",
+      }))
+      .catch(() => ({ token: "", user: "" }));
+    await this.page.goto(`${OA_URL}/`, { waitUntil: "domcontentloaded" });
+    if (sess.token) {
+      await this.page.evaluate(({ token, user }) => {
+        sessionStorage.setItem("bcaichat_tab_token", token);
+        if (user) sessionStorage.setItem("bcaichat_tab_user", user);
+      }, sess);
+      await this.page.goto(`${OA_URL}/`, { waitUntil: "domcontentloaded" });
+    }
+  }
+
+  // ผู้ใช้ยังไม่มีร้าน ฟอร์มเปิดร้านเปิดเองครั้งแรก -> กดปุ่มสลับเฉพาะเมื่อฟอร์มยังไม่เปิด
+  async openCreateShopForm() {
+    const handle = this.page.locator('[data-testid="create-oa-handle"]');
+    const toggle = this.page.locator('[data-testid="toggle-create-oa-btn"]');
+    await toggle.waitFor({ state: "visible", timeout: 8000 });
+    // ฟอร์มเปิดเองเมื่อโหลดรายชื่อร้านเสร็จ ซึ่งอาจเกิดระหว่างที่กำลังจะกดปุ่ม ทำให้การกดกลายเป็นปิดฟอร์ม
+    // จึงดูสถานะจากปุ่ม (aria-expanded) แล้วกดซ้ำถ้าฟอร์มยังไม่เปิด
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+      const opened = await handle
+        .waitFor({ state: "visible", timeout: 3000 })
+        .then(() => true)
+        .catch(() => false);
+      if (opened) return;
+    }
+    throw new Error("create-shop form did not open");
+  }
+
+  async ensureOnShopDiscover() {
+    await this.ensureOnChatShell();
+    await this.page.locator('[data-testid="nav-tab-oa"]').first().click();
+    await this.page.locator('[data-testid="oa-discover-search"]').waitFor({ state: "visible", timeout: 12000 });
+  }
+
   async ensureOnChatShell() {
-    const onOaPath = this.page.url().includes("/oa");
-    if (onOaPath) {
+    if (this.isOnShopSite()) {
       await this.page.goto(`${WEB_URL}/`, { waitUntil: "domcontentloaded" });
       await this.page.locator('[data-testid="nav-tab-chats"]').waitFor({ state: "visible", timeout: 15000 });
     }
@@ -402,10 +454,8 @@ class TabSession {
   }
 
   async ensureOnOaConsole() {
-    if (!this.page.url().includes("/oa")) {
-      await this.page.goto(`${WEB_URL}/oa`, { waitUntil: "domcontentloaded" });
-    }
-    await this.page.locator('[data-testid="oa-mode-console"]').waitFor({ state: "visible", timeout: 15000 });
+    await this.gotoShopSite();
+    await this.page.locator('[data-testid="toggle-create-oa-btn"]').waitFor({ state: "visible", timeout: 15000 });
   }
 
   async openRoom(convId) {
@@ -428,14 +478,12 @@ class TabSession {
 
   async selectOaShop(handle) {
     await this.ensureOnOaConsole();
-    await this.page.locator('[data-testid="oa-mode-console"]').click();
     const sw = this.page.locator(`[data-testid="oa-shop-switch-${handle}"]`);
     try {
       await sw.waitFor({ state: "visible", timeout: 2500 });
     } catch {
-      await this.page.goto(`${WEB_URL}/oa`, { waitUntil: "domcontentloaded" });
-      await this.page.locator('[data-testid="oa-mode-console"]').waitFor({ state: "visible", timeout: 15000 });
-      await this.page.locator('[data-testid="oa-mode-console"]').click();
+      await this.page.goto(`${OA_URL}/`, { waitUntil: "domcontentloaded" });
+      await this.page.locator('[data-testid="toggle-create-oa-btn"]').waitFor({ state: "visible", timeout: 15000 });
       await sw.waitFor({ state: "visible", timeout: 10000 });
     }
     await sw.click();
@@ -450,14 +498,15 @@ async function createLoggedInTabs(browser) {
   for (const u of SIM_USERS) {
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     await context.grantPermissions(["microphone", "camera"], { origin: WEB_URL });
+    await context.grantPermissions(["microphone", "camera"], { origin: OA_URL });
 
     if (!TARGET_LIVE) {
-      const apiRoutePattern = new RegExp(`^http://(?:127\\.0\\.0\\.1|localhost):${WEB_PORT}/(?:api|miniapp)/`);
+      const apiRoutePattern = new RegExp(`^http://(?:127\\.0\\.0\\.1|localhost|oa\\.localhost):${WEB_PORT}/(?:api|miniapp)/`);
       await context.route(apiRoutePattern, async (route) => {
         try {
           const reqUrl = route.request().url();
           const targetUrl = reqUrl.replace(
-            new RegExp(`^http://(?:127\\.0\\.0\\.1|localhost):${WEB_PORT}/`),
+            new RegExp(`^http://(?:127\\.0\\.0\\.1|localhost|oa\\.localhost):${WEB_PORT}/`),
             `${BACKEND_URL}/`
           );
           const response = await route.fetch({ url: targetUrl });
@@ -1081,22 +1130,24 @@ async function runSuite3OaSystem(tabs) {
 
   // 3A. Multi-Shop Creation & Multi-Shop Switcher
   await phoom.ensureOnOaConsole();
-  await phoom.page.locator('[data-testid="oa-mode-console"]').click();
-  await phoom.page.locator('[data-testid="toggle-create-oa-btn"]').click();
+  await phoom.openCreateShopForm();
   await phoom.page.locator('[data-testid="create-oa-name"]').fill(phoomShopName);
   await phoom.page.locator('[data-testid="create-oa-handle"]').fill(phoomShopHandle);
   await phoom.page.locator('[data-testid="submit-create-oa-btn"]').click();
   await phoom.page.locator(`[data-testid="oa-shop-switch-${phoomShopHandle}"]`).waitFor({ state: "visible", timeout: 10000 });
 
   await tonnam.ensureOnOaConsole();
-  await tonnam.page.locator('[data-testid="oa-mode-console"]').click();
-  await tonnam.page.locator('[data-testid="toggle-create-oa-btn"]').click();
+  await tonnam.openCreateShopForm();
   await tonnam.page.locator('[data-testid="create-oa-name"]').fill(tonnamShopName);
   await tonnam.page.locator('[data-testid="create-oa-handle"]').fill(tonnamShopHandle);
   await tonnam.page.locator('[data-testid="submit-create-oa-btn"]').click();
   await tonnam.page.locator(`[data-testid="oa-shop-switch-${tonnamShopHandle}"]`).waitFor({ state: "visible", timeout: 10000 });
 
   await tonnam.page.locator('[data-testid="oa-multi-shop-switcher"]').waitFor({ state: "visible", timeout: 8000 });
+  // ไซต์ร้านค้าไม่มีแท็บเพื่อน/แชท/สมุดบันทึก
+  for (const t of ["home", "chats", "notes"]) {
+    assert((await tonnam.page.locator(`[data-testid$="nav-tab-${t}"]`).count()) === 0, `shop site must not show ${t} tab`);
+  }
   await tonnam.page.locator('[data-testid="oa-shop-switch-cha_banchiang"]').click();
   await tonnam.page.locator('[data-testid="oa-console-summary-bar"]').filter({ hasText: "cha_banchiang" }).waitFor({ timeout: 8000 });
   await tonnam.page.locator(`[data-testid="oa-shop-switch-${tonnamShopHandle}"]`).click();
@@ -1155,8 +1206,13 @@ async function runSuite3OaSystem(tabs) {
   console.log("  [3B] 4-Role Team & RBAC (agent/marketer UI + 403 on /chats & /messages) PASSED");
 
   // 3C. Discover + Follow + Custom Rich Menu
-  await kin.ensureOnOaConsole();
-  await kin.page.locator('[data-testid="oa-mode-discover"]').click();
+  await kin.ensureOnShopDiscover();
+  // ไซต์แชทไม่มีคอนโซล/สร้างร้าน และ /oa เด้งไปไซต์ร้านค้า
+  assert((await kin.page.locator('[data-testid="toggle-create-oa-btn"]').count()) === 0, "chat site must not show create-shop UI");
+  assert((await kin.page.locator('[data-testid="oa-subtab-inbox"]').count()) === 0, "chat site must not show shop console");
+  const oaRedirect = await fetch(`http://localhost:${WEB_PORT}/oa`, { redirect: "manual" });
+  assert(oaRedirect.status === 307, `/oa on chat host must redirect, got ${oaRedirect.status}`);
+  assert((oaRedirect.headers.get("location") || "").startsWith(`${OA_URL}/`), "/oa must redirect to shop site root");
   await kin.page.locator('[data-testid="oa-discover-search"]').fill("ชาบ้านเชียง");
   const card = kin.page.locator('[data-testid="oa-card-cha_banchiang"]');
   await card.waitFor({ state: "visible", timeout: 10000 });
@@ -1284,9 +1340,21 @@ async function runSuite3OaSystem(tabs) {
   console.log("  [3E+3F] Coupons (create/claim/redeem) + Inbox CRM Tags/Filter + Reply as Shop PASSED");
 
   // 3G. Targeted Broadcast (VIP only) + All Broadcast (with coupon card)
+  // CRM ลูกค้า: แสดงผู้ติดตาม, กรองด้วยแท็ก VIP, เปิดรายละเอียด
+  await tonnam.page.locator('[data-testid="oa-subtab-customers"]').click();
+  await tonnam.page.locator('[data-testid="oa-crm"]').waitFor({ state: "visible", timeout: 10000 });
+  await tonnam.page.locator(`[data-testid="oa-crm-row-${baibua.user.id}"]`).waitFor({ state: "visible", timeout: 10000 });
+  await tonnam.page.locator('[data-testid^="oa-crm-tag-"]').filter({ hasText: /vip/i }).first().click();
+  await tonnam.page.locator(`[data-testid="oa-crm-row-${baibua.user.id}"]`).waitFor({ state: "visible", timeout: 8000 });
+  await tonnam.page.locator(`[data-testid="oa-crm-row-${kin.user.id}"]`).waitFor({ state: "detached", timeout: 8000 });
+  await tonnam.page.locator(`[data-testid="oa-crm-row-${baibua.user.id}"]`).click();
+  await tonnam.page.locator('[data-testid="oa-crm-detail"]').waitFor({ state: "visible", timeout: 8000 });
+
   await tonnam.page.locator('[data-testid="oa-subtab-broadcast"]').click();
   const vipMsg = `สิทธิพิเศษ_VIP_เท่านั้น_${RUN_TAG}`;
-  await tonnam.page.locator('[data-testid="oa-broadcast-tag-input"]').fill("VIP");
+  const vipChip = tonnam.page.locator('[data-testid^="oa-broadcast-tag-"]').filter({ hasText: /vip/i }).first();
+  await vipChip.click();
+  assert(/จะส่งถึง\s*\d+\s*คน/.test(await tonnam.page.locator('[data-testid="oa-broadcast-recipient-count"]').innerText()), "broadcast must show recipient count");
   await tonnam.page.locator('[data-testid="oa-broadcast-coupon-select"]').selectOption("");
   await tonnam.page.locator('[data-testid="oa-broadcast-content"]').fill(vipMsg);
   await tonnam.page.locator('[data-testid="oa-broadcast-submit"]').click();
@@ -1298,7 +1366,9 @@ async function runSuite3OaSystem(tabs) {
   const baibuaPreAll = await getMessageIds(baibua, baibuaOaConv.id);
   const kinPreAll = await getMessageIds(kin, kinOaConv.id);
   const allMsg = `ประกาศรวมผู้ติดตามทุกคน_${RUN_TAG}`;
-  await tonnam.page.locator('[data-testid="oa-broadcast-tag-input"]').fill("");
+  // หลังส่งแล้วฟอร์มล้างแท็กเอง; ถ้ายังเลือกอยู่ให้ยกเลิกเพื่อส่งถึงผู้ติดตามทุกคน
+  if ((await vipChip.getAttribute("aria-pressed")) === "true") await vipChip.click();
+  assert((await vipChip.getAttribute("aria-pressed")) !== "true", "VIP chip must be off for all-followers broadcast");
   await tonnam.page.locator('[data-testid="oa-broadcast-coupon-select"]').selectOption(createdCp.id);
   await tonnam.page.locator('[data-testid="oa-broadcast-content"]').fill(allMsg);
   await tonnam.page.locator('[data-testid="oa-broadcast-submit"]').click();
