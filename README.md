@@ -24,6 +24,8 @@
 
 ![หน้าเลือกตำแหน่งบนแผนที่แบบเต็มพื้นที่ แตะแผนที่เพื่อปักหมุดแล้วกดใช้ตำแหน่งนี้](docs/screenshots/web-location-picker.png)
 
+![หน้าเลือกตำแหน่งเมื่อกดปุ่มสลับเป็นภาพดาวเทียม พร้อมเครดิตแหล่งภาพ](docs/screenshots/web-location-satellite.png)
+
 **BCAiChatOA: หลายร้านค้า ทีมงาน และคูปอง (`/oa`)**
 
 ![หน้าจัดการร้านค้า BCAiChatOA พร้อมตัวสลับร้านและคูปอง](docs/screenshots/web-oa-console.png)
@@ -85,7 +87,7 @@ flowchart LR
 3. **เพิ่มเพื่อน 4 ช่องทาง, ความเป็นส่วนตัว, ปิดเสียง และแชทครบเครื่อง**:
    - เพิ่มเพื่อนด้วย **QR Code**, **เบอร์โทร**, **`@bc_id`**, หรือ **Email** โดยระบบเคารพสวิตช์ความเป็นส่วนตัวรายช่องทาง (`allow_add_by_phone`, `allow_add_by_id`, `allow_add_by_email`), รองรับ **Reset QR Token**, **ลบเพื่อน**, **ปิดเสียงรายห้องแบบตั้งเวลา** (`1 ชม.`, `8 ชม.`, `ถึง 08:00 น.`, `ตลอดไป`), **DND ทั้งระบบ**, และ **Silent Block** ที่ซ่อนข้อความ/สายโทรจากผู้ถูกบล็อกโดยอีกฝ่ายไม่รู้ตัว
    - **สแกน QR เต็มจอ**: ปุ่ม "สแกน QR เต็มจอ" ในแผงเพิ่มเพื่อนเปิดหน้าเต็มจอที่สลับ **สแกน QR / QR ของฉัน** ได้ (Web: `MainShell.tsx` + `BarcodeDetector` และอัปโหลดรูป QR, Flutter: `lib/screens/qr_friend_screen.dart` + `mobile_scanner`)
-   - ภายในห้องแชทรองรับข้อความ **แก้ไขสด** (`PUT /api/messages/:id` + WS `message_edited`), **ส่งต่อหลายห้อง**, **ส่งตำแหน่งที่ตั้ง (`location_data`)** พร้อมแผนที่ฟรี OpenStreetMap ในการ์ด และปุ่ม "เลือกบนแผนที่เต็มจอ" (แตะแผนที่เพื่อปักหมุด แล้วกด "ใช้ตำแหน่งนี้"), **การ์ดแนะนำเพื่อน (`contact_data`)**, **เกมสุ่มบันได (`ladder_data`)**, **ส่งแบบเงียบ & ข้อความลบอัตโนมัติ**, **สมุดบันทึก Keep ส่วนตัว**, ปรับสปีดเสียง `1x / 1.5x / 2x`, อัลบั้ม, โพล, นัดหมาย, ข้อความลับ PIN, Mini-Apps ส่วนตัว 5 ตัว, และผู้ช่วย `@ai`
+   - ภายในห้องแชทรองรับข้อความ **แก้ไขสด** (`PUT /api/messages/:id` + WS `message_edited`), **ส่งต่อหลายห้อง**, **ส่งตำแหน่งที่ตั้ง (`location_data`)** พร้อมแผนที่ฟรี OpenStreetMap ในการ์ด และปุ่ม "เลือกบนแผนที่เต็มจอ" (แตะแผนที่เพื่อย้ายหมุดแบบ animation, กดที่หมุดแล้วลากได้โดยแผนที่เลื่อนตามเองเมื่อถึงขอบ, ปุ่มสลับ "ดาวเทียม/แผนที่", ปุ่มจับตำแหน่งปัจจุบันจาก GPS แล้วกด "ใช้ตำแหน่งนี้"), **การ์ดแนะนำเพื่อน (`contact_data`)**, **เกมสุ่มบันได (`ladder_data`)**, **ส่งแบบเงียบ & ข้อความลบอัตโนมัติ**, **สมุดบันทึก Keep ส่วนตัว**, ปรับสปีดเสียง `1x / 1.5x / 2x`, อัลบั้ม, โพล, นัดหมาย, ข้อความลับ PIN, Mini-Apps ส่วนตัว 5 ตัว, และผู้ช่วย `@ai`
 
 4. **BCAiChatOA (หลายร้านค้าต่อผู้ใช้ & แบ่งสิทธิ์ทีม) และ LiveKit Call**:
    - ผู้ใช้ทั่วไปสร้างร้านค้า Official Account ได้หลายร้านที่หน้า `/oa` (และหน้าจัดการ OA ใน Flutter) สลับร้านผ่าน **Multi-Shop Switcher** และเชิญทีมงานในบทบาท `owner`, `admin`, `agent` (ตอบ inbox ลูกค้าได้อย่างเดียว), และ `marketer` พร้อมค้นหา/ติดตามร้านค้า Rich Menu, Auto-Reply คีย์เวิร์ด, คูปอง (สร้าง/เก็บ/ใช้) และ Broadcast
@@ -133,9 +135,10 @@ flowchart LR
 | :--- | :--- | :--- |
 | **Rust Toolchain** | Rust (`edition 2021`), `axum 0.7`, `tokio 1`, `mongodb 3.1`, `bson 2.13`, `reqwest 0.12`, `jsonwebtoken 9.3`, `hmac 0.12`, `sha2 0.10` | ใช้คอมไพล์และรัน `backend/` |
 | **Node.js 20+** | Node.js >= 20, `next ^15.3.3`, `react ^19.1.0`, `typescript ^5.8.3`, `@tailwindcss/postcss ^4.1.8`, `livekit-client ^2.24.1`, `qrcode ^1.5.4`, `leaflet ^1.9.4` (**BSD-2**), `playwright ^1.65.1` | ใช้รัน `web/` และชุดทดสอบอัตโนมัติใน `e2e/` |
-| **Flutter SDK** | Flutter (`Dart SDK ^3.11.5`), `http`, `web_socket_channel`, `shared_preferences`, `file_picker`, `url_launcher`, `google_fonts`, `qr_flutter`, `flutter_local_notifications`, `audioplayers`, `livekit_client`, `mobile_scanner` (**BSD-3**), `flutter_map` (**BSD-3**), `latlong2` | ใช้รันและ build `frontend/` สำหรับ Android, iOS, Windows, macOS |
+| **Flutter SDK** | Flutter (`Dart SDK ^3.11.5`), `http`, `web_socket_channel`, `shared_preferences`, `file_picker`, `url_launcher`, `google_fonts`, `qr_flutter`, `flutter_local_notifications`, `audioplayers`, `livekit_client`, `mobile_scanner` (**BSD-3**), `flutter_map` (**BSD-3**), `latlong2`, `geolocator` (**MIT**) | ใช้รันและ build `frontend/` สำหรับ Android, iOS, Windows, macOS |
 | **Docker** | Docker Engine + Docker Compose (`mongo:7.0`, `minio/minio:latest`, `livekit/livekit-server`) | รันฐานข้อมูล MongoDB, MinIO Storage และ LiveKit SFU |
 | **แผนที่** | ไทล์แผนที่ `https://tile.openstreetmap.org/{z}/{x}/{y}.png` (ข้อมูล OpenStreetMap สัญญาอนุญาต **ODbL**) | ใช้ฟรี ไม่ต้องมี API key; ต้องแสดงเครดิต "© OpenStreetMap" บนแผนที่เสมอ และ Flutter ส่งชื่อแอป `com.bcaichat.app` เป็น User-Agent (ที่มา: [OSM Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/)) |
+| **ภาพดาวเทียม** | ไทล์ `https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/g/{z}/{y}/{x}.jpg` (Sentinel-2 cloudless ปี 2016 สัญญาอนุญาต **CC BY 4.0**) | ใช้ฟรี ไม่ต้องมี API key; ต้องแสดงเครดิต "EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2016)" บนแผนที่ (ที่มา: [EOxCloudless FAQ](https://cloudless.eox.at/documentation/faq)) |
 | **ภายนอก (ตั้งค่าใน `.env`)** | SMSMKT OTP API, Google OAuth2, DeepSeek API, Firebase Cloud Messaging (ตัวเลือก) | ให้บริการส่ง OTP จริง ตรวจสอบ Gmail ตอบแชท AI และ Push แจ้งเตือน |
 | **ฟอนต์และไอคอนปลอดลิขสิทธิ์** | ฟอนต์ `Prompt` (**SIL OFL**), `lucide-react` (**MIT**), Material Icons (**Apache-2.0**), เสียง WAV สังเคราะห์ใน `frontend/assets/sounds/` | ใช้งานได้อย่างถูกต้องตามสัญญาอนุญาตเปิด 100% |
 
@@ -225,5 +228,7 @@ node e2e/e2e_playwright_web_5users.mjs
 - **การเชื่อมต่อ LiveKit Media และ Android อุปกรณ์จริง**: ค่าเริ่มต้นบน Android ชี้ที่ `http://10.0.2.2:8096` สำหรับ Android Emulator; การเชื่อมต่อบนอุปกรณ์จริงหรือเครือข่ายแยกต้องตั้ง Server URL ให้ตรงกับโฮสต์และเปิดพอร์ต LiveKit (`7880-7882`) ให้เข้าถึงได้
 - **การ Build สำหรับ Apple (iOS / macOS)**: ไม่สามารถ Build บน Windows ได้โดยตรง ต้องดำเนินการบนเครื่อง macOS หรือสั่งรัน GitHub Actions workflow `.github/workflows/build-apple.yml`
 - **สแกน QR และการเลือกอุปกรณ์โทร**: `mobile_scanner` รองรับกล้องสแกนเฉพาะ Android / iOS / macOS — บน Windows ใช้การวางรหัส QR แทน; บน Web การสแกนด้วยกล้องต้องใช้เบราว์เซอร์ที่มี `BarcodeDetector` (ไม่มีให้อัปโหลดรูป QR); ใน Flutter เลือกไมโครโฟนได้เฉพาะ Windows / macOS และเลือกลำโพงไม่ได้บน iOS
-- **แผนที่ OpenStreetMap**: ต้องต่ออินเทอร์เน็ตจึงจะเห็นภาพแผนที่; เซิร์ฟเวอร์ไทล์สาธารณะให้บริการแบบ best-effort ไม่มี SLA และอาจถูกระงับได้หากใช้งานหนัก ห้ามดาวน์โหลดไทล์ล่วงหน้าหรือใช้แบบออฟไลน์ (ถ้าผู้ใช้เพิ่มมากให้เปลี่ยน URL ไทล์ที่ `web/src/components/MapPreview.tsx` และ `frontend/lib/widgets/map_preview.dart`); แผนที่ใช้แสดงและปักหมุดเท่านั้น ปุ่มนำทางยังเปิดลิงก์แผนที่ภายนอก; แอป Flutter ยังไม่มีปุ่มจับตำแหน่งปัจจุบันจาก GPS
+- **แผนที่ OpenStreetMap**: ต้องต่ออินเทอร์เน็ตจึงจะเห็นภาพแผนที่; เซิร์ฟเวอร์ไทล์สาธารณะให้บริการแบบ best-effort ไม่มี SLA และอาจถูกระงับได้หากใช้งานหนัก ห้ามดาวน์โหลดไทล์ล่วงหน้าหรือใช้แบบออฟไลน์ (ถ้าผู้ใช้เพิ่มมากให้เปลี่ยน URL ไทล์ที่ `web/src/components/MapPreview.tsx` และ `frontend/lib/widgets/map_preview.dart`); แผนที่ใช้แสดงและปักหมุดเท่านั้น ปุ่มนำทางยังเปิดลิงก์แผนที่ภายนอก
+- **ภาพดาวเทียม**: เป็นภาพปี 2016 ความละเอียดราว 10 เมตรต่อพิกเซล (ชัดถึงซูม 14 ซูมลึกกว่านั้นเป็นภาพขยาย) เห็นถนนใหญ่ แม่น้ำ และแปลงที่ดิน แต่ไม่เห็นรายหลังคาเรือน; เซิร์ฟเวอร์สาธารณะไม่มี SLA; ภาพปี 2018 ขึ้นไปของผู้ให้บริการเดียวกันห้ามใช้เชิงพาณิชย์จึงไม่ได้นำมาใช้
+- **ตำแหน่งปัจจุบัน (GPS)**: ต้องอนุญาตสิทธิ์ตำแหน่งและเปิดบริการตำแหน่งของเครื่อง; บนเว็บต้องเปิดผ่าน HTTPS หรือ `localhost`
 - **Push Notification & DeepSeek Fallback**: Push ผ่าน FCM ถูกปิดเป็นค่าเริ่มต้นหากเว้นว่าง `FCM_SERVICE_ACCOUNT_FILE` และเมื่อยังไม่ตั้ง `DEEPSEEK_API_KEY` ผู้ช่วย `@ai` จะตอบกลับด้วย fallback engine ภายใน (`generate_smart_context_reply`)

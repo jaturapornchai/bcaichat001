@@ -88,4 +88,73 @@ void main() {
     expect(result, isNotNull);
     expect(result!.lat, closeTo(13.7563, 0.3));
   });
+
+  testWidgets(
+    'ปุ่มสลับชั้นแผนที่: เปลี่ยนเป็นภาพดาวเทียมและเครดิตตามแหล่งภาพ',
+    (tester) async {
+      await tester.pumpWidget(
+        _host(
+          BcMapPreview(
+            interactive: true,
+            height: 260,
+            lat: 13.7563,
+            lng: 100.5018,
+            onPick: (_, _) {},
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.byKey(const Key('map-gps-btn')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('map-layer-btn')));
+      await tester.pump();
+      final layer = tester.widget<TileLayer>(find.byType(TileLayer));
+      expect(layer.urlTemplate, BcMapPreview.satelliteTileUrl);
+      expect(layer.maxNativeZoom, BcMapPreview.satelliteMaxNativeZoom);
+      expect(find.text(BcMapPreview.satelliteCredit), findsOneWidget);
+      await tester.tap(find.byKey(const Key('map-layer-btn')));
+      await tester.pump();
+      expect(find.text(BcMapPreview.mapCredit), findsOneWidget);
+    },
+  );
+
+  testWidgets('กดที่หมุดแล้วลาก: ได้พิกัดใหม่ตามทิศที่ลาก', (tester) async {
+    double lat = 13.7563, lng = 100.5018;
+    await tester.pumpWidget(
+      _host(
+        StatefulBuilder(
+          builder: (context, setState) => BcMapPreview(
+            interactive: true,
+            height: 260,
+            lat: lat,
+            lng: lng,
+            onPick: (a, b) => setState(() {
+              lat = a;
+              lng = b;
+            }),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.drag(
+      find.byKey(const Key('map-preview-pin')),
+      const Offset(40, 30),
+    );
+    await tester.pump();
+    expect(lng, greaterThan(100.5018), reason: 'ลากไปทางขวา = ลองจิจูดเพิ่ม');
+    expect(lat, lessThan(13.7563), reason: 'ลากลงล่าง = ละติจูดลด');
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byKey(const Key('map-preview-pin')), findsOneWidget);
+  });
+
+  testWidgets('การ์ดในแชท (ไม่ interactive): ไม่มีปุ่มสลับชั้นและปุ่ม GPS', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(const BcMapPreview(lat: 13.7563, lng: 100.5018)),
+    );
+    await tester.pump();
+    expect(find.byKey(const Key('map-layer-btn')), findsNothing);
+    expect(find.byKey(const Key('map-gps-btn')), findsNothing);
+  });
 }

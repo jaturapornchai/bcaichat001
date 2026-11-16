@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -19,7 +22,8 @@ class BcMapPreview extends StatefulWidget {
   /// ความสูงเป็นพิกเซล; null = เต็มพื้นที่ของกล่องแม่
   final double? height;
 
-  /// true = เลื่อน/ซูมได้ และแตะเพื่อปักหมุด
+  /// true = เลื่อน/ซูมได้ แตะเพื่อย้ายหมุด กดที่หมุดแล้วลากได้
+  /// สลับภาพดาวเทียม และจับตำแหน่งปัจจุบันจาก GPS ได้
   final bool interactive;
   final void Function(double lat, double lng)? onPick;
 
@@ -33,6 +37,16 @@ class BcMapPreview extends StatefulWidget {
   });
 
   static const tileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+  /// ภาพดาวเทียม Sentinel-2 cloudless ปี 2016 (CC BY 4.0, ไม่ต้องมี API key)
+  /// ที่มา: https://cloudless.eox.at/documentation/faq — ลำดับไทล์เป็น {z}/{y}/{x}
+  static const satelliteTileUrl =
+      'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/g/{z}/{y}/{x}.jpg';
+  static const satelliteMaxNativeZoom = 14;
+  static const mapCredit = '© OpenStreetMap';
+  static const satelliteCredit =
+      'EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH '
+      '(Contains modified Copernicus Sentinel data 2016)';
   static const userAgentPackage = 'com.bcaichat.app';
   static const defaultCenter = LatLng(13.7563, 100.5018); // กรุงเทพฯ
 
@@ -48,35 +62,218 @@ class BcMapPreview extends StatefulWidget {
   State<BcMapPreview> createState() => _BcMapPreviewState();
 }
 
-class _BcMapPreviewState extends State<BcMapPreview> {
+class _BcMapPreviewState extends State<BcMapPreview>
+    with SingleTickerProviderStateMixin {
   static const double _pinZoom = 15;
+  static const double _pinBox = 44;
+
+  /// ระยะจากขอบแผนที่ที่เริ่มเลื่อนแผนที่ตามนิ้วระหว่างลากหมุด
+  static const double _edgeZone = 44;
+  static const double _edgeStep = 9;
 
   final MapController _controller = MapController();
+  final GlobalKey _mapBoxKey = GlobalKey();
+  late final AnimationController _moveAnim;
+
   bool _mapReady = false;
+  bool _satellite = false;
+  bool _dragging = false;
+  bool _gpsLoading = false;
+  String? _notice;
+
+  /// ตำแหน่งหมุดที่วาดอยู่จริง (ต่างจาก widget.lat/lng ระหว่าง animation และระหว่างลาก)
+  LatLng? _shownPin;
+  LatLng? _moveFromPin;
+  LatLng? _moveToPin;
+  LatLng? _moveFromCenter;
+  double _moveFromZoom = _pinZoom;
+
+  Offset _grabDelta = Offset.zero;
+  Offset _fingerLocal = Offset.zero;
+  Timer? _edgeTimer;
 
   LatLng? get _pin => BcMapPreview.isValidLatLng(widget.lat, widget.lng)
       ? LatLng(widget.lat!, widget.lng!)
       : null;
 
   @override
-  void didUpdateWidget(BcMapPreview oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final pin = _pin;
-    final moved = oldWidget.lat != widget.lat || oldWidget.lng != widget.lng;
-    if (pin != null && moved && _mapReady) {
-      _controller.move(pin, math.max(_controller.camera.zoom, _pinZoom));
-    }
+  void initState() {
+    super.initState();
+    // สร้างตรงนี้ (ไม่ lazy) เพราะ dispose() ห้ามเป็นจุดแรกที่สร้าง ticker
+    _moveAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 280),
+    )..addListener(_onMoveTick);
+    _shownPin = _pin;
   }
 
   @override
+  void didUpdateWidget(BcMapPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.lat == widget.lat && oldWidget.lng == widget.lng) return;
+    final pin = _pin;
+    final from = _shownPin;
+    if (pin == null || from == null || !_mapReady) {
+      _moveAnim.stop();
+      _shownPin = pin;
+      if (pin != null && _mapReady) {
+        _controller.move(pin, math.max(_controller.camera.zoom, _pinZoom));
+      }
+      return;
+    }
+    _moveFromPin = from;
+    _moveToPin = pin;
+    _moveFromCenter = _controller.camera.center;
+    _moveFromZoom = _controller.camera.zoom;
+    _moveAnim.forward(from: 0);
+  }
+
+  /// เลื่อนหมุดและกึ่งกลางแผนที่ไปยังตำแหน่งใหม่แบบนุ่มนวล
+  void _onMoveTick() {
+    final from = _moveFromPin, to = _moveToPin, center = _moveFromCenter;
+    if (from == null || to == null || center == null) return;
+    final t = Curves.easeOutCubic.transform(_moveAnim.value);
+    final toZoom = math.max(_moveFromZoom, _pinZoom);
+    _controller.move(
+      _lerp(center, to, t),
+      _moveFromZoom + (toZoom - _moveFromZoom) * t,
+    );
+    setState(() => _shownPin = _lerp(from, to, t));
+  }
+
+  static LatLng _lerp(LatLng a, LatLng b, double t) => LatLng(
+    a.latitude + (b.latitude - a.latitude) * t,
+    a.longitude + (b.longitude - a.longitude) * t,
+  );
+
+  @override
   void dispose() {
+    _edgeTimer?.cancel();
+    _moveAnim.dispose();
     _controller.dispose();
     super.dispose();
   }
 
+  // ───── ลากหมุด ─────
+
+  Offset _toMapLocal(Offset global) {
+    final box = _mapBoxKey.currentContext!.findRenderObject()! as RenderBox;
+    return box.globalToLocal(global);
+  }
+
+  void _onPinDragStart(DragStartDetails details) {
+    final pin = _shownPin;
+    if (pin == null) return;
+    _moveAnim.stop();
+    _fingerLocal = _toMapLocal(details.globalPosition);
+    // จำระยะจากนิ้วถึงปลายหมุด เพื่อไม่ให้หมุดกระโดดไปอยู่ใต้นิ้วตอนเริ่มลาก
+    _grabDelta = _controller.camera.latLngToScreenOffset(pin) - _fingerLocal;
+    setState(() => _dragging = true);
+  }
+
+  void _onPinDragUpdate(DragUpdateDetails details) {
+    if (!_dragging) return;
+    _fingerLocal = _toMapLocal(details.globalPosition);
+    _movePinUnderFinger();
+    final velocity = _edgeVelocity();
+    if (velocity == Offset.zero) {
+      _edgeTimer?.cancel();
+      _edgeTimer = null;
+    } else {
+      _edgeTimer ??= Timer.periodic(
+        const Duration(milliseconds: 16),
+        (_) => _onEdgeTick(),
+      );
+    }
+  }
+
+  void _onPinDragEnd() {
+    _edgeTimer?.cancel();
+    _edgeTimer = null;
+    if (!_dragging) return;
+    setState(() => _dragging = false);
+    final pin = _shownPin;
+    if (pin != null) widget.onPick?.call(pin.latitude, pin.longitude);
+  }
+
+  void _movePinUnderFinger() {
+    final tip = _fingerLocal + _grabDelta;
+    setState(() => _shownPin = _controller.camera.screenOffsetToLatLng(tip));
+  }
+
+  /// ทิศและความเร็วที่แผนที่ต้องเลื่อน เมื่อนิ้วเข้าใกล้ขอบระหว่างลากหมุด
+  Offset _edgeVelocity() {
+    final size = _mapBoxKey.currentContext?.size;
+    if (size == null) return Offset.zero;
+    double axis(double pos, double extent) {
+      if (pos < _edgeZone) return -_edgeStep;
+      if (pos > extent - _edgeZone) return _edgeStep;
+      return 0;
+    }
+
+    return Offset(
+      axis(_fingerLocal.dx, size.width),
+      axis(_fingerLocal.dy, size.height),
+    );
+  }
+
+  void _onEdgeTick() {
+    final size = _mapBoxKey.currentContext?.size;
+    final velocity = _edgeVelocity();
+    if (!_dragging || size == null || velocity == Offset.zero) return;
+    final camera = _controller.camera;
+    final center = camera.screenOffsetToLatLng(
+      size.center(Offset.zero) + velocity,
+    );
+    _controller.move(center, camera.zoom);
+    _movePinUnderFinger();
+  }
+
+  // ───── ตำแหน่งปัจจุบันจาก GPS ─────
+
+  Future<void> _useGps() async {
+    if (_gpsLoading) return;
+    setState(() {
+      _gpsLoading = true;
+      _notice = null;
+    });
+    String? notice;
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        notice = 'ยังไม่ได้เปิดบริการตำแหน่งของเครื่อง';
+      } else {
+        var permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.denied) {
+          permission = await Geolocator.requestPermission();
+        }
+        if (permission == LocationPermission.denied ||
+            permission == LocationPermission.deniedForever) {
+          notice = 'ยังไม่ได้อนุญาตให้แอปใช้ตำแหน่ง';
+        } else {
+          final pos = await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.high,
+              timeLimit: Duration(seconds: 12),
+            ),
+          );
+          widget.onPick?.call(pos.latitude, pos.longitude);
+        }
+      }
+    } catch (_) {
+      notice = 'จับตำแหน่งปัจจุบันไม่ได้ แตะบนแผนที่เพื่อปักหมุดแทน';
+    }
+    if (!mounted) return;
+    setState(() {
+      _gpsLoading = false;
+      _notice = notice;
+    });
+  }
+
+  // ───── UI ─────
+
   @override
   Widget build(BuildContext context) {
-    final pin = _pin;
+    final pin = _shownPin;
     final map = FlutterMap(
       mapController: _controller,
       options: MapOptions(
@@ -84,8 +281,10 @@ class _BcMapPreviewState extends State<BcMapPreview> {
         initialZoom: pin != null ? _pinZoom : 11,
         maxZoom: 19,
         onMapReady: () => _mapReady = true,
-        onTap: (_, point) =>
-            widget.onPick?.call(point.latitude, point.longitude),
+        onTap: (_, point) {
+          setState(() => _notice = null);
+          widget.onPick?.call(point.latitude, point.longitude);
+        },
         interactionOptions: InteractionOptions(
           flags: widget.interactive
               ? InteractiveFlag.all & ~InteractiveFlag.rotate
@@ -94,25 +293,23 @@ class _BcMapPreviewState extends State<BcMapPreview> {
       ),
       children: [
         TileLayer(
-          urlTemplate: BcMapPreview.tileUrl,
+          key: ValueKey(_satellite),
+          urlTemplate: _satellite
+              ? BcMapPreview.satelliteTileUrl
+              : BcMapPreview.tileUrl,
           userAgentPackageName: BcMapPreview.userAgentPackage,
           maxZoom: 19,
+          maxNativeZoom: _satellite ? BcMapPreview.satelliteMaxNativeZoom : 19,
         ),
         if (pin != null)
           MarkerLayer(
             markers: [
               Marker(
                 point: pin,
-                width: 36,
-                height: 36,
+                width: _pinBox,
+                height: _pinBox,
                 alignment: Alignment.topCenter,
-                child: Icon(
-                  Icons.location_on_rounded,
-                  key: const Key('map-preview-pin'),
-                  color: AppTheme.brandPrimary,
-                  size: 36,
-                  shadows: const [Shadow(color: Colors.white, blurRadius: 4)],
-                ),
+                child: _buildPin(),
               ),
             ],
           ),
@@ -122,6 +319,7 @@ class _BcMapPreviewState extends State<BcMapPreview> {
     return ClipRRect(
       borderRadius: BorderRadius.circular(10),
       child: SizedBox(
+        key: _mapBoxKey,
         height: widget.height,
         child: Stack(
           children: [
@@ -129,9 +327,100 @@ class _BcMapPreviewState extends State<BcMapPreview> {
             Positioned.fill(
               child: IgnorePointer(ignoring: !widget.interactive, child: map),
             ),
-            Positioned(right: 0, bottom: 0, child: _buildCredit()),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Align(
+                alignment: Alignment.bottomRight,
+                child: _buildCredit(),
+              ),
+            ),
+            if (widget.interactive)
+              Positioned(top: 6, right: 6, child: _buildControls()),
+            if (widget.interactive && _notice != null)
+              Positioned(
+                top: 6,
+                left: 6,
+                right: 112,
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: _buildNotice(_notice!),
+                ),
+              ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildPin() {
+    final icon = Align(
+      alignment: Alignment.bottomCenter,
+      child: AnimatedScale(
+        scale: _dragging ? 1.3 : 1,
+        alignment: Alignment.bottomCenter,
+        duration: const Duration(milliseconds: 150),
+        child: Icon(
+          Icons.location_on_rounded,
+          key: const Key('map-preview-pin'),
+          color: AppTheme.brandPrimary,
+          size: 36,
+          shadows: const [Shadow(color: Colors.white, blurRadius: 4)],
+        ),
+      ),
+    );
+    if (!widget.interactive) return icon;
+    // ชนะการแย่ง gesture กับแผนที่ทันทีที่นิ้วแตะหมุด เพื่อให้ "กดแล้วลากได้เลย"
+    return RawGestureDetector(
+      behavior: HitTestBehavior.opaque,
+      gestures: {
+        _ImmediatePanRecognizer:
+            GestureRecognizerFactoryWithHandlers<_ImmediatePanRecognizer>(
+              _ImmediatePanRecognizer.new,
+              (recognizer) => recognizer
+                ..onStart = _onPinDragStart
+                ..onUpdate = _onPinDragUpdate
+                ..onEnd = ((_) => _onPinDragEnd())
+                ..onCancel = _onPinDragEnd,
+            ),
+      },
+      child: icon,
+    );
+  }
+
+  Widget _buildControls() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        _MapChipButton(
+          key: const Key('map-layer-btn'),
+          icon: _satellite ? Icons.map_rounded : Icons.satellite_alt_rounded,
+          label: _satellite ? 'แผนที่' : 'ดาวเทียม',
+          onTap: () => setState(() => _satellite = !_satellite),
+        ),
+        const SizedBox(height: 4),
+        _MapChipButton(
+          key: const Key('map-gps-btn'),
+          icon: Icons.my_location_rounded,
+          label: _gpsLoading ? 'กำลังจับพิกัด...' : 'ตำแหน่งฉัน',
+          onTap: _gpsLoading ? null : _useGps,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNotice(String text) {
+    return Container(
+      key: const Key('map-notice'),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xF2FFFFFF),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(fontSize: 11, color: AppTheme.slateDark),
       ),
     );
   }
@@ -139,18 +428,77 @@ class _BcMapPreviewState extends State<BcMapPreview> {
   Widget _buildCredit() {
     return GestureDetector(
       onTap: () => launchUrl(
-        Uri.parse('https://www.openstreetmap.org/copyright'),
+        Uri.parse(
+          _satellite
+              ? 'https://cloudless.eox.at'
+              : 'https://www.openstreetmap.org/copyright',
+        ),
         mode: LaunchMode.externalApplication,
       ),
       child: Container(
         key: const Key('map-preview-credit'),
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
         color: const Color(0xCCFFFFFF),
-        child: const Text(
-          '© OpenStreetMap',
-          style: TextStyle(fontSize: 9.5, color: AppTheme.slateBody),
+        child: Text(
+          _satellite ? BcMapPreview.satelliteCredit : BcMapPreview.mapCredit,
+          style: const TextStyle(fontSize: 9.5, color: AppTheme.slateBody),
         ),
       ),
     );
+  }
+}
+
+/// ปุ่มเล็กบนแผนที่ (สลับชั้นแผนที่ / ตำแหน่งปัจจุบัน)
+class _MapChipButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+
+  const _MapChipButton({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      elevation: 1,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(icon, size: 15, color: AppTheme.brandPrimary),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.slateDark,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Pan recognizer ที่รับ gesture ทันทีตั้งแต่นิ้วแตะ (ไม่รอระยะ slop) ใช้กับการลากหมุด
+class _ImmediatePanRecognizer extends PanGestureRecognizer {
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    super.addAllowedPointer(event);
+    resolve(GestureDisposition.accepted);
   }
 }

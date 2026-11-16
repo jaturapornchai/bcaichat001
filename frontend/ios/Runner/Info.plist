@@ -67,6 +67,8 @@
 	<string>BC Ai Chat ขออนุญาตเข้าถึงกล้องเพื่อถ่ายภาพ ส่งในห้องแชท และสนทนาวิดีโอคอล</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>BC Ai Chat ขออนุญาตเข้าถึงไมโครโฟนเพื่อบันทึกข้อความเสียงและสนทนาโทรด้วยเสียง/วิดีโอ</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>BC Ai Chat ขออนุญาตใช้ตำแหน่งปัจจุบันเพื่อปักหมุดและส่งตำแหน่งในห้องแชท</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>

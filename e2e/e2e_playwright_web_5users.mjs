@@ -583,6 +583,41 @@ async function main() {
       await u1.page.locator('[data-testid="loc-fullmap-map"] img.leaflet-tile-loaded').nth(8).waitFor({ timeout: 15000 }).catch(() => {});
       await shot(u1.page, "web-location-picker");
     }
+    // กดที่หมุดแล้วลาก: พิกัดต้องเปลี่ยนตามตำแหน่งที่ปล่อย
+    const coordsBeforeDrag = await u1.page.getByTestId("loc-fullmap-coords").innerText();
+    const pinBox = await u1.page.locator('[data-testid="loc-fullmap-map"] .leaflet-marker-icon').boundingBox();
+    assert.ok(pinBox, "Pin marker is rendered on the full-screen map");
+    const pinX = pinBox.x + pinBox.width / 2;
+    const pinY = pinBox.y + pinBox.height / 2;
+    await u1.page.mouse.move(pinX, pinY);
+    await u1.page.mouse.down();
+    await u1.page.mouse.move(pinX + 90, pinY + 60, { steps: 8 });
+    await u1.page.mouse.up();
+    await u1.page.waitForFunction(
+      (before) => document.querySelector('[data-testid="loc-fullmap-coords"]')?.textContent !== before,
+      coordsBeforeDrag,
+      { timeout: 5000 }
+    );
+    assert.match(await u1.page.getByTestId("loc-fullmap-coords").innerText(), /พิกัด: \d+\.\d{5}, \d+\.\d{5}/);
+    // ปุ่มสลับเป็นภาพดาวเทียม แล้วสลับกลับ
+    await u1.page.getByTestId("loc-fullmap-map-layer-btn").click();
+    await u1.page.locator('[data-testid="loc-fullmap-map"][data-layer="satellite"]').waitFor({ timeout: 5000 });
+    await u1.page.locator('[data-testid="loc-fullmap-map"] img.leaflet-tile[src*="s2cloudless"]').first().waitFor({ state: "attached", timeout: 5000 });
+    assert.match(await u1.page.locator('[data-testid="loc-fullmap-map"] .leaflet-control-attribution').innerText(), /EOxCloudless/);
+    if (README_SHOTS_DIR) {
+      await u1.page.locator('[data-testid="loc-fullmap-map"] img.leaflet-tile-loaded[src*="s2cloudless"]').nth(8).waitFor({ timeout: 15000 }).catch(() => {});
+      await shot(u1.page, "web-location-satellite");
+    }
+    await u1.page.getByTestId("loc-fullmap-map-layer-btn").click();
+    await u1.page.locator('[data-testid="loc-fullmap-map"][data-layer="map"]').waitFor({ timeout: 5000 });
+    // แตะจุดอื่น = ย้ายหมุด แล้วกดยืนยันทันทีระหว่าง animation (ต้องไม่เกิด error ตอนปิดแผนที่)
+    const coordsBeforeTap = await u1.page.getByTestId("loc-fullmap-coords").innerText();
+    await u1.page.locator('[data-testid="loc-fullmap-map"].leaflet-container').click({ position: { x: 60, y: 200 } });
+    await u1.page.waitForFunction(
+      (before) => document.querySelector('[data-testid="loc-fullmap-coords"]')?.textContent !== before,
+      coordsBeforeTap,
+      { timeout: 5000 }
+    );
     await u1.page.getByTestId("loc-fullmap-confirm-btn").click();
     await u1.page.getByTestId("loc-fullmap-view").waitFor({ state: "detached", timeout: 5000 });
     await u1.page.locator('[data-testid="loc-pick-map"][data-has-pin="true"]').waitFor({ state: "visible", timeout: 5000 });
