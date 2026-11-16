@@ -316,6 +316,20 @@ function fetchShopText(urlPath) {
   });
 }
 
+// เรียกเว็บแบบที่ reverse proxy ปลายทาง TLS ของเซิร์ฟเวอร์จริงเรียก (Host ของไซต์ + X-Forwarded-Proto: https)
+function fetchViaTlsProxy(siteHost, urlPath) {
+  const headers = { host: siteHost, "x-forwarded-host": siteHost, "x-forwarded-proto": "https" };
+  return new Promise((resolve, reject) => {
+    http
+      .get({ host: "127.0.0.1", port: WEB_PORT, path: urlPath, headers }, (res) => {
+        let body = "";
+        res.on("data", (c) => (body += c));
+        res.on("end", () => resolve({ status: res.statusCode, location: res.headers.location || "", body }));
+      })
+      .on("error", reject);
+  });
+}
+
 async function assertZeroPopupsAndOverlays(page, label) {
   const dialogCount = await page.locator('[role="dialog"]').count();
   assert.equal(dialogCount, 0, `[role="dialog"] must be 0 on ${label}`);
@@ -452,6 +466,16 @@ async function main() {
     ]);
     assert.ok(oaRobots.includes("GPTBot") && oaRobots.includes("ClaudeBot"), "shop robots.txt allows AI crawlers");
     assert.ok(oaLlms.includes("BC Ai Chat OA"), "shop llms.txt names BC Ai Chat OA");
+    // หลัง reverse proxy ปลายทาง TLS ไซต์ร้านค้าต้องตอบเองได้ทุกเส้นทาง (เคยตอบ 500 เพราะถูกส่งต่อออกนอกเป็น https)
+    for (const shopPath of ["/", "/robots.txt", "/llms.txt", "/sitemap.xml", "/manifest.webmanifest"]) {
+      const proxied = await fetchViaTlsProxy("oa.bcaichat.test", shopPath);
+      assert.equal(proxied.status, 200, `shop site ${shopPath} behind a TLS proxy`);
+    }
+    const proxiedShopHome = await fetchViaTlsProxy("oa.bcaichat.test", "/");
+    assert.ok(proxiedShopHome.body.includes("BC Ai Chat OA"), "shop home behind a TLS proxy names BC Ai Chat OA");
+    const proxiedChatOa = await fetchViaTlsProxy("www.bcaichat.test", "/oa");
+    assert.equal(proxiedChatOa.status, 307, "chat site /oa behind a TLS proxy redirects");
+    assert.equal(proxiedChatOa.location, "https://oa.bcaichat.test/", "chat site /oa redirects to the shop host over https");
     assert.equal(multiDemoRes.status, 404, "/multi-demo must return 404");
 
     browser = await launchBrowser();

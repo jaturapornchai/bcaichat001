@@ -26,7 +26,7 @@
 - **Web (`web/src/`)**:
   - SEO & GEO: `public/robots.txt`, `public/llms.txt`, `src/app/sitemap.ts`, `src/app/layout.tsx` (`SocialNetworkingApplication` JSON-LD, ฟอนต์ `Prompt` OFL, `<h1>` เดียวต่อหน้า)
   - หน้า `/` (`MainShell`, `LoginView`, `ChatRoomView`, `RoomSideModal`, `CallWorkspaceBar`): 4 แท็บหลัก (`เพื่อน`, `แชท` default, `สมุดบันทึก`, `ตั้งค่า`) + Immersive Room บน `< md` + Inline Trays/Panels (`room-side-panel`, `plus-attach-tray`, `rich-card-inline-tray`, `ai-inline-tray`, `active-call-dock`, `incoming-call-banner` — **0** `[role="dialog"]` และ **0** `.fixed.inset-0`)
-  - แยกไซต์ด้วย `src/middleware.ts` + `src/lib/site.ts` (โฮสต์ที่ป้ายแรกเป็น `oa` = ไซต์ร้านค้า; `/oa` บนไซต์แชทส่งต่อไป `oa.<โฮสต์>`; โฮสต์ที่เป็น IP ใช้ `/oa` ที่เดิม) และ route group `src/app/(chat)/`, `src/app/(oa)/` (layout, SEO, manifest แยกกัน)
+  - แยกไซต์ด้วย rewrite ตามโฮสต์ใน `next.config.ts` + `src/middleware.ts` (ย้าย `/oa` ของไซต์แชท) + `src/lib/site.ts` (โฮสต์ที่ป้ายแรกเป็น `oa` = ไซต์ร้านค้า; `/oa` บนไซต์แชทส่งต่อไป `oa.<โฮสต์>`; โฮสต์ที่เป็น IP ใช้ `/oa` ที่เดิม) และ route group `src/app/(chat)/`, `src/app/(oa)/` (layout, SEO, manifest แยกกัน)
   - ไซต์ร้านค้า (`OaConsoleWorkspace.tsx`, `OaCrmCustomers.tsx`): สร้างหลายร้านค้าต่อผู้ใช้, Multi-Shop Switcher, จัดการทีมตามสิทธิ์ Role, Inbox ตอบลูกค้า, ลูกค้า (CRM), Auto-Reply, Coupons, Broadcast — ไซต์แชทเหลือเฉพาะค้นหา/ติดตามร้าน (`OaDiscoverView.tsx`)
 - **Flutter (`frontend/lib/`)**:
   - เฉพาะ Native 4 แพลตฟอร์ม (`android/`, `ios/`, `windows/`, `macos/`) — **ห้ามสร้าง `frontend/web/` หรือไฟล์ `push_web*.dart`**
