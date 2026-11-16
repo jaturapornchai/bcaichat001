@@ -20,9 +20,14 @@ pub struct RegisterDeviceRequest {
     pub popup: bool,
     pub sound: bool,
     pub sounds: AlertSounds,
+    /// Client app registering the device ("chat" or "oa"); installs that
+    /// predate the app split send none.
+    #[serde(default)]
+    pub app: Option<String>,
 }
 
-fn validate(req: &RegisterDeviceRequest) -> Result<(), ApiError> {
+/// Checks the request and returns the client app name in its stored form.
+fn validate(req: &RegisterDeviceRequest) -> Result<&'static str, ApiError> {
     let id_ok = (8..=64).contains(&req.device_id.len())
         && req.device_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
     let token_ok = (1..=4096).contains(&req.token.len())
@@ -44,7 +49,8 @@ fn validate(req: &RegisterDeviceRequest) -> Result<(), ApiError> {
     if !sounds_ok {
         return Err(ApiError::bad_request("รหัสเสียงไม่ถูกต้อง"));
     }
-    Ok(())
+    crate::client_app::parse(req.app.as_deref())
+        .ok_or_else(|| ApiError::bad_request("app ต้องเป็น chat หรือ oa"))
 }
 
 /// Saves this install's push token and alert settings for the signed-in user.
@@ -53,7 +59,7 @@ pub async fn register_device_handler(
     State(state): State<AppState>,
     Json(req): Json<RegisterDeviceRequest>,
 ) -> Result<Json<Value>, ApiError> {
-    validate(&req)?;
+    let app = validate(&req)?;
     let coll = state.db.collection::<DeviceDoc>("device_tokens");
     let device = DeviceDoc {
         id: req.device_id,
@@ -63,6 +69,7 @@ pub async fn register_device_handler(
         popup: req.popup,
         sound: req.sound,
         sounds: req.sounds,
+        app: app.to_string(),
         updated_at: chrono::Utc::now().to_rfc3339(),
     };
     coll.delete_many(doc! { "token": &device.token, "_id": { "$ne": &device.id } })

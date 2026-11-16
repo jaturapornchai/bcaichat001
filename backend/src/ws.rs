@@ -66,6 +66,10 @@ pub struct WsQuery {
     pub token: Option<String>,
     /// App install id, so push skips devices that are connected.
     pub device: Option<String>,
+    /// Client app of this socket ("chat" or "oa"); clients that predate the
+    /// app split send none and get every event.
+    #[serde(default)]
+    pub app: Option<String>,
 }
 
 pub async fn ws_handler(
@@ -82,12 +86,15 @@ pub async fn ws_handler(
         return StatusCode::UNAUTHORIZED.into_response();
     };
     let user_id = claims.sub;
+    let Some(app) = crate::client_app::parse(query.app.as_deref()) else {
+        return StatusCode::BAD_REQUEST.into_response();
+    };
 
     let device_key = query
         .device
         .filter(|d| !d.is_empty() && d.len() <= 64)
         .map(|d| format!("{user_id}:{d}"));
-    ws.on_upgrade(move |socket| handle_socket(socket, state, user_id, device_key))
+    ws.on_upgrade(move |socket| handle_socket(socket, state, user_id, device_key, app))
         .into_response()
 }
 
@@ -100,6 +107,7 @@ async fn handle_socket(
     state: AppState,
     user_id: String,
     device_key: Option<String>,
+    app: &'static str,
 ) {
     if let Some(key) = &device_key {
         state.ws_hub.set_online(key, true);
@@ -123,7 +131,7 @@ async fn handle_socket(
             let out = tokio::select! {
                 _ = ping.tick() => Message::Ping(Vec::new().into()),
                 msg = rx.recv() => match msg {
-                    Ok(msg) if can_receive(&send_state, &send_uid, &msg).await => {
+                    Ok(msg) if can_receive(&send_state, &send_uid, app, &msg).await => {
                         Message::Text(msg.into())
                     }
                     Ok(_) | Err(broadcast::error::RecvError::Lagged(_)) => continue,
@@ -183,10 +191,42 @@ async fn handle_socket(
     }
 }
 
-/// Room events (anything with conversation_id) go only to that room's members;
+/// One user's side of a conversation. The projection keeps at most that user
+/// in each list, so a large group costs the same as a direct chat.
+#[derive(Debug, Deserialize)]
+struct RecipientRelation {
+    #[serde(default)]
+    member_ids: Vec<String>,
+    #[serde(default)]
+    admin_ids: Vec<String>,
+    #[serde(default)]
+    oa_id: Option<String>,
+}
+
+async fn recipient_relation(
+    state: &AppState,
+    conv_id: &str,
+    user_id: &str,
+) -> Option<RecipientRelation> {
+    state
+        .db
+        .collection::<RecipientRelation>("conversations")
+        .find_one(doc! { "_id": conv_id })
+        .projection(doc! {
+            "member_ids": { "$elemMatch": { "$eq": user_id } },
+            "admin_ids": { "$elemMatch": { "$eq": user_id } },
+            "oa_id": 1,
+        })
+        .await
+        .ok()
+        .flatten()
+}
+
+/// Room events (anything with conversation_id) go only to that room's members,
+/// and only to the client app that handles the room for them (`client_app`);
 /// org-wide events (theme, mini-apps) go to everyone.
-// ponytail: one indexed count per room event per socket; cache memberships per socket if traffic grows.
-pub async fn can_receive(state: &AppState, user_id: &str, raw: &str) -> bool {
+// ponytail: one indexed lookup per room event per socket; cache memberships per socket if traffic grows.
+pub async fn can_receive(state: &AppState, user_id: &str, app: &str, raw: &str) -> bool {
     let Ok(v) = serde_json::from_str::<Value>(raw) else {
         return false;
     };
@@ -230,30 +270,28 @@ pub async fn can_receive(state: &AppState, user_id: &str, raw: &str) -> bool {
         }
     }
     let is_call_event = event_name.starts_with("call_");
+    let conv_id = v.get("conversation_id").and_then(|c| c.as_str());
+    let mut is_target = false;
     if let Some(targets) = v.get("target_user_ids").and_then(|t| t.as_array()) {
-        if targets.iter().any(|x| x.as_str() == Some(user_id)) {
-            return true;
-        }
-        if is_call_event || v.get("conversation_id").and_then(|c| c.as_str()).is_none() {
+        is_target = targets.iter().any(|x| x.as_str() == Some(user_id));
+        if !is_target && (is_call_event || conv_id.is_none()) {
             return false;
         }
     }
-    let Some(conv_id) = v.get("conversation_id").and_then(|c| c.as_str()) else {
+    let Some(conv_id) = conv_id else {
         return true;
     };
-    state
-        .db
-        .collection::<bson::Document>("conversations")
-        .count_documents(doc! {
-            "_id": conv_id,
-            "$or": [
-                { "member_ids": user_id },
-                { "admin_ids": user_id },
-            ]
-        })
-        .await
-        .map(|n| n > 0)
-        .unwrap_or(false)
+    // A named target on a client that predates the app split needs no lookup.
+    if is_target && app.is_empty() {
+        return true;
+    }
+    let Some(relation) = recipient_relation(state, conv_id, user_id).await else {
+        return false;
+    };
+    let is_member = !relation.member_ids.is_empty();
+    let is_admin = !relation.admin_ids.is_empty();
+    (is_target || is_member || is_admin)
+        && crate::client_app::receives(app, relation.oa_id.is_some(), is_member, is_admin)
 }
 
 #[cfg(test)]

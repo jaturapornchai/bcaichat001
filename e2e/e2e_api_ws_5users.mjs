@@ -352,9 +352,13 @@ async function api(method, reqPath, body = undefined, token = null, expectedStat
   return { status: res.status, data: json, raw: text };
 }
 
-function connectWs(token, label) {
+// `app` says which client the socket is ("chat" or "oa"); clients that predate the app split send none.
+function connectWs(token, label, app = "") {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`${WS_BASE}?token=${encodeURIComponent(token)}&device=e2e_${label}`);
+    const appParam = app ? `&app=${encodeURIComponent(app)}` : "";
+    const ws = new WebSocket(
+      `${WS_BASE}?token=${encodeURIComponent(token)}&device=e2e_${label}${appParam}`
+    );
     const events = [];
     const waiters = [];
 
@@ -898,6 +902,86 @@ async function main() {
       "Targeted VIP broadcast to U4"
     );
     console.log("✅ Multi-Shop & Multi-Role ร้านค้า + Follow + Auto-Reply + Coupon + Targeted Broadcast passed");
+
+    // 7b. บัญชีเดียวเปิดสองแอป: U2 (พนักงานร้าน A) เปิดแอปแชทและแอปร้านค้าพร้อมกัน
+    // Every socket gets events in broadcast order, so once a later event has arrived
+    // an earlier one that is missing was filtered out, not delayed.
+    const u2ChatApp = await connectWs(U2.token, "u2_chat_app", "chat");
+    const u2ShopApp = await connectWs(U2.token, "u2_shop_app", "oa");
+    const u4ChatApp = await connectWs(U4.token, "u4_chat_app", "chat");
+    wsClients.push(u2ChatApp, u2ShopApp, u4ChatApp);
+    const sendText = async (convId, content, token) =>
+      (await api("POST", `/api/conversations/${convId}/messages`, { content }, token)).data;
+    const isMessage = (msg) => (e) => e.event === "new_message" && e.message?.id === msg.id;
+
+    // ลูกค้าทักร้าน → พนักงานได้ที่แอปร้านค้า (และเครื่องรุ่นเก่า) ลูกค้าเห็นข้อความตัวเองที่แอปแชท
+    const shopMsg = await sendText(oaConvU4Id, "ขอสั่งกาแฟเย็น 2 แก้วค่ะ", U4.token);
+    const isShopAlert = (e) => e.event === "oa_customer_message" && e.message?.id === shopMsg.id;
+    await u2ShopApp.waitFor(isShopAlert, 6000, "customer message on staff shop app");
+    await U2.ws.waitFor(isShopAlert, 6000, "customer message on staff legacy client");
+    await u4ChatApp.waitFor(isMessage(shopMsg), 6000, "own shop message on customer chat app");
+
+    // ข้อความส่วนตัว → แอปแชท (และเครื่องรุ่นเก่า)
+    const personalMsg = await sendText(directConv12Id, "เย็นนี้กินข้าวบ้านไหนดี", U1.token);
+    await u2ChatApp.waitFor(isMessage(personalMsg), 6000, "personal message on chat app");
+    await U2.ws.waitFor(isMessage(personalMsg), 6000, "personal message on legacy client");
+
+    // สายเข้าร้าน → แอปร้านค้า (และเครื่องรุ่นเก่า); ถึงตรงนี้แอปร้านค้าต้องไม่มีเหตุการณ์ของแชทส่วนตัว
+    const shopCall = (
+      await api(
+        "POST",
+        "/api/calls/start",
+        { conversation_id: oaConvU4Id, call_type: "audio" },
+        U4.token
+      )
+    ).data;
+    const isShopCall = (name) => (e) => e.event === name && e.call?.id === shopCall.call.id;
+    await u2ShopApp.waitFor(isShopCall("call_incoming"), 6000, "shop call on staff shop app");
+    await U2.ws.waitFor(isShopCall("call_incoming"), 6000, "shop call on staff legacy client");
+    assert.ok(
+      !u2ShopApp.events.some((e) => e.conversation_id === directConv12Id),
+      "Shop app must not receive personal chat events"
+    );
+    await api("POST", `/api/calls/${shopCall.call.id}/hangup`, undefined, U4.token);
+    await u2ShopApp.waitFor(isShopCall("call_ended"), 6000, "shop call ended on staff shop app");
+
+    // พนักงานตอบจากร้าน → ลูกค้าได้ที่แอปแชท
+    const staffReply = (
+      await api(
+        "POST",
+        `/api/oa/${shopA.id}/chats/${oaConvU4Id}/messages`,
+        { content: "รับออเดอร์แล้วค่ะ รอสักครู่นะคะ" },
+        U2.token
+      )
+    ).data;
+    await u4ChatApp.waitFor(isMessage(staffReply), 6000, "shop reply on customer chat app");
+    await u2ShopApp.waitFor(isMessage(staffReply), 6000, "shop reply on staff shop app");
+
+    // ข้อความส่วนตัวอีกฉบับเป็นตัวปิดท้าย: แอปแชทของพนักงานต้องไม่เคยได้งานของร้านเลย
+    const personalMsg2 = await sendText(directConv12Id, "งั้นเจอกันหกโมงนะ", U1.token);
+    await u2ChatApp.waitFor(isMessage(personalMsg2), 6000, "second personal message on chat app");
+    assert.ok(
+      !u2ChatApp.events.some(
+        (e) => e.conversation_id === oaConvU4Id || e.call?.id === shopCall.call.id
+      ),
+      "Chat app must not receive shop-staff messages or shop calls"
+    );
+
+    // ชื่อแอปที่ไม่รู้จักถูกปฏิเสธทั้งตอนต่อ WebSocket และตอนลงทะเบียนอุปกรณ์
+    await assert.rejects(connectWs(U2.token, "u2_unknown_app", "shop"), /WS error/);
+    const deviceBody = {
+      device_id: "e2e-u2-shop-app",
+      token: "e2e-token-u2-shop-app", // pragma: allowlist secret
+      platform: "android",
+      popup: true,
+      sound: true,
+      sounds: { normal: "pop", urgent: "urgent", ai: "robot" },
+    };
+    await api("POST", "/api/devices", { ...deviceBody, app: "oa" }, U2.token);
+    await api("POST", "/api/devices", { ...deviceBody, app: "shop" }, U2.token, 400);
+    await api("DELETE", "/api/devices/e2e-u2-shop-app", undefined, U2.token);
+    for (const c of [u2ChatApp, u2ShopApp, u4ChatApp]) c.close();
+    console.log("✅ บัญชีเดียวเปิดสองแอป: งานร้านเข้าแอปร้านค้า งานส่วนตัวเข้าแอปแชท เครื่องรุ่นเก่าได้ครบ passed");
 
     // 8. LiveKit Call Signaling & call_log Message Bubble
     const startCall = (

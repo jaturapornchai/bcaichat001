@@ -51,6 +51,10 @@ pub struct DeviceDoc {
     pub popup: bool,
     pub sound: bool,
     pub sounds: AlertSounds,
+    /// Client app that registered the device ("chat" or "oa"); empty for
+    /// installs that predate the app split, which get every push.
+    #[serde(default)]
+    pub app: String,
     pub updated_at: String,
 }
 
@@ -353,6 +357,13 @@ fn is_user_mentioned_in_message(u: &UserDoc, msg: &MessageDto) -> bool {
 }
 
 /// Fire-and-forget push for a just-broadcast `new_message` to specific user IDs.
+/// Whether a device's app handles `conv` for its owner (see `client_app`).
+fn device_app_receives(device: &DeviceDoc, conv: &ConversationDoc) -> bool {
+    let is_member = conv.member_ids.contains(&device.user_id);
+    let is_admin = conv.admin_ids.contains(&device.user_id);
+    crate::client_app::receives(&device.app, conv.oa_id.is_some(), is_member, is_admin)
+}
+
 pub fn notify_target_users(
     state: &AppState,
     conv: &ConversationDoc,
@@ -454,9 +465,9 @@ pub fn notify_target_users(
                 return;
             }
         };
-        let offline = found
-            .into_iter()
-            .filter(|d| !hub.device_online(&d.user_id, &d.id));
+        let offline = found.into_iter().filter(|d| {
+            device_app_receives(d, &conv_clone) && !hub.device_online(&d.user_id, &d.id)
+        });
         futures::stream::iter(offline)
             .for_each_concurrent(8, |d| {
                 let fcm = fcm.clone();
@@ -529,6 +540,7 @@ pub fn notify_incoming_call(state: &AppState, conv: &ConversationDoc, call: &Cal
 
     let db = state.db.clone();
     let hub = state.ws_hub.clone();
+    let conv_clone = conv.clone();
     let conv_id = conv.id.clone();
     let call_id = call.id.clone();
     let call_type = call.call_type.clone();
@@ -591,9 +603,9 @@ pub fn notify_incoming_call(state: &AppState, conv: &ConversationDoc, call: &Cal
                 return;
             }
         };
-        let offline = found
-            .into_iter()
-            .filter(|d| !hub.device_online(&d.user_id, &d.id));
+        let offline = found.into_iter().filter(|d| {
+            device_app_receives(d, &conv_clone) && !hub.device_online(&d.user_id, &d.id)
+        });
         futures::stream::iter(offline)
             .for_each_concurrent(8, |d| {
                 let fcm = fcm.clone();
@@ -672,6 +684,7 @@ pub fn notify_call_cancelled(state: &AppState, conv: &ConversationDoc, call: &Ca
 
     let db = state.db.clone();
     let hub = state.ws_hub.clone();
+    let conv_clone = conv.clone();
     let conv_id = conv.id.clone();
     let call_id = call.id.clone();
     let status = call.status.clone();
@@ -688,9 +701,9 @@ pub fn notify_call_cancelled(state: &AppState, conv: &ConversationDoc, call: &Ca
                 return;
             }
         };
-        let offline = found
-            .into_iter()
-            .filter(|d| !hub.device_online(&d.user_id, &d.id));
+        let offline = found.into_iter().filter(|d| {
+            device_app_receives(d, &conv_clone) && !hub.device_online(&d.user_id, &d.id)
+        });
         futures::stream::iter(offline)
             .for_each_concurrent(8, |d| {
                 let fcm = fcm.clone();
@@ -757,8 +770,33 @@ mod tests {
             popup: true,
             sound,
             sounds: AlertSounds { normal: "pop".into(), urgent: "urgent".into(), ai: "robot".into() },
+            app: String::new(),
             updated_at: String::new(),
         }
+    }
+
+    #[test]
+    fn push_goes_to_the_app_that_handles_the_conversation() {
+        let with_app = |user: &str, app: &str| DeviceDoc {
+            user_id: user.into(),
+            app: app.into(),
+            ..device(true)
+        };
+        // Personal chat: member "b" gets it on the chat app, never on the shop app.
+        let personal = conv("direct");
+        assert!(device_app_receives(&with_app("b", "chat"), &personal));
+        assert!(!device_app_receives(&with_app("b", "oa"), &personal));
+        assert!(device_app_receives(&with_app("b", ""), &personal));
+
+        // Shop chat: "b" is the customer, "staff" answers for the shop.
+        let mut shop = conv("oa");
+        shop.oa_id = Some("oa1".into());
+        shop.admin_ids = vec!["staff".into()];
+        assert!(device_app_receives(&with_app("b", "chat"), &shop));
+        assert!(!device_app_receives(&with_app("b", "oa"), &shop));
+        assert!(!device_app_receives(&with_app("staff", "chat"), &shop));
+        assert!(device_app_receives(&with_app("staff", "oa"), &shop));
+        assert!(device_app_receives(&with_app("staff", ""), &shop));
     }
 
     #[test]

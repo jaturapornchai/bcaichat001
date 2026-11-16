@@ -1911,18 +1911,83 @@ async fn test_full_bcaichat_auth_oa_calls_minio_and_mongo_flow() {
         }
     }
     assert!(!incoming_raw.is_empty(), "call_incoming WS event must be broadcast");
-    assert!(can_receive(&state, &kong_id, &incoming_raw).await);
-    assert!(can_receive(&state, &agent_id, &incoming_raw).await);
-    assert!(can_receive(&state, &shop_adm_id, &incoming_raw).await);
-    assert!(can_receive(&state, &prae_id, &incoming_raw).await);
+    assert!(can_receive(&state, &kong_id, "", &incoming_raw).await);
+    assert!(can_receive(&state, &agent_id, "", &incoming_raw).await);
+    assert!(can_receive(&state, &shop_adm_id, "", &incoming_raw).await);
+    assert!(can_receive(&state, &prae_id, "", &incoming_raw).await);
     assert!(
-        !can_receive(&state, &mkt_id, &incoming_raw).await,
+        !can_receive(&state, &mkt_id, "", &incoming_raw).await,
         "marketer must not receive call_incoming"
     );
     assert!(
-        !can_receive(&state, &boss_id, &incoming_raw).await,
+        !can_receive(&state, &boss_id, "", &incoming_raw).await,
         "outsider must not receive call_incoming"
     );
+    // One account on two apps: the shop's staff get the shop call on the shop app only,
+    // the customer gets it on the chat app only.
+    for staff_id in [&kong_id, &agent_id, &shop_adm_id] {
+        assert!(can_receive(&state, staff_id, "oa", &incoming_raw).await);
+        assert!(
+            !can_receive(&state, staff_id, "chat", &incoming_raw).await,
+            "shop staff must not get a shop call on the chat app"
+        );
+    }
+    assert!(can_receive(&state, &prae_id, "chat", &incoming_raw).await);
+    assert!(
+        !can_receive(&state, &prae_id, "oa", &incoming_raw).await,
+        "customer must not get a shop call on the shop app"
+    );
+
+    // Shop room events without named targets (a customer writing to the shop) follow the same split;
+    // a marketer is not inbox staff and gets none.
+    let shop_room_event =
+        json!({ "event": "oa_customer_message", "conversation_id": oa_conv_id }).to_string();
+    for (user_id, on_legacy, on_chat, on_shop) in [
+        (&agent_id, true, false, true),
+        (&prae_id, true, true, false),
+        (&mkt_id, false, false, false),
+    ] {
+        assert_eq!(can_receive(&state, user_id, "", &shop_room_event).await, on_legacy);
+        assert_eq!(can_receive(&state, user_id, "chat", &shop_room_event).await, on_chat);
+        assert_eq!(can_receive(&state, user_id, "oa", &shop_room_event).await, on_shop);
+    }
+
+    // Device registration records which app the install is; an unknown app name is rejected.
+    let device_body = |client_app: Option<&str>| {
+        let mut body = json!({
+            "device_id": "it-kong-shop-app", "token": "it-token-kong-shop-app",
+            "platform": "android", "popup": true, "sound": true,
+            "sounds": { "normal": "pop", "urgent": "urgent", "ai": "robot" },
+        });
+        if let Some(name) = client_app {
+            body["app"] = json!(name);
+        }
+        body
+    };
+    let devices_coll = state.db.collection::<mongodb::bson::Document>("device_tokens");
+    for (sent, stored) in [(Some("oa"), "oa"), (None, "")] {
+        let (status, res) =
+            call(&app, "POST", "/api/devices", Some(&kong_token), Some(device_body(sent))).await;
+        assert_eq!(status, StatusCode::OK, "{res}");
+        let saved = devices_coll
+            .find_one(mongodb::bson::doc! { "_id": "it-kong-shop-app" })
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(saved.get_str("app").unwrap(), stored);
+    }
+    let (status, _) = call(
+        &app,
+        "POST",
+        "/api/devices",
+        Some(&kong_token),
+        Some(device_body(Some("shop"))),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let (status, _) =
+        call(&app, "DELETE", "/api/devices/it-kong-shop-app", Some(&kong_token), None).await;
+    assert_eq!(status, StatusCode::OK);
 
     // GET /api/calls/active
     let (status, active_res) = call(
@@ -2481,12 +2546,32 @@ async fn test_full_bcaichat_auth_oa_calls_minio_and_mongo_flow() {
     .await;
     assert_eq!(status, StatusCode::OK, "{silent_msg}");
 
+    // Personal room events without named targets: members only, never on the shop app.
+    let room_event =
+        json!({ "event": "conversation_updated", "conversation_id": boss_mind_conv_id }).to_string();
+    for client_app in ["", "chat"] {
+        assert!(can_receive(&state, &boss_id, client_app, &room_event).await);
+        assert!(
+            !can_receive(&state, &kong_id, client_app, &room_event).await,
+            "non-member must not get room events"
+        );
+    }
+    assert!(!can_receive(&state, &boss_id, "oa", &room_event).await);
+    let missing_room =
+        json!({ "event": "conversation_updated", "conversation_id": "conv_missing" }).to_string();
+    assert!(!can_receive(&state, &boss_id, "", &missing_room).await);
+
     let mut checked_silent_ws = false;
     while let Ok(raw) = ws_rx.try_recv() {
         let ev: Value = serde_json::from_str(&raw).unwrap();
         if ev["event"] == "new_message" && ev["message"]["id"] == silent_msg["id"] {
-            assert!(can_receive(&state, &boss_id, &raw).await);
-            assert!(!can_receive(&state, &mind_id, &raw).await);
+            assert!(can_receive(&state, &boss_id, "", &raw).await);
+            assert!(can_receive(&state, &boss_id, "chat", &raw).await);
+            assert!(
+                !can_receive(&state, &boss_id, "oa", &raw).await,
+                "personal chat must not reach the shop app"
+            );
+            assert!(!can_receive(&state, &mind_id, "", &raw).await);
             checked_silent_ws = true;
         }
     }

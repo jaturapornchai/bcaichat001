@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod client_app;
 pub mod config;
 pub mod minio;
 pub mod models;
