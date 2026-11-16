@@ -1360,10 +1360,8 @@ async function runSuiteD_PlaywrightWebVitalsAndLayout(ctxData) {
         await tc.page.getByTestId("plus-attach-toggle").click();
         await tc.page.getByTestId("plus-attach-tray").waitFor({ state: "visible", timeout: 10000 });
         await tc.page.getByTestId("attach-tab-location").click();
-        await tc.page.getByTestId("send-location-btn").waitFor({ state: "visible", timeout: 10000 });
-        assert.equal(await tc.page.getByTestId("loc-lat-input").count(), 0, `${vp.name}_room: manual coords folded initially`);
-        await tc.page.getByTestId("toggle-manual-coords").click();
-        await tc.page.getByTestId("loc-lat-input").waitFor({ state: "visible", timeout: 5000 });
+        await tc.page.getByTestId("loc-fullmap-view").waitFor({ state: "visible", timeout: 10000 });
+        await tc.page.locator('[data-testid="loc-fullmap-map"].leaflet-container').waitFor({ state: "visible", timeout: 10000 });
         await tc.page.waitForTimeout(250);
         const roomOverflow = await tc.page.evaluate(() => {
           let maxDelta = 0;

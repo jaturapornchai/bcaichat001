@@ -1548,6 +1548,34 @@ export function formatThaiTime(iso?: string | null): string {
   return `${dd}/${mo} ${hh}:${mm}`;
 }
 
+const THAI_WEEKDAYS_SHORT = ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."];
+const THAI_MONTHS_SHORT = [
+  "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
+  "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
+];
+
+/** คีย์วันตามเวลาเครื่อง ใช้เทียบว่าข้อความสองอันอยู่คนละวันหรือไม่ ("" = วันที่อ่านไม่ได้) */
+export function localDayKey(iso?: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+/** ป้ายคั่นวันในห้องแชท: วันนี้ / เมื่อวาน / ส. 14 พ.ย. (ต่างปีต่อท้ายด้วย พ.ศ.) */
+export function formatThaiDay(iso?: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const now = new Date();
+  const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diffDays = Math.round((startOfDay(now) - startOfDay(d)) / 86_400_000);
+  if (diffDays === 0) return "วันนี้";
+  if (diffDays === 1) return "เมื่อวาน";
+  const label = `${THAI_WEEKDAYS_SHORT[d.getDay()]} ${d.getDate()} ${THAI_MONTHS_SHORT[d.getMonth()]}`;
+  return d.getFullYear() === now.getFullYear() ? label : `${label} ${d.getFullYear() + 543}`;
+}
+
 export function formatFileSize(bytes: number): string {
   if (!bytes || bytes <= 0) return "0 B";
   if (bytes < 1024) return `${bytes} B`;

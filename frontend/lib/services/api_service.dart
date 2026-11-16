@@ -1463,45 +1463,6 @@ class ApiService {
     return null;
   }
 
-  Future<List<({String title, String address, double lat, double lng})>>
-  searchNominatimPlaces(String query) async {
-    final q = query.trim();
-    if (q.isEmpty) return const [];
-    final uri = Uri.parse(
-      'https://nominatim.openstreetmap.org/search?format=json&limit=6&q=${Uri.encodeQueryComponent(q)}',
-    );
-    final res = await http
-        .get(
-          uri,
-          headers: const {
-            'User-Agent': 'BCAiChat/1.0',
-            'Accept-Language': 'th,en',
-          },
-        )
-        .timeout(const Duration(seconds: 6));
-    if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw Exception('ค้นหาสถานที่ออนไลน์ไม่สำเร็จ (${res.statusCode})');
-    }
-    final decoded = jsonDecode(utf8.decode(res.bodyBytes));
-    if (decoded is! List) return const [];
-    final out = <({String title, String address, double lat, double lng})>[];
-    for (final item in decoded.whereType<Map>()) {
-      final lat = double.tryParse((item['lat'] ?? '').toString());
-      final lng = double.tryParse((item['lon'] ?? '').toString());
-      if (lat == null || lng == null) continue;
-      final display = (item['display_name'] ?? '').toString().trim();
-      final name = (item['name'] ?? '').toString().trim();
-      final title = name.isNotEmpty ? name : display.split(',').first.trim();
-      out.add((
-        title: title.isEmpty ? 'ตำแหน่งที่ปักหมุด' : title,
-        address: display,
-        lat: lat,
-        lng: lng,
-      ));
-    }
-    return out;
-  }
-
   Future<ChatMessage> updateTaskAction(String messageId, String action) async {
     final res = await http.post(
       Uri.parse('$baseUrl/api/messages/$messageId/task-action'),

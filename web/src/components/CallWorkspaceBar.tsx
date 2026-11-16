@@ -1174,6 +1174,9 @@ export function CallWorkspaceBar({
                   สายเรียกเข้าจาก {incomingCall.initiator_name}
                 </span>
               </div>
+              <div className="truncate text-[10px] text-[var(--bc-muted)]">
+                {incomingCall.call_type === "video" ? "วิดีโอคอล" : "สายโทรเสียง"}
+              </div>
             </div>
           </div>
 
@@ -1189,6 +1192,24 @@ export function CallWorkspaceBar({
                 <span>เต็มจอ</span>
               </button>
             )}
+            {/* ปฏิเสธอยู่ซ้าย รับสายอยู่ขวา */}
+            <button
+              type="button"
+              disabled={actionBusy}
+              data-testid="decline-call-btn"
+              onClick={async () => {
+                setActionBusy(true);
+                try {
+                  await onDeclineCall(incomingCall.id);
+                } finally {
+                  setActionBusy(false);
+                }
+              }}
+              className="inline-flex h-8 items-center gap-1 rounded-xl bg-red-600 px-3 text-xs font-bold text-white shadow-xs transition hover:bg-red-700 disabled:opacity-60"
+            >
+              <PhoneOff className="h-3.5 w-3.5 shrink-0" />
+              <span>ปฏิเสธ</span>
+            </button>
             <button
               type="button"
               disabled={actionBusy}
@@ -1209,23 +1230,6 @@ export function CallWorkspaceBar({
                 <Phone className="h-3.5 w-3.5 shrink-0" />
               )}
               <span>รับสาย</span>
-            </button>
-            <button
-              type="button"
-              disabled={actionBusy}
-              data-testid="decline-call-btn"
-              onClick={async () => {
-                setActionBusy(true);
-                try {
-                  await onDeclineCall(incomingCall.id);
-                } finally {
-                  setActionBusy(false);
-                }
-              }}
-              className="inline-flex h-8 items-center gap-1 rounded-xl bg-red-600 px-3 text-xs font-bold text-white shadow-xs transition hover:bg-red-700 disabled:opacity-60"
-            >
-              <PhoneOff className="h-3.5 w-3.5 shrink-0" />
-              <span>ปฏิเสธ</span>
             </button>
           </div>
         </div>

@@ -1338,11 +1338,25 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                             itemBuilder: (ctx, index) {
                               final msg = visibleMessages[index];
                               final isMe = msg.senderId == currentUserId;
-                              return _buildMessageRow(
+                              final row = _buildMessageRow(
                                 msg,
                                 isMe,
                                 isAdmin,
                                 themeMode,
+                              );
+                              // ป้ายคั่นวัน: ขึ้นก่อนข้อความแรกของแต่ละวัน
+                              final dayLabel = formatThaiDay(msg.createdAt);
+                              final startsNewDay =
+                                  dayLabel.isNotEmpty &&
+                                  (index == 0 ||
+                                      !isSameLocalDay(
+                                        visibleMessages[index - 1].createdAt,
+                                        msg.createdAt,
+                                      ));
+                              if (!startsNewDay) return row;
+                              return Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [_buildDaySeparator(dayLabel), row],
                               );
                             },
                           ),
@@ -1720,6 +1734,12 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 ),
               ),
               const SizedBox(width: 4),
+              _headerIconButton(
+                icon: Icons.search_rounded,
+                tooltip: 'ค้นหาข้อความ',
+                onPressed: _toggleSearchBar,
+                color: iconIdle,
+              ),
               if (_canStartCall) ...[
                 _headerIconButton(
                   icon: Icons.call_rounded,
@@ -1891,6 +1911,31 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     );
   }
 
+  Widget _buildDaySeparator(String label) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Center(
+        child: Container(
+          key: const Key('chat-day-separator'),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.30),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              height: 1.3,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildMessageRow(
     ChatMessage msg,
     bool isMe,
@@ -1969,7 +2014,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           : CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (isMe)
+        // read_count จาก backend ไม่นับผู้ส่ง: 0 = ยังไม่มีใครอ่าน จึงยังไม่ขึ้นป้าย
+        if (isMe && msg.readCount > 0)
           InkWell(
             borderRadius: BorderRadius.circular(6),
             onTap: _conversation.isGroup && msg.readBy.isNotEmpty
@@ -2415,6 +2461,25 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                     _selectedActionMessage = null;
                   }),
                 ),
+                if (msg.type == 'text' &&
+                    !msg.isUnsent &&
+                    msg.content.trim().isNotEmpty &&
+                    (!msg.isConfidential ||
+                        _revealedMessageIds.contains(msg.id))) ...[
+                  const SizedBox(width: 6),
+                  ActionChip(
+                    key: Key('copy-msg-btn-${msg.id}'),
+                    avatar: const Icon(Icons.copy_rounded, size: 15),
+                    label: const Text('คัดลอก', style: TextStyle(fontSize: 12)),
+                    onPressed: () {
+                      setState(() => _selectedActionMessage = null);
+                      Clipboard.setData(ClipboardData(text: msg.content));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('คัดลอกข้อความแล้ว')),
+                      );
+                    },
+                  ),
+                ],
                 if (msg.senderId == (ApiService.instance.currentUser?.id ?? '') &&
                     msg.type == 'text' &&
                     !msg.isUnsent) ...[
@@ -2510,7 +2575,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 const SizedBox(width: 6),
                 ActionChip(
                   avatar: const Icon(Icons.delete_outline_rounded, size: 15),
-                  label: const Text('ลบเฉพาะฉัน', style: TextStyle(fontSize: 12)),
+                  tooltip: 'ลบเฉพาะฝั่งฉัน',
+                  label: const Text('ลบ', style: TextStyle(fontSize: 12)),
                   onPressed: () {
                     setState(() => _selectedActionMessage = null);
                     _handleDeleteForMe(msg);
@@ -2525,7 +2591,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       color: AppTheme.dangerRed,
                     ),
                     label: const Text(
-                      'ยกเลิก & ลบไฟล์',
+                      'ยกเลิกการส่ง',
                       style: TextStyle(
                         fontSize: 12,
                         color: AppTheme.dangerRed,
@@ -5609,25 +5675,6 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                               : AppTheme.slateBody,
                         ),
                 ),
-                IconButton(
-                  onPressed: () => setState(() {
-                    _selectedActionMessage = null;
-                    _activeComposerTray =
-                        _activeComposerTray == 'sticker' ? null : 'sticker';
-                  }),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints.tightFor(
-                    width: 36,
-                    height: 36,
-                  ),
-                  tooltip: 'สติกเกอร์',
-                  icon: Icon(
-                    Icons.emoji_emotions_outlined,
-                    color: _activeComposerTray == 'sticker'
-                        ? AppTheme.brandPrimary
-                        : AppTheme.slateBody,
-                  ),
-                ),
                 const SizedBox(width: 4),
                 Expanded(
                   child: TextField(
@@ -5650,6 +5697,27 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: 7,
+                      ),
+                      // ปุ่มสติกเกอร์ฝังที่ขอบขวาของช่องพิมพ์ — ตำแหน่งที่ผู้ใช้แอปแชทคุ้นมือ
+                      suffixIconConstraints: const BoxConstraints.tightFor(
+                        width: 34,
+                        height: 34,
+                      ),
+                      suffixIcon: IconButton(
+                        onPressed: () => setState(() {
+                          _selectedActionMessage = null;
+                          _activeComposerTray =
+                              _activeComposerTray == 'sticker' ? null : 'sticker';
+                        }),
+                        padding: EdgeInsets.zero,
+                        tooltip: 'สติกเกอร์',
+                        icon: Icon(
+                          Icons.emoji_emotions_outlined,
+                          size: 20,
+                          color: _activeComposerTray == 'sticker'
+                              ? AppTheme.brandPrimary
+                              : AppTheme.slateBody,
+                        ),
                       ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(18),
@@ -8568,23 +8636,8 @@ class _InlinePlusActionPanel extends StatefulWidget {
 }
 
 class _InlinePlusActionPanelState extends State<_InlinePlusActionPanel> {
-  String _tab = 'location'; // location | contact | ladder
-
-  // Location fields
-  final TextEditingController _placeSearchCtrl = TextEditingController();
-  final TextEditingController _locTitleCtrl = TextEditingController();
-  final TextEditingController _locAddrCtrl = TextEditingController();
-  final TextEditingController _locLatCtrl = TextEditingController(
-    text: '13.7563',
-  );
-  final TextEditingController _locLngCtrl = TextEditingController(
-    text: '100.5018',
-  );
-  final TextEditingController _locLinkCtrl = TextEditingController();
-  bool _searchingPlace = false;
-  String? _placeSearchNote;
-  List<({String title, String address, double lat, double lng})> _placeHits =
-      const [];
+  // null = เพิ่งกด + เห็นแค่เมนู เลือกหัวข้อแล้วจึงเปิดรายละเอียดของหัวข้อนั้น
+  String? _tab; // null = เห็นแค่เมนู | contact | ladder | options (ตำแหน่ง/การ์ดโต้ตอบ เปิดหน้าของตัวเองทันที)
 
   // Contact filter
   final TextEditingController _friendFilterCtrl = TextEditingController();
@@ -8621,12 +8674,6 @@ class _InlinePlusActionPanelState extends State<_InlinePlusActionPanel> {
 
   @override
   void dispose() {
-    _placeSearchCtrl.dispose();
-    _locTitleCtrl.dispose();
-    _locAddrCtrl.dispose();
-    _locLatCtrl.dispose();
-    _locLngCtrl.dispose();
-    _locLinkCtrl.dispose();
     _friendFilterCtrl.dispose();
     _ladderTitleCtrl.dispose();
     _ladderPlayersCtrl.dispose();
@@ -8634,94 +8681,20 @@ class _InlinePlusActionPanelState extends State<_InlinePlusActionPanel> {
     super.dispose();
   }
 
+  /// เปิดแผนที่เต็มจอ เลือกตำแหน่งแล้วส่งเข้าห้องแชททันที
   Future<void> _openFullMapPicker() async {
     final picked = await Navigator.of(context).push<({double lat, double lng})>(
-      MaterialPageRoute(
-        builder: (_) => LocationPickerScreen(
-          initialLat: double.tryParse(_locLatCtrl.text.trim()),
-          initialLng: double.tryParse(_locLngCtrl.text.trim()),
-        ),
-      ),
+      MaterialPageRoute(builder: (_) => const LocationPickerScreen()),
     );
     if (picked == null || !mounted) return;
-    setState(() {
-      _locLatCtrl.text = picked.lat.toStringAsFixed(6);
-      _locLngCtrl.text = picked.lng.toStringAsFixed(6);
-      _placeSearchNote = 'เลือกตำแหน่งจากแผนที่แล้ว ✓';
-    });
-  }
-
-  Future<void> _searchPlaces() async {
-    final q = _placeSearchCtrl.text.trim();
-    if (q.isEmpty || _searchingPlace) return;
-    setState(() {
-      _searchingPlace = true;
-      _placeSearchNote = null;
-    });
-    try {
-      final hits = await ApiService.instance.searchNominatimPlaces(q);
-      if (!mounted) return;
-      setState(() {
-        _placeHits = hits;
-        _searchingPlace = false;
-        if (hits.isEmpty) {
-          _placeSearchNote = 'ไม่พบสถานที่ ลองพิมพ์คำค้นอื่นหรือกรอกพิกัดเองด้านล่าง';
-        }
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _searchingPlace = false;
-        _placeSearchNote =
-            'ค้นหาออนไลน์ไม่พร้อมใช้งาน กรุณาวางลิงก์ Google Maps หรือกรอกพิกัดเองด้านล่าง';
-      });
-    }
-  }
-
-  void _parsePastedLinkOrCoords() {
-    final parsed = ApiService.parseLocationInput(_locLinkCtrl.text);
-    if (parsed == null) {
-      setState(() {
-        _placeSearchNote =
-            'ไม่พบพิกัดในข้อความ กรุณาวางลิงก์ Google Maps หรือพิมพ์ เช่น 13.7563, 100.5018';
-      });
-      return;
-    }
-    setState(() {
-      _locLatCtrl.text = parsed.lat.toStringAsFixed(6);
-      _locLngCtrl.text = parsed.lng.toStringAsFixed(6);
-      if (_locTitleCtrl.text.trim().isEmpty) {
-        _locTitleCtrl.text = 'ตำแหน่งจากแผนที่';
-      }
-      _placeSearchNote = 'ดึงพิกัดสำเร็จแล้ว ✓';
-    });
-  }
-
-  void _submitLocation() {
-    final lat = double.tryParse(_locLatCtrl.text.trim());
-    final lng = double.tryParse(_locLngCtrl.text.trim());
-    if (lat == null ||
-        lng == null ||
-        lat < -90 ||
-        lat > 90 ||
-        lng < -180 ||
-        lng > 180) {
-      setState(() {
-        _placeSearchNote =
-            'กรุณาระบุละติจูด (-90..90) และลองจิจูด (-180..180) ให้ถูกต้อง';
-      });
-      return;
-    }
-    final title = _locTitleCtrl.text.trim().isNotEmpty
-        ? _locTitleCtrl.text.trim()
-        : 'ตำแหน่งที่ตั้งของฉัน';
-    final addr = _locAddrCtrl.text.trim();
+    final lat = double.parse(picked.lat.toStringAsFixed(6));
+    final lng = double.parse(picked.lng.toStringAsFixed(6));
     widget.onSendLocation(
       LocationData(
         latitude: lat,
         longitude: lng,
-        title: title,
-        address: addr,
+        title: 'ตำแหน่งที่ปักหมุด',
+        address: '',
         mapUrl: 'https://www.google.com/maps/search/?api=1&query=$lat,$lng',
       ),
     );
@@ -8759,14 +8732,22 @@ class _InlinePlusActionPanelState extends State<_InlinePlusActionPanel> {
     widget.onSendLadder(LadderGameData(title: title, entries: entries));
   }
 
-  Widget _tabButton(String code, IconData icon, String label) {
+  // ปุ่มเมนูแบบไอคอนบน-ข้อความล่าง (เมนูปุ่ม + เห็นเป็นตารางไอคอนก่อน เลือกแล้วจึงเข้าหัวข้อ)
+  Widget _menuButton(
+    String code,
+    IconData icon,
+    String label,
+    double width, {
+    VoidCallback? onTap,
+  }) {
     final active = _tab == code;
-    return Expanded(
+    return SizedBox(
+      width: width,
       child: InkWell(
-        onTap: () => setState(() => _tab = code),
+        onTap: onTap ?? () => setState(() => _tab = code),
         borderRadius: BorderRadius.circular(10),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 6),
+          padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 4),
           decoration: BoxDecoration(
             color: active ? AppTheme.brandPrimary : AppTheme.surfaceBg,
             borderRadius: BorderRadius.circular(10),
@@ -8774,26 +8755,24 @@ class _InlinePlusActionPanelState extends State<_InlinePlusActionPanel> {
               color: active ? AppTheme.brandPrimary : AppTheme.borderSubtle,
             ),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Icon(
                 icon,
-                size: 15,
+                size: 20,
                 color: active ? Colors.white : AppTheme.slateBody,
               ),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: active ? Colors.white : AppTheme.slateDark,
-                  ),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: active ? Colors.white : AppTheme.slateDark,
                 ),
               ),
             ],
@@ -8827,13 +8806,58 @@ class _InlinePlusActionPanelState extends State<_InlinePlusActionPanel> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _tabButton('location', Icons.location_on_rounded, 'ตำแหน่ง'),
-              const SizedBox(width: 6),
-              _tabButton('contact', Icons.contact_page_rounded, 'แนะนำเพื่อน'),
-              const SizedBox(width: 6),
-              _tabButton('ladder', Icons.casino_rounded, 'สุ่มบันได'),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    const gap = 6.0;
+                    final columns = constraints.maxWidth >= 420 ? 5 : 3;
+                    final itemWidth =
+                        ((constraints.maxWidth - gap * (columns - 1)) / columns)
+                            .floorToDouble();
+                    return Wrap(
+                      spacing: gap,
+                      runSpacing: gap,
+                      children: [
+                        _menuButton(
+                          'location',
+                          Icons.location_on_rounded,
+                          'ตำแหน่ง',
+                          itemWidth,
+                          onTap: _openFullMapPicker,
+                        ),
+                        _menuButton(
+                          'contact',
+                          Icons.contact_page_rounded,
+                          'แนะนำเพื่อน',
+                          itemWidth,
+                        ),
+                        _menuButton(
+                          'ladder',
+                          Icons.casino_rounded,
+                          'สุ่มบันได',
+                          itemWidth,
+                        ),
+                        if (widget.hasMiniApps)
+                          _menuButton(
+                            'miniapps',
+                            Icons.widgets_outlined,
+                            'การ์ดโต้ตอบ',
+                            itemWidth,
+                            onTap: widget.onOpenMiniApps,
+                          ),
+                        _menuButton(
+                          'options',
+                          Icons.tune_rounded,
+                          'ตัวเลือกการส่ง',
+                          itemWidth,
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
               const SizedBox(width: 4),
               IconButton(
                 visualDensity: VisualDensity.compact,
@@ -8843,7 +8867,8 @@ class _InlinePlusActionPanelState extends State<_InlinePlusActionPanel> {
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          if (_tab == 'options') const SizedBox(height: 6),
+          if (_tab == 'options')
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -8933,31 +8958,11 @@ class _InlinePlusActionPanelState extends State<_InlinePlusActionPanel> {
                     ),
                     onPressed: widget.onCycleDisappear,
                   ),
-                  if (widget.hasMiniApps) ...[
-                    const SizedBox(width: 6),
-                    ActionChip(
-                      visualDensity: VisualDensity.compact,
-                      backgroundColor: AppTheme.brandSoft,
-                      avatar: Icon(
-                        Icons.widgets_outlined,
-                        size: 14,
-                        color: AppTheme.brandDeep,
-                      ),
-                      label: Text(
-                        'การ์ดโต้ตอบ',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.brandDeep,
-                        ),
-                      ),
-                      onPressed: widget.onOpenMiniApps,
-                    ),
-                  ],
                 ],
               ),
             ),
-          const SizedBox(height: 8),
+          if (_tab == 'contact' || _tab == 'ladder') const SizedBox(height: 8),
+          if (_tab == 'contact' || _tab == 'ladder')
           Flexible(
             child: SingleChildScrollView(
               child: switch (_tab) {
@@ -9038,7 +9043,7 @@ class _InlinePlusActionPanelState extends State<_InlinePlusActionPanel> {
                       ),
                   ],
                 ),
-                'ladder' => Column(
+                _ => Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -9074,222 +9079,6 @@ class _InlinePlusActionPanelState extends State<_InlinePlusActionPanel> {
                         backgroundColor: AppTheme.brandPrimary,
                         visualDensity: VisualDensity.compact,
                       ),
-                    ),
-                  ],
-                ),
-                _ => Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _placeSearchCtrl,
-                            onSubmitted: (_) => _searchPlaces(),
-                            decoration: const InputDecoration(
-                              hintText: 'ค้นหาชื่อสถานที่...',
-                              isDense: true,
-                              contentPadding: EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 8,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        FilledButton(
-                          onPressed: _searchingPlace ? null : _searchPlaces,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: AppTheme.brandPrimary,
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          child: _searchingPlace
-                              ? const SizedBox(
-                                  width: 14,
-                                  height: 14,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Text('ค้นหา'),
-                        ),
-                      ],
-                    ),
-                    if (_placeHits.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      SizedBox(
-                        height: 34,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: _placeHits.length,
-                          separatorBuilder: (_, _) => const SizedBox(width: 6),
-                          itemBuilder: (_, i) {
-                            final hit = _placeHits[i];
-                            return ActionChip(
-                              backgroundColor: AppTheme.brandSoft,
-                              label: Text(
-                                hit.title,
-                                style: TextStyle(
-                                  fontSize: 11.5,
-                                  color: AppTheme.brandDeep,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              onPressed: () => setState(() {
-                                _locTitleCtrl.text = hit.title;
-                                _locAddrCtrl.text = hit.address;
-                                _locLatCtrl.text = hit.lat.toStringAsFixed(6);
-                                _locLngCtrl.text = hit.lng.toStringAsFixed(6);
-                                _placeSearchNote = 'เลือกสถานที่แล้ว ✓';
-                              }),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 6),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _locLinkCtrl,
-                            onSubmitted: (_) => _parsePastedLinkOrCoords(),
-                            decoration: const InputDecoration(
-                              hintText: 'วางลิงก์ Google Maps หรือ lat, lng',
-                              isDense: true,
-                              contentPadding: EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 8,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        OutlinedButton(
-                          onPressed: _parsePastedLinkOrCoords,
-                          style: OutlinedButton.styleFrom(
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          child: const Text(
-                            'ดึงพิกัด',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (_placeSearchNote != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        _placeSearchNote!,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: _placeSearchNote!.contains('✓')
-                              ? AppTheme.brandDeep
-                              : AppTheme.warningAmber,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 6),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        key: const Key('loc-fullmap-open-btn'),
-                        onPressed: _openFullMapPicker,
-                        icon: const Icon(Icons.map_outlined, size: 16),
-                        label: const Text(
-                          'เลือกบนแผนที่เต็มจอ',
-                          style: TextStyle(fontSize: 12.5),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    BcMapPreview(
-                      key: const Key('loc-pick-map'),
-                      interactive: true,
-                      height: 150,
-                      lat: double.tryParse(_locLatCtrl.text.trim()),
-                      lng: double.tryParse(_locLngCtrl.text.trim()),
-                      onPick: (lat, lng) => setState(() {
-                        _locLatCtrl.text = lat.toStringAsFixed(6);
-                        _locLngCtrl.text = lng.toStringAsFixed(6);
-                        _placeSearchNote = 'ปักหมุดจากแผนที่แล้ว ✓';
-                      }),
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          flex: 2,
-                          child: TextField(
-                            controller: _locTitleCtrl,
-                            decoration: const InputDecoration(
-                              labelText: 'ชื่อสถานที่',
-                              isDense: true,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: TextField(
-                            controller: _locLatCtrl,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                              signed: true,
-                            ),
-                            decoration: const InputDecoration(
-                              labelText: 'Lat',
-                              isDense: true,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: TextField(
-                            controller: _locLngCtrl,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                              signed: true,
-                            ),
-                            decoration: const InputDecoration(
-                              labelText: 'Lng',
-                              isDense: true,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _locAddrCtrl,
-                            decoration: const InputDecoration(
-                              labelText: 'รายละเอียด / ที่อยู่เพิ่มเติม',
-                              isDense: true,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        FilledButton.icon(
-                          onPressed: _submitLocation,
-                          icon: const Icon(Icons.send_rounded, size: 15),
-                          label: const Text('ส่งตำแหน่ง'),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: AppTheme.brandPrimary,
-                            visualDensity: VisualDensity.compact,
-                          ),
-                        ),
-                      ],
                     ),
                   ],
                 ),

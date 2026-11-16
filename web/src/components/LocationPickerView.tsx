@@ -8,10 +8,11 @@ interface LocationPickerViewProps {
   initialLat?: number;
   initialLng?: number;
   onCancel: () => void;
-  onConfirm: (lat: number, lng: number) => void;
+  /** ส่งตำแหน่งที่เลือกเข้าห้องแชท */
+  onConfirm: (lat: number, lng: number) => void | Promise<void>;
 }
 
-/** หน้าเลือกตำแหน่งบนแผนที่แบบเต็มพื้นที่ห้องแชท (แทนที่เนื้อหาห้อง ไม่ใช่ popup ซ้อน) */
+/** หน้าเลือกและส่งตำแหน่งบนแผนที่แบบเต็มพื้นที่ห้องแชท (แทนที่เนื้อหาห้อง ไม่ใช่ popup ซ้อน) */
 export default function LocationPickerView({
   initialLat,
   initialLng,
@@ -25,6 +26,17 @@ export default function LocationPickerView({
   );
   const [gpsLoading, setGpsLoading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+
+  const handleConfirm = async () => {
+    if (!pin || sending) return;
+    setSending(true);
+    try {
+      await onConfirm(pin.lat, pin.lng);
+    } finally {
+      setSending(false);
+    }
+  };
 
   const handleUseGps = () => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
@@ -63,7 +75,7 @@ export default function LocationPickerView({
           <ArrowLeft className="h-4 w-4" />
         </button>
         <h2 className="min-w-0 flex-1 truncate text-sm font-bold text-[var(--bc-text)]">
-          เลือกตำแหน่งบนแผนที่
+          แชร์ตำแหน่ง
         </h2>
         <button
           type="button"
@@ -104,12 +116,12 @@ export default function LocationPickerView({
         <button
           type="button"
           data-testid="loc-fullmap-confirm-btn"
-          disabled={!pin}
-          onClick={() => pin && onConfirm(pin.lat, pin.lng)}
+          disabled={!pin || sending}
+          onClick={() => void handleConfirm()}
           className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg bg-[var(--bc-primary)] px-3 text-xs font-bold text-white hover:brightness-95 disabled:opacity-50"
         >
           <Check className="h-3.5 w-3.5" />
-          <span>ใช้ตำแหน่งนี้</span>
+          <span>{sending ? "กำลังส่ง..." : "ส่งตำแหน่งนี้"}</span>
         </button>
       </footer>
     </section>

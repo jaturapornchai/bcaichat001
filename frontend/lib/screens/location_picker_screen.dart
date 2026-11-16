@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/map_preview.dart';
 
-/// หน้าเต็มจอ "เลือกตำแหน่งบนแผนที่" — เป็นหน้าปกติ (route) ไม่ใช่ popup
+/// หน้าเต็มจอ "แชร์ตำแหน่ง" เลือกตำแหน่งบนแผนที่แล้วส่ง — เป็นหน้าปกติ (route) ไม่ใช่ popup
 ///
 /// คืนค่าพิกัดที่เลือกผ่าน `Navigator.pop(context, (lat: ..., lng: ...))`
 class LocationPickerScreen extends StatefulWidget {
@@ -74,7 +74,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             tooltip: 'ย้อนกลับ',
           ),
           const Text(
-            'เลือกตำแหน่งบนแผนที่',
+            'แชร์ตำแหน่ง',
             style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w700,
@@ -114,7 +114,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 ? () => Navigator.of(context).pop((lat: _lat!, lng: _lng!))
                 : null,
             icon: const Icon(Icons.check_rounded, size: 16),
-            label: const Text('ใช้ตำแหน่งนี้'),
+            label: const Text('ส่งตำแหน่งนี้'),
             style: FilledButton.styleFrom(
               backgroundColor: AppTheme.brandPrimary,
               visualDensity: VisualDensity.compact,

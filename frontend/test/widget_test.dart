@@ -225,12 +225,16 @@ void main() {
       await tester.pump();
       expect(find.byIcon(Icons.send_rounded), findsOneWidget);
 
-      // Tapping [+] reveals rich actions and collapsed send options.
+      // Tapping [+] shows a plain icon menu only; send options open from their own menu item.
       await tester.tap(find.byIcon(Icons.add_circle_outline_rounded));
       await tester.pump();
       expect(find.text('ตำแหน่ง'), findsOneWidget);
       expect(find.text('แนะนำเพื่อน'), findsOneWidget);
       expect(find.text('สุ่มบันได'), findsOneWidget);
+      expect(find.text('ตัวเลือกการส่ง'), findsOneWidget);
+      expect(find.text('ลบอัตโนมัติ: ปิด'), findsNothing);
+      await tester.tap(find.text('ตัวเลือกการส่ง'));
+      await tester.pump();
       expect(find.text('ลบอัตโนมัติ: ปิด'), findsOneWidget);
 
       await tester.tap(find.text('ลบอัตโนมัติ: ปิด'));

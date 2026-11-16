@@ -65,6 +65,7 @@ class BcMapPreview extends StatefulWidget {
 class _BcMapPreviewState extends State<BcMapPreview>
     with SingleTickerProviderStateMixin {
   static const double _pinZoom = 15;
+  static const double _mapMaxZoom = 19;
   static const double _pinBox = 44;
 
   /// ระยะจากขอบแผนที่ที่เริ่มเลื่อนแผนที่ตามนิ้วระหว่างลากหมุด
@@ -87,6 +88,21 @@ class _BcMapPreviewState extends State<BcMapPreview>
   LatLng? _moveToPin;
   LatLng? _moveFromCenter;
   double _moveFromZoom = _pinZoom;
+
+  /// ภาพดาวเทียมชัดถึงซูม 14 จึงไม่ให้ซูมลึกกว่านั้น (ซูมลึกกว่าเป็นภาพขยายที่เบลอ)
+  double get _maxZoom => _satellite
+      ? BcMapPreview.satelliteMaxNativeZoom.toDouble()
+      : _mapMaxZoom;
+
+  double _pinZoomFrom(double current) =>
+      math.min(math.max(current, _pinZoom), _maxZoom);
+
+  void _toggleLayer() {
+    setState(() => _satellite = !_satellite);
+    if (!_mapReady) return;
+    final camera = _controller.camera;
+    if (camera.zoom > _maxZoom) _controller.move(camera.center, _maxZoom);
+  }
 
   Offset _grabDelta = Offset.zero;
   Offset _fingerLocal = Offset.zero;
@@ -117,7 +133,7 @@ class _BcMapPreviewState extends State<BcMapPreview>
       _moveAnim.stop();
       _shownPin = pin;
       if (pin != null && _mapReady) {
-        _controller.move(pin, math.max(_controller.camera.zoom, _pinZoom));
+        _controller.move(pin, _pinZoomFrom(_controller.camera.zoom));
       }
       return;
     }
@@ -133,7 +149,7 @@ class _BcMapPreviewState extends State<BcMapPreview>
     final from = _moveFromPin, to = _moveToPin, center = _moveFromCenter;
     if (from == null || to == null || center == null) return;
     final t = Curves.easeOutCubic.transform(_moveAnim.value);
-    final toZoom = math.max(_moveFromZoom, _pinZoom);
+    final toZoom = _pinZoomFrom(_moveFromZoom);
     _controller.move(
       _lerp(center, to, t),
       _moveFromZoom + (toZoom - _moveFromZoom) * t,
@@ -279,7 +295,7 @@ class _BcMapPreviewState extends State<BcMapPreview>
       options: MapOptions(
         initialCenter: pin ?? BcMapPreview.defaultCenter,
         initialZoom: pin != null ? _pinZoom : 11,
-        maxZoom: 19,
+        maxZoom: _maxZoom,
         onMapReady: () => _mapReady = true,
         onTap: (_, point) {
           setState(() => _notice = null);
@@ -298,8 +314,8 @@ class _BcMapPreviewState extends State<BcMapPreview>
               ? BcMapPreview.satelliteTileUrl
               : BcMapPreview.tileUrl,
           userAgentPackageName: BcMapPreview.userAgentPackage,
-          maxZoom: 19,
-          maxNativeZoom: _satellite ? BcMapPreview.satelliteMaxNativeZoom : 19,
+          maxZoom: _maxZoom,
+          maxNativeZoom: _maxZoom.toInt(),
         ),
         if (pin != null)
           MarkerLayer(
@@ -397,7 +413,7 @@ class _BcMapPreviewState extends State<BcMapPreview>
           key: const Key('map-layer-btn'),
           icon: _satellite ? Icons.map_rounded : Icons.satellite_alt_rounded,
           label: _satellite ? 'แผนที่' : 'ดาวเทียม',
-          onTap: () => setState(() => _satellite = !_satellite),
+          onTap: _toggleLayer,
         ),
         const SizedBox(height: 4),
         _MapChipButton(

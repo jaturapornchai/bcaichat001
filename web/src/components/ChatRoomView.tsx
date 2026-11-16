@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import LocationPickerView from "@/components/LocationPickerView";
 import MapPreview, { isValidLatLng } from "@/components/MapPreview";
 import {
@@ -28,9 +28,7 @@ import {
   Forward,
   Image as ImageIcon,
   Layers,
-  LocateFixed,
   Lock,
-  Map as MapIcon,
   MapPin,
   Menu,
   Mic,
@@ -44,6 +42,7 @@ import {
   Search,
   Send,
   Shuffle,
+  SlidersHorizontal,
   Smile,
   Sparkles,
   Square,
@@ -62,8 +61,10 @@ import {
   api,
   formatCallDuration,
   formatFileSize,
+  formatThaiDay,
   formatThaiTime,
   formatThaiUntil,
+  localDayKey,
   getTabToken,
   isConversationMutedNow,
   resolveMediaUrl,
@@ -134,34 +135,6 @@ function computeExpireAtIso(preset: ExpireTimerPreset): string | undefined {
   };
   if (preset === "off") return undefined;
   return new Date(Date.now() + durationsMs[preset]).toISOString();
-}
-
-function parseLocationInput(raw: string): { lat: number; lng: number } | null {
-  const txt = raw.trim();
-  if (!txt) return null;
-  const patterns = [
-    /@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/,
-    /[?&](?:q|query|ll)=(-?\d+(?:\.\d+)?)(?:,|%2C)\s*(-?\d+(?:\.\d+)?)/i,
-    /!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/,
-    /(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/,
-  ];
-  for (const re of patterns) {
-    const m = txt.match(re);
-    if (!m) continue;
-    const lat = Number(m[1]);
-    const lng = Number(m[2]);
-    if (
-      Number.isFinite(lat) &&
-      Number.isFinite(lng) &&
-      lat >= -90 &&
-      lat <= 90 &&
-      lng >= -180 &&
-      lng <= 180
-    ) {
-      return { lat, lng };
-    }
-  }
-  return null;
 }
 
 function isSafeHttpUrl(raw?: string | null): boolean {
@@ -309,25 +282,12 @@ export function ChatRoomView({
 
   // Wave 4: Inline + Attach Tray (Location / Contact / Rich Card / Ladder / Mini-Apps / Send Options)
   const [showPlusTray, setShowPlusTray] = useState(false);
-  const [plusTab, setPlusTab] = useState<
-    "location" | "contact" | "richcard" | "ladder" | "miniapps"
-  >("location");
+  // null = เพิ่งกด + เห็นแค่เมนู เลือกหัวข้อแล้วจึงเปิดรายละเอียดของหัวข้อนั้น
+  const [plusTab, setPlusTab] = useState<"contact" | "ladder" | "miniapps" | "options" | null>(null);
   const [isSilentSend, setIsSilentSend] = useState(false);
   const [expireTimer, setExpireTimer] = useState<ExpireTimerPreset>("off");
 
-  // Location sharing state
-  const [locUrlInput, setLocUrlInput] = useState("");
-  const [locTitle, setLocTitle] = useState("");
-  const [locAddress, setLocAddress] = useState("");
-  const [locLat, setLocLat] = useState("");
-  const [locLng, setLocLng] = useState("");
-  const [locSearchQuery, setLocSearchQuery] = useState("");
-  const [locSearchLoading, setLocSearchLoading] = useState(false);
-  const [locSearchResults, setLocSearchResults] = useState<
-    Array<{ display_name: string; lat: string; lon: string }>
-  >([]);
-  const [locSearchNotice, setLocSearchNotice] = useState<string | null>(null);
-  const [gpsLoading, setGpsLoading] = useState(false);
+  // แชร์ตำแหน่ง: กดปุ่ม "ตำแหน่ง" แล้วเปิดแผนที่เต็มพื้นที่ทันที
   const [locFullMapOpen, setLocFullMapOpen] = useState(false);
 
   // Contact sharing state
@@ -557,141 +517,29 @@ export function ChatRoomView({
     }
   };
 
-  const handleLocUrlChange = (val: string) => {
-    setLocUrlInput(val);
-    const parsed = parseLocationInput(val);
-    if (parsed) {
-      setLocLat(String(parsed.lat));
-      setLocLng(String(parsed.lng));
-      setLocSearchNotice(
-        `ดึงพิกัด ${parsed.lat.toFixed(5)}, ${parsed.lng.toFixed(5)} สำเร็จแล้ว`
-      );
-    }
-  };
-
-  const handleUseCurrentGps = () => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      setLocSearchNotice(
-        "เบราว์เซอร์ไม่รองรับ GPS กรุณาค้นหาสถานที่หรือกรอกพิกัดละติจูด/ลองจิจูด"
-      );
+  const handleSendLocation = async (lat: number, lng: number) => {
+    if (!isValidLatLng(lat, lng)) {
+      onNotify("พิกัดไม่ถูกต้อง กรุณาเลือกตำแหน่งบนแผนที่ใหม่");
       return;
     }
-    setGpsLoading(true);
-    setLocSearchNotice(null);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        setLocLat(lat.toFixed(6));
-        setLocLng(lng.toFixed(6));
-        if (!locTitle.trim()) {
-          setLocTitle("ตำแหน่งปัจจุบันของฉัน");
-        }
-        setLocSearchNotice("ดึงพิกัด GPS ปัจจุบันเรียบร้อยแล้ว");
-        setGpsLoading(false);
-      },
-      () => {
-        setGpsLoading(false);
-        setLocSearchNotice(
-          "ไม่สามารถเข้าถึงตำแหน่ง GPS ได้ กรุณากรอกพิกัดหรือวางลิงก์ Google Maps แทน"
-        );
-      },
-      { enableHighAccuracy: true, timeout: 8000 }
-    );
-  };
-
-  const handleSearchLocationPlace = async () => {
-    const q = locSearchQuery.trim();
-    if (!q) return;
-    const direct = parseLocationInput(q);
-    if (direct) {
-      setLocLat(String(direct.lat));
-      setLocLng(String(direct.lng));
-      if (!locTitle.trim()) setLocTitle("ตำแหน่งที่ปักหมุด");
-      setLocSearchResults([]);
-      setLocSearchNotice("ดึงพิกัดจากข้อความเรียบร้อยแล้ว");
-      return;
-    }
-    setLocSearchLoading(true);
-    setLocSearchNotice(null);
-    try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 5000);
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&limit=5&accept-language=th,en&q=${encodeURIComponent(q)}`,
-        { signal: ctrl.signal }
-      );
-      clearTimeout(timer);
-      if (!res.ok) throw new Error("nominatim");
-      const rows = (await res.json()) as Array<{
-        display_name?: string;
-        lat?: string;
-        lon?: string;
-      }>;
-      const valid = Array.isArray(rows) ? rows.filter((r) => r.lat && r.lon) : [];
-      setLocSearchResults(
-        valid.map((r) => ({
-          display_name: r.display_name || q,
-          lat: r.lat || "",
-          lon: r.lon || "",
-        }))
-      );
-      if (valid.length === 0) {
-        setLocSearchNotice("ไม่พบสถานที่นี้ ลองคำค้นอื่นหรือกรอกพิกัด lat,lng โดยตรง");
-      }
-    } catch {
-      setLocSearchResults([]);
-      setLocSearchNotice(
-        "ค้นหาสถานที่ออนไลน์ไม่สำเร็จ (อาจออฟไลน์) — กรอกพิกัด lat,lng หรือวางลิงก์ Maps แทน"
-      );
-    } finally {
-      setLocSearchLoading(false);
-    }
-  };
-
-  const handleSendLocation = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const fallbackParsed = !locLat.trim() || !locLng.trim() ? parseLocationInput(locUrlInput) : null;
-    const lat = fallbackParsed ? fallbackParsed.lat : Number(locLat.trim());
-    const lng = fallbackParsed ? fallbackParsed.lng : Number(locLng.trim());
-    if (
-      !Number.isFinite(lat) ||
-      !Number.isFinite(lng) ||
-      lat < -90 ||
-      lat > 90 ||
-      lng < -180 ||
-      lng > 180
-    ) {
-      onNotify("กรุณากรอกพิกัดละติจูด (-90 ถึง 90) และลองจิจูด (-180 ถึง 180) ให้ถูกต้อง");
-      return;
-    }
-    const title = locTitle.trim() || "ตำแหน่งที่ตั้ง";
-    const address = locAddress.trim() || undefined;
-    const mapUrl = isSafeHttpUrl(locUrlInput.trim())
-      ? locUrlInput.trim()
-      : `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+    const title = "ตำแหน่งที่ปักหมุด";
     try {
       const sent = await api.sendMessage(conversation.id, {
         type: "location",
-        content: `📍 ${title}${address ? ` — ${address}` : ""} (${lat.toFixed(5)}, ${lng.toFixed(5)})`,
+        content: `📍 ${title} (${lat.toFixed(5)}, ${lng.toFixed(5)})`,
         location_data: {
-          latitude: lat,
-          longitude: lng,
+          latitude: Number(lat.toFixed(6)),
+          longitude: Number(lng.toFixed(6)),
           title,
-          address,
-          map_url: mapUrl,
+          map_url: `https://www.google.com/maps/search/?api=1&query=${lat.toFixed(6)},${lng.toFixed(6)}`,
         },
         ...buildCommonSendOpts(),
       });
       if (isConfidential) {
         setUnlockedIds((prev) => ({ ...prev, [sent.id]: true }));
       }
+      setLocFullMapOpen(false);
       setShowPlusTray(false);
-      setLocUrlInput("");
-      setLocTitle("");
-      setLocAddress("");
-      setLocSearchResults([]);
-      setLocSearchNotice(null);
       resetPerMessageFlags();
       playChime("sent");
       await onRefreshMessages();
@@ -1045,15 +893,8 @@ export function ChatRoomView({
     <div className="flex h-full min-h-0 flex-col bg-[var(--bc-card)]">
       {locFullMapOpen && (
         <LocationPickerView
-          initialLat={locLat.trim() ? Number(locLat) : undefined}
-          initialLng={locLng.trim() ? Number(locLng) : undefined}
           onCancel={() => setLocFullMapOpen(false)}
-          onConfirm={(lat, lng) => {
-            setLocLat(lat.toFixed(6));
-            setLocLng(lng.toFixed(6));
-            setLocSearchNotice("เลือกตำแหน่งจากแผนที่แล้ว");
-            setLocFullMapOpen(false);
-          }}
+          onConfirm={handleSendLocation}
         />
       )}
       {/* ระหว่างเลือกตำแหน่งเต็มพื้นที่ ซ่อนเนื้อหาห้องไว้ (ไม่ถอดออก เพื่อคงตำแหน่งเลื่อนและข้อความที่พิมพ์ค้าง) */}
@@ -1088,6 +929,15 @@ export function ChatRoomView({
               >
                 {conversation.name}
               </h2>
+              {conversation.type === "group" && (
+                <span
+                  data-testid="active-room-member-count"
+                  title="จำนวนสมาชิก"
+                  className="shrink-0 text-xs font-semibold leading-tight text-[var(--bc-muted)] sm:text-sm"
+                >
+                  ({conversation.members.length})
+                </span>
+              )}
               {isShopRoom && (
                 <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-[var(--bc-soft)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--bc-deep)]">
                   <BadgeCheck className="h-3 w-3 text-[var(--bc-primary)]" />
@@ -1443,9 +1293,33 @@ export function ChatRoomView({
                   <strong className="text-[var(--bc-primary)]">@ai</strong> ได้เลยครับ
                 </div>
               ) : (
-                filteredMessages.map((msg) => {
+                filteredMessages.map((msg, msgIndex) => {
+                  // ป้ายคั่นวัน: ขึ้นก่อนข้อความแรกของแต่ละวัน (เทียบกับข้อความก่อนหน้าในรายการที่กำลังแสดง)
+                  const dayKey = localDayKey(msg.created_at);
+                  const startsNewDay =
+                    dayKey !== "" &&
+                    dayKey !== localDayKey(filteredMessages[msgIndex - 1]?.created_at);
+                  const withDay = (row: ReactNode) => (
+                    <Fragment key={msg.id}>
+                      {startsNewDay && (
+                        <div data-testid="chat-day-separator" className="flex justify-center py-1">
+                          <span
+                            className={`rounded-full px-3 py-0.5 text-[10px] font-semibold ${
+                              isDarkRoom
+                                ? "bg-stone-800/90 text-stone-200"
+                                : "bg-[var(--bc-sand)]/90 text-[var(--bc-text)]"
+                            }`}
+                          >
+                            {formatThaiDay(msg.created_at)}
+                          </span>
+                        </div>
+                      )}
+                      {row}
+                    </Fragment>
+                  );
+
                   if (msg.type === "system") {
-                    return (
+                    return withDay(
                       <div key={msg.id} className="flex justify-center py-1">
                         <span
                           className={`rounded-full px-3 py-1 text-[11px] font-medium ${
@@ -1463,7 +1337,7 @@ export function ChatRoomView({
                   if (msg.type === "call_log") {
                     const cType = String(msg.card_payload?.call_type || "audio");
                     const dur = Number(msg.card_payload?.duration_sec || 0);
-                    return (
+                    return withDay(
                       <div key={msg.id} className="flex justify-center py-1">
                         <div
                           className={`inline-flex flex-wrap items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold shadow-2xs ${
@@ -1517,7 +1391,7 @@ export function ChatRoomView({
                   );
                   const canDeleteAny = isMe || currentUser.role === "admin";
 
-                  return (
+                  return withDay(
                     <div
                       key={msg.id}
                       data-testid={`message-item-${msg.id}`}
@@ -2260,7 +2134,7 @@ export function ChatRoomView({
                           {msg.edited_at && msg.type !== "text" && (
                             <span className="opacity-80">(แก้ไขแล้ว)</span>
                           )}
-                          {msg.read_count > 0 && (
+                          {isMe && msg.read_count > 0 && (
                             conversation.type === "group" || conversation.members.length > 2 ? (
                               <button
                                 type="button"
@@ -2277,7 +2151,7 @@ export function ChatRoomView({
                             ) : (
                               <span className="inline-flex items-center gap-0.5 font-semibold text-[var(--bc-primary)]">
                                 <CheckCheck className="h-3 w-3" />
-                                <span>อ่านแล้ว {msg.read_count}</span>
+                                <span>อ่านแล้ว</span>
                               </span>
                             )
                           )}
@@ -2341,8 +2215,27 @@ export function ChatRoomView({
                               title="ตอบกลับ"
                             >
                               <Reply className="h-3 w-3" />
-                              <span>ตอบ</span>
+                              <span>ตอบกลับ</span>
                             </button>
+
+                            {!isLocked && msg.type === "text" && msg.content.trim() !== "" && (
+                              <button
+                                type="button"
+                                data-testid={`copy-msg-btn-${msg.id}`}
+                                onClick={() => {
+                                  void navigator.clipboard
+                                    .writeText(msg.content)
+                                    .then(() => onNotify("คัดลอกข้อความแล้ว"))
+                                    .catch(() => onNotify("คัดลอกข้อความไม่สำเร็จ"));
+                                  setSelectedActionMsgId(null);
+                                }}
+                                className="inline-flex h-7 items-center gap-1 rounded-lg px-2 hover:bg-[var(--bc-soft)]"
+                                title="คัดลอกข้อความ"
+                              >
+                                <Copy className="h-3 w-3" />
+                                <span>คัดลอก</span>
+                              </button>
+                            )}
 
                             {isMe && msg.type === "text" && (
                               <button
@@ -2421,9 +2314,9 @@ export function ChatRoomView({
                                 setSelectedActionMsgId(null);
                               }}
                               className="inline-flex h-7 items-center rounded-lg px-2 hover:bg-[var(--bc-panel)]"
-                              title="ลบเฉพาะฉัน"
+                              title="ลบเฉพาะฝั่งฉัน"
                             >
-                              ลบเฉพาะฉัน
+                              ลบ
                             </button>
 
                             {canDeleteAny && (
@@ -2436,9 +2329,9 @@ export function ChatRoomView({
                                   setSelectedActionMsgId(null);
                                 }}
                                 className="inline-flex h-7 items-center rounded-lg px-2 font-semibold text-red-600 hover:bg-red-50"
-                                title="ยกเลิกข้อความทุกคน"
+                                title="ยกเลิกการส่ง (ลบออกจากทุกคนในห้อง)"
                               >
-                                ยกเลิกทุกคน
+                                ยกเลิกการส่ง
                               </button>
                             )}
                           </div>
@@ -2995,16 +2888,12 @@ export function ChatRoomView({
                 className="mb-1.5 max-h-[46dvh] space-y-2 overflow-y-auto rounded-xl border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2 text-xs"
               >
                 <div className="flex items-start justify-between gap-1.5">
-                  <div className="grid flex-1 grid-cols-3 gap-1.5 sm:grid-cols-5">
+                  <div className="grid flex-1 grid-cols-3 gap-1.5 sm:grid-cols-6">
                     <button
                       type="button"
                       data-testid="attach-tab-location"
-                      onClick={() => setPlusTab("location")}
-                      className={`flex flex-col items-center justify-center gap-0.5 rounded-xl border px-1.5 py-2 text-[11px] font-bold transition ${
-                        plusTab === "location"
-                          ? "border-[var(--bc-primary)] bg-[var(--bc-primary)] text-white"
-                          : "border-[var(--bc-border)] bg-white text-[var(--bc-text)] hover:bg-[var(--bc-soft)]/50"
-                      }`}
+                      onClick={() => setLocFullMapOpen(true)}
+                      className="flex flex-col items-center justify-center gap-0.5 rounded-xl border border-[var(--bc-border)] bg-white px-1.5 py-2 text-[11px] font-bold text-[var(--bc-text)] transition hover:bg-[var(--bc-soft)]/50"
                     >
                       <MapPin className="h-4 w-4 shrink-0" />
                       <span className="truncate">ตำแหน่ง</span>
@@ -3070,6 +2959,20 @@ export function ChatRoomView({
                       <Wrench className="h-4 w-4 shrink-0" />
                       <span className="truncate">เครื่องมือเสริม</span>
                     </button>
+
+                    <button
+                      type="button"
+                      data-testid="attach-tab-options"
+                      onClick={() => setPlusTab("options")}
+                      className={`flex flex-col items-center justify-center gap-0.5 rounded-xl border px-1.5 py-2 text-[11px] font-bold transition ${
+                        plusTab === "options"
+                          ? "border-[var(--bc-primary)] bg-[var(--bc-primary)] text-white"
+                          : "border-[var(--bc-border)] bg-white text-[var(--bc-text)] hover:bg-[var(--bc-soft)]/50"
+                      }`}
+                    >
+                      <SlidersHorizontal className="h-4 w-4 shrink-0" />
+                      <span className="truncate">ตัวเลือกการส่ง</span>
+                    </button>
                   </div>
 
                   <button
@@ -3082,162 +2985,6 @@ export function ChatRoomView({
                     <X className="h-4 w-4" />
                   </button>
                 </div>
-
-                {/* Tab 1: Share Location */}
-                {plusTab === "location" && (
-                  <form onSubmit={handleSendLocation} className="space-y-1.5 rounded-xl border border-[var(--bc-border)] bg-white p-2">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={handleUseCurrentGps}
-                        disabled={gpsLoading}
-                        className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-[var(--bc-primary)] bg-[var(--bc-soft)] px-2.5 text-[11px] font-bold text-[var(--bc-deep)]"
-                      >
-                        <LocateFixed className="h-3.5 w-3.5" />
-                        <span>{gpsLoading ? "กำลังจับพิกัด..." : "ใช้ตำแหน่งปัจจุบัน"}</span>
-                      </button>
-                      <button
-                        type="button"
-                        data-testid="loc-fullmap-open-btn"
-                        onClick={() => setLocFullMapOpen(true)}
-                        className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-[var(--bc-primary)] bg-[var(--bc-soft)] px-2.5 text-[11px] font-bold text-[var(--bc-deep)]"
-                      >
-                        <MapIcon className="h-3.5 w-3.5" />
-                        <span>เลือกบนแผนที่เต็มจอ</span>
-                      </button>
-
-                      <div className="flex min-w-0 flex-1 items-center gap-1">
-                        <input
-                          type="text"
-                          value={locSearchQuery}
-                          onChange={(e) => setLocSearchQuery(e.target.value)}
-                          placeholder="ค้นหาชื่อสถานที่..."
-                          className="h-8 min-w-0 flex-1 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2 text-xs outline-none focus:border-[var(--bc-primary)]"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => void handleSearchLocationPlace()}
-                          disabled={locSearchLoading}
-                          className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2.5 text-[11px] font-bold text-[var(--bc-text)] hover:bg-[var(--bc-soft)]"
-                        >
-                          <Search className="h-3 w-3" />
-                          <span>{locSearchLoading ? "กำลังหา..." : "ค้นหา"}</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {locSearchResults.length > 0 && (
-                      <div className="max-h-24 space-y-1 overflow-y-auto rounded-lg border border-[var(--bc-border)] bg-[var(--bc-panel)] p-1">
-                        {locSearchResults.map((item, idx) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => {
-                              setLocLat(item.lat);
-                              setLocLng(item.lon);
-                              const shortTitle = item.display_name.split(",")[0]?.trim() || item.display_name;
-                              setLocTitle(shortTitle);
-                              setLocAddress(item.display_name);
-                              setLocSearchResults([]);
-                              setLocSearchNotice("เลือกพิกัดจากผลค้นหาแล้ว");
-                            }}
-                            className="block w-full truncate rounded px-2 py-1 text-left text-[11px] hover:bg-white"
-                          >
-                            📍 {item.display_name}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-
-                    {locSearchNotice && (
-                      <div className="text-[11px] font-medium text-[var(--bc-primary)]">
-                        {locSearchNotice}
-                      </div>
-                    )}
-
-                    <MapPreview
-                      testId="loc-pick-map"
-                      interactive
-                      height={170}
-                      lat={locLat.trim() ? Number(locLat) : undefined}
-                      lng={locLng.trim() ? Number(locLng) : undefined}
-                      onPick={(lat, lng) => {
-                        setLocLat(lat.toFixed(6));
-                        setLocLng(lng.toFixed(6));
-                        setLocSearchNotice("ปักหมุดจากแผนที่แล้ว แตะจุดอื่นเพื่อย้ายหมุด");
-                      }}
-                    />
-
-                    <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                      <input
-                        type="text"
-                        data-testid="loc-title-input"
-                        value={locTitle}
-                        onChange={(e) => setLocTitle(e.target.value)}
-                        placeholder="ชื่อสถานที่ (เช่น สยามพารากอน)"
-                        className="h-8 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2 text-xs outline-none focus:border-[var(--bc-primary)]"
-                      />
-                      <input
-                        type="text"
-                        value={locAddress}
-                        onChange={(e) => setLocAddress(e.target.value)}
-                        placeholder="ที่อยู่ / จุดนัดพบ (ถ้ามี)"
-                        className="h-8 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2 text-xs outline-none focus:border-[var(--bc-primary)]"
-                      />
-                    </div>
-
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <button
-                        type="button"
-                        data-testid="toggle-manual-coords"
-                        aria-expanded={showManualCoords}
-                        onClick={() => setShowManualCoords((v) => !v)}
-                        className="inline-flex h-8 items-center gap-1 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2 text-[11px] font-semibold text-[var(--bc-text)] hover:bg-[var(--bc-soft)]"
-                      >
-                        <span>{showManualCoords ? "กรอกพิกัดเอง ▴" : "กรอกพิกัดเอง ▾"}</span>
-                      </button>
-
-                      <button
-                        type="submit"
-                        data-testid="send-location-btn"
-                        className="inline-flex h-9 items-center gap-1 rounded-lg bg-[var(--bc-primary)] px-3 text-xs font-bold text-white hover:brightness-95"
-                      >
-                        <MapPin className="h-3.5 w-3.5" />
-                        <span>ส่งตำแหน่ง</span>
-                      </button>
-                    </div>
-
-                    {showManualCoords && (
-                      <div className="space-y-1.5 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-panel)] p-2">
-                        <input
-                          type="text"
-                          value={locUrlInput}
-                          onChange={(e) => handleLocUrlChange(e.target.value)}
-                          placeholder="วางลิงก์แผนที่ หรือพิกัด เช่น 13.7563, 100.5018"
-                          className="h-8 w-full rounded-lg border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2 text-xs outline-none focus:border-[var(--bc-primary)]"
-                        />
-                        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                          <input
-                            type="text"
-                            data-testid="loc-lat-input"
-                            value={locLat}
-                            onChange={(e) => setLocLat(e.target.value)}
-                            placeholder="ละติจูด เช่น 13.7563"
-                            className="h-8 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2 text-xs outline-none focus:border-[var(--bc-primary)]"
-                          />
-                          <input
-                            type="text"
-                            data-testid="loc-lng-input"
-                            value={locLng}
-                            onChange={(e) => setLocLng(e.target.value)}
-                            placeholder="ลองจิจูด เช่น 100.5018"
-                            className="h-8 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2 text-xs outline-none focus:border-[var(--bc-primary)]"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </form>
-                )}
 
                 {/* Tab 2: Recommend Contact */}
                 {plusTab === "contact" && (
@@ -3378,91 +3125,93 @@ export function ChatRoomView({
                   </div>
                 )}
 
-                {/* Bottom Send Options: Silent / Auto-Expire / Urgent / Confidential PIN */}
-                <div className="space-y-1.5 rounded-lg border border-[var(--bc-border)] bg-white p-2">
-                  <div className="text-[11px] font-bold text-[var(--bc-muted)]">
-                    ตัวเลือกการส่ง
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <button
-                      type="button"
-                      data-testid="toggle-silent-send"
-                      aria-pressed={isSilentSend}
-                      onClick={() => {
-                        setIsSilentSend((v) => {
-                          const next = !v;
-                          if (next) setIsUrgent(false);
-                          return next;
-                        });
-                      }}
-                      className={`inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border px-2 text-[11px] font-semibold ${
-                        isSilentSend
-                          ? "border-stone-700 bg-stone-700 text-white"
-                          : "border-[var(--bc-border)] bg-[var(--bc-panel)] text-[var(--bc-text)]"
-                      }`}
-                    >
-                      <VolumeX className="h-3.5 w-3.5" />
-                      <span>ส่งไร้เสียง</span>
-                    </button>
-
-                    <label className="inline-flex h-8 items-center gap-1 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2 text-[11px] font-semibold text-[var(--bc-text)]">
-                      <Timer className="h-3.5 w-3.5 text-[var(--bc-primary)]" />
-                      <span>ลบอัตโนมัติ:</span>
-                      <select
-                        data-testid="select-expire-timer"
-                        value={expireTimer}
-                        onChange={(e) => setExpireTimer(e.target.value as ExpireTimerPreset)}
-                        className="h-6 rounded border border-[var(--bc-border)] bg-[var(--bc-surface)] px-1 text-[11px] outline-none"
+                {/* Send Options (เปิดจากเมนู "ตัวเลือกการส่ง"): Silent / Auto-Expire / Urgent / Confidential PIN */}
+                {plusTab === "options" && (
+                  <div className="space-y-1.5 rounded-lg border border-[var(--bc-border)] bg-white p-2">
+                    <div className="text-[11px] font-bold text-[var(--bc-muted)]">
+                      ตัวเลือกการส่ง
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        data-testid="toggle-silent-send"
+                        aria-pressed={isSilentSend}
+                        onClick={() => {
+                          setIsSilentSend((v) => {
+                            const next = !v;
+                            if (next) setIsUrgent(false);
+                            return next;
+                          });
+                        }}
+                        className={`inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border px-2 text-[11px] font-semibold ${
+                          isSilentSend
+                            ? "border-stone-700 bg-stone-700 text-white"
+                            : "border-[var(--bc-border)] bg-[var(--bc-panel)] text-[var(--bc-text)]"
+                        }`}
                       >
-                        <option value="off">ปิด</option>
-                        <option value="1m">1 นาที</option>
-                        <option value="1h">1 ชั่วโมง</option>
-                        <option value="24h">24 ชั่วโมง</option>
-                        <option value="7d">7 วัน</option>
-                      </select>
-                    </label>
+                        <VolumeX className="h-3.5 w-3.5" />
+                        <span>ส่งไร้เสียง</span>
+                      </button>
 
-                    <button
-                      type="button"
-                      data-testid="toggle-urgent-send"
-                      aria-pressed={isUrgent}
-                      onClick={() => {
-                        setIsUrgent((v) => {
-                          const next = !v;
-                          if (next) setIsSilentSend(false);
-                          return next;
-                        });
-                      }}
-                      className={`inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border px-2 text-[11px] font-semibold ${
-                        isUrgent
-                          ? "border-amber-600 bg-amber-600 text-white"
-                          : "border-[var(--bc-border)] bg-[var(--bc-panel)] text-[var(--bc-text)]"
-                      }`}
-                    >
-                      <AlertTriangle className="h-3.5 w-3.5" />
-                      <span>เรื่องด่วน</span>
-                    </button>
+                      <label className="inline-flex h-8 items-center gap-1 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2 text-[11px] font-semibold text-[var(--bc-text)]">
+                        <Timer className="h-3.5 w-3.5 text-[var(--bc-primary)]" />
+                        <span>ลบอัตโนมัติ:</span>
+                        <select
+                          data-testid="select-expire-timer"
+                          value={expireTimer}
+                          onChange={(e) => setExpireTimer(e.target.value as ExpireTimerPreset)}
+                          className="h-6 rounded border border-[var(--bc-border)] bg-[var(--bc-surface)] px-1 text-[11px] outline-none"
+                        >
+                          <option value="off">ปิด</option>
+                          <option value="1m">1 นาที</option>
+                          <option value="1h">1 ชั่วโมง</option>
+                          <option value="24h">24 ชั่วโมง</option>
+                          <option value="7d">7 วัน</option>
+                        </select>
+                      </label>
 
-                    <button
-                      type="button"
-                      data-testid="toggle-confidential-pin"
-                      aria-pressed={isConfidential}
-                      onClick={() => setIsConfidential((v) => !v)}
-                      className={`inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border px-2 text-[11px] font-semibold ${
-                        isConfidential
-                          ? "border-[var(--bc-deep)] bg-[var(--bc-deep)] text-white"
-                          : "border-[var(--bc-border)] bg-[var(--bc-panel)] text-[var(--bc-text)]"
-                      }`}
-                    >
-                      {isConfidential ? (
-                        <EyeOff className="h-3.5 w-3.5" />
-                      ) : (
-                        <Eye className="h-3.5 w-3.5" />
-                      )}
-                      <span>ข้อความลับ PIN</span>
-                    </button>
+                      <button
+                        type="button"
+                        data-testid="toggle-urgent-send"
+                        aria-pressed={isUrgent}
+                        onClick={() => {
+                          setIsUrgent((v) => {
+                            const next = !v;
+                            if (next) setIsSilentSend(false);
+                            return next;
+                          });
+                        }}
+                        className={`inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border px-2 text-[11px] font-semibold ${
+                          isUrgent
+                            ? "border-amber-600 bg-amber-600 text-white"
+                            : "border-[var(--bc-border)] bg-[var(--bc-panel)] text-[var(--bc-text)]"
+                        }`}
+                      >
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                        <span>เรื่องด่วน</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        data-testid="toggle-confidential-pin"
+                        aria-pressed={isConfidential}
+                        onClick={() => setIsConfidential((v) => !v)}
+                        className={`inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border px-2 text-[11px] font-semibold ${
+                          isConfidential
+                            ? "border-[var(--bc-deep)] bg-[var(--bc-deep)] text-white"
+                            : "border-[var(--bc-border)] bg-[var(--bc-panel)] text-[var(--bc-text)]"
+                        }`}
+                      >
+                        {isConfidential ? (
+                          <EyeOff className="h-3.5 w-3.5" />
+                        ) : (
+                          <Eye className="h-3.5 w-3.5" />
+                        )}
+                        <span>ข้อความลับ PIN</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
 
@@ -3619,6 +3368,7 @@ export function ChatRoomView({
                   setShowCardModal(false);
                   setAiModalMode(null);
                   setShowComposerAi(false);
+                  setPlusTab(null);
                   setShowPlusTray((v) => !v);
                 }}
                 className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition ${
@@ -3649,35 +3399,37 @@ export function ChatRoomView({
                 />
               </label>
 
-              <button
-                type="button"
-                aria-label="สติกเกอร์"
-                title="สติกเกอร์"
-                aria-expanded={showStickerPicker}
-                onClick={() => {
-                  setShowPlusTray(false);
-                  setShowCardModal(false);
-                  setShowComposerAi(false);
-                  setShowStickerPicker((v) => !v);
-                }}
-                className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition ${
-                  showStickerPicker
-                    ? "border-[var(--bc-primary)] bg-[var(--bc-soft)] text-[var(--bc-primary)]"
-                    : "border-[var(--bc-border)] bg-[var(--bc-panel)] text-[var(--bc-primary)] hover:bg-[var(--bc-soft)]"
-                }`}
-              >
-                <Smile className="h-4 w-4" />
-              </button>
-
-              <input
-                ref={inputRef}
-                data-testid="chat-message-input"
-                type="text"
-                value={draft}
-                onChange={(e) => handleDraftChange(e.target.value)}
-                placeholder="พิมพ์ข้อความ..."
-                className="h-9 min-w-0 flex-1 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-surface)] px-2.5 text-xs text-[var(--bc-text)] outline-none focus:border-[var(--bc-primary)]"
-              />
+              {/* ปุ่มสติกเกอร์ฝังที่ขอบขวาของช่องพิมพ์ — ตำแหน่งที่ผู้ใช้แอปแชทคุ้นมือ */}
+              <div className="relative min-w-0 flex-1">
+                <input
+                  ref={inputRef}
+                  data-testid="chat-message-input"
+                  type="text"
+                  value={draft}
+                  onChange={(e) => handleDraftChange(e.target.value)}
+                  placeholder="พิมพ์ข้อความ..."
+                  className="h-9 w-full min-w-0 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-surface)] pl-2.5 pr-9 text-xs text-[var(--bc-text)] outline-none focus:border-[var(--bc-primary)]"
+                />
+                <button
+                  type="button"
+                  aria-label="สติกเกอร์"
+                  title="สติกเกอร์"
+                  aria-expanded={showStickerPicker}
+                  onClick={() => {
+                    setShowPlusTray(false);
+                    setShowCardModal(false);
+                    setShowComposerAi(false);
+                    setShowStickerPicker((v) => !v);
+                  }}
+                  className={`absolute right-1 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md transition ${
+                    showStickerPicker
+                      ? "bg-[var(--bc-soft)] text-[var(--bc-primary)]"
+                      : "text-[var(--bc-muted)] hover:bg-[var(--bc-soft)] hover:text-[var(--bc-primary)]"
+                  }`}
+                >
+                  <Smile className="h-4 w-4" />
+                </button>
+              </div>
 
               <button
                 type="button"
@@ -3699,8 +3451,11 @@ export function ChatRoomView({
                 <Sparkles className="h-4 w-4" />
               </button>
 
+              {/* ช่องว่าง = ปุ่มอัดเสียง, พิมพ์แล้ว = ปุ่มส่ง (ใช้ตำแหน่งเดียวกัน) */}
+              {isRecording || !draft.trim() ? (
               <button
                 type="button"
+                data-testid="chat-mic-btn"
                 onClick={handleToggleRecording}
                 aria-label={isRecording ? "หยุดอัดเสียง" : "อัดเสียง"}
                 title={isRecording ? "หยุดอัดเสียง" : "อัดเสียง"}
@@ -3719,17 +3474,18 @@ export function ChatRoomView({
                   <Mic className="h-4 w-4" />
                 )}
               </button>
-
+              ) : (
               <button
                 type="submit"
                 data-testid="chat-send-btn"
                 aria-label="ส่ง"
-                disabled={sending || !draft.trim()}
-                className="inline-flex h-9 shrink-0 items-center justify-center gap-1 rounded-lg bg-[var(--bc-primary)] px-2.5 text-xs font-bold text-white shadow-xs transition hover:brightness-95 disabled:opacity-50 sm:px-3"
+                title="ส่ง"
+                disabled={sending}
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--bc-primary)] text-white shadow-xs transition hover:brightness-95 disabled:opacity-50"
               >
                 <Send className="h-4 w-4 shrink-0" />
-                <span>ส่ง</span>
               </button>
+              )}
             </form>
               </>
             )}

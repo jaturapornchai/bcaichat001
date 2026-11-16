@@ -11,10 +11,12 @@ const TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const TILE_CREDIT =
   '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>';
 // ภาพดาวเทียม Sentinel-2 cloudless ปี 2016 (CC BY 4.0, ไม่ต้องมี API key) ความละเอียดจริงถึงซูม 14
+// จึงจำกัดซูมของชั้นดาวเทียมไว้ที่ 14 (ซูมลึกกว่านั้นเป็นภาพขยายที่เบลอ)
 // ที่มา: https://cloudless.eox.at/documentation/faq — ลำดับไทล์เป็น {z}/{y}/{x}
 const SATELLITE_URL =
   "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/g/{z}/{y}/{x}.jpg";
-const SATELLITE_MAX_NATIVE_ZOOM = 14;
+const SATELLITE_MAX_ZOOM = 14;
+const MAP_MAX_ZOOM = 19;
 const SATELLITE_CREDIT =
   '<a href="https://cloudless.eox.at" target="_blank" rel="noopener noreferrer">EOxCloudless</a> by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2016)';
 const DEFAULT_CENTER: [number, number] = [13.7563, 100.5018]; // กรุงเทพฯ
@@ -79,10 +81,9 @@ export default function MapPreview({
       });
       map.attributionControl.setPrefix(false);
       layersRef.current = {
-        map: L.tileLayer(TILE_URL, { maxZoom: 19, attribution: TILE_CREDIT }),
+        map: L.tileLayer(TILE_URL, { maxZoom: MAP_MAX_ZOOM, attribution: TILE_CREDIT }),
         satellite: L.tileLayer(SATELLITE_URL, {
-          maxZoom: 19,
-          maxNativeZoom: SATELLITE_MAX_NATIVE_ZOOM,
+          maxZoom: SATELLITE_MAX_ZOOM,
           attribution: SATELLITE_CREDIT,
         }),
       };
@@ -139,6 +140,8 @@ export default function MapPreview({
     const hide = satellite ? layers.map : layers.satellite;
     hide.remove();
     show.addTo(map);
+    // setMaxZoom ถอยซูมให้เองถ้ากำลังซูมลึกกว่าที่ชั้นนี้รองรับ
+    map.setMaxZoom(satellite ? SATELLITE_MAX_ZOOM : MAP_MAX_ZOOM);
   }, [ready, satellite]);
 
   useEffect(() => {
@@ -153,7 +156,7 @@ export default function MapPreview({
     marker.setLatLng([lat, lng]);
     if (firstPin) {
       marker.addTo(map);
-      map.setView([lat, lng], Math.max(map.getZoom(), 15), { animate: false });
+      map.setView([lat, lng], Math.min(Math.max(map.getZoom(), 15), map.getMaxZoom()), { animate: false });
     } else {
       // cleanup เรียก stop() ก่อน remove() เสมอ จึงปิดแผนที่กลาง animation ได้โดยไม่เกิด _leaflet_pos
       map.panTo([lat, lng], { animate: true, duration: PIN_MOVE_MS / 1000 });

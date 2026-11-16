@@ -860,12 +860,18 @@ async function main() {
       .fill("กลุ่มทดสอบครบทุกปุ่ม");
     await createGroupForm.locator("label", { hasText: "บดินทร์ ผู้ตรวจ B" }).click();
     await createGroupForm.getByRole("button", { name: "สร้างกลุ่มทันที" }).click();
-    await userAS.page.getByTestId("chat-message-input").waitFor({ state: "visible", timeout: 10000 });
+    // Two-pane keeps the previous room open on the right, so wait for the new group's own header (not just any composer)
+    await userAS.page.getByTestId("active-room-title").filter({ hasText: "กลุ่มทดสอบครบทุกปุ่ม" }).waitFor({ state: "visible", timeout: 10000 });
 
     // Fetch group invite_token & have User G join via Join Group form in Tab 1
     const convsAfterGroup = (await apiFetch("/api/conversations", userAToken)).data;
     const createdGroup = convsAfterGroup.find((c) => c.name === "กลุ่มทดสอบครบทุกปุ่ม");
     assert.ok(createdGroup?.invite_token, "Created group must have invite_token");
+    assert.equal(
+      (await userAS.page.getByTestId("active-room-member-count").innerText()).trim(),
+      `(${createdGroup.members.length})`,
+      "Group header shows member count next to the room name"
+    );
 
     await userGS.page.getByTestId("nav-tab-home").click();
     assert.equal(await userGS.page.locator('input[placeholder="วางรหัสเชิญกลุ่ม"]').count(), 0);
@@ -881,6 +887,9 @@ async function main() {
 
     assert.equal(await userAS.page.getByTestId(`friend-hide-btn-${c4Id}`).count(), 0);
     await userAS.page.getByTestId(`friend-more-btn-${c4Id}`).click();
+    for (const quickAction of ["friend-call-audio-btn", "friend-call-video-btn"]) {
+      await userAS.page.getByTestId(`${quickAction}-${c4Id}`).waitFor({ state: "visible", timeout: 5000 });
+    }
     await userAS.page.getByTestId(`friend-hide-btn-${c4Id}`).click();
 
     await userAS.page.getByTestId("nav-tab-services").click();
@@ -983,7 +992,7 @@ async function main() {
 
     // Reply & React (tap msg-actions-toggle before each action)
     await userAS.page.getByTestId(`msg-actions-toggle-${firstMsgId}`).click();
-    await userAS.page.getByTestId(`msg-action-bar-${firstMsgId}`).getByRole("button", { name: "ตอบ" }).click();
+    await userAS.page.getByTestId(`msg-action-bar-${firstMsgId}`).getByRole("button", { name: "ตอบกลับ" }).click();
     await userAS.page.getByTestId("chat-message-input").fill("ข้อความตอบกลับอ้างอิง");
     await userAS.page.getByTestId("chat-send-btn").click();
     await userAS.page.getByText("ข้อความตอบกลับอ้างอิง").first().waitFor({ state: "visible" });
@@ -1014,16 +1023,15 @@ async function main() {
     await richTray.locator('button[type="submit"]').click();
     await userAS.page.getByText("การ์ดนัดหมายทีม").first().waitFor({ state: "visible", timeout: 8000 });
 
-    // `+` tray: Location (manual coords folded behind toggle-manual-coords), Contact, Ladder, Silent + Expire
+    // `+` tray: Location (opens the full map picker directly), Contact, Ladder, Silent + Expire
     await userAS.page.getByTestId("plus-attach-toggle").click();
     await userAS.page.getByTestId("plus-attach-tray").waitFor({ state: "visible" });
     await userAS.page.getByTestId("attach-tab-location").click();
-    assert.equal(await userAS.page.getByTestId("loc-lat-input").count(), 0, "Manual coords folded initially");
-    await userAS.page.getByTestId("loc-title-input").fill("พิพิธภัณฑ์บ้านเชียง");
-    await userAS.page.getByTestId("toggle-manual-coords").click();
-    await userAS.page.getByTestId("loc-lat-input").fill("17.4069");
-    await userAS.page.getByTestId("loc-lng-input").fill("103.2625");
-    await userAS.page.getByTestId("send-location-btn").click();
+    await userAS.page.getByTestId("loc-fullmap-view").waitFor({ state: "visible", timeout: 5000 });
+    await userAS.page.locator('[data-testid="loc-fullmap-map"].leaflet-container').click({ position: { x: 120, y: 120 } });
+    await userAS.page.locator('[data-testid="loc-fullmap-map"][data-has-pin="true"]').waitFor({ state: "visible", timeout: 5000 });
+    await userAS.page.getByTestId("loc-fullmap-confirm-btn").click();
+    await userAS.page.getByTestId("loc-fullmap-view").waitFor({ state: "detached", timeout: 8000 });
     await userBS.page.locator('[data-testid^="location-card-"]').first().waitFor({ state: "visible", timeout: 8000 });
 
     await userAS.page.getByTestId("plus-attach-toggle").click();
@@ -1035,9 +1043,10 @@ async function main() {
     await userAS.page.getByTestId("mobile-back-btn").click();
     await userAS.page.getByText("กลุ่มทดสอบครบทุกปุ่ม").first().click();
     await userAS.page.getByTestId("plus-attach-toggle").click();
-    await userAS.page.getByTestId("attach-tab-ladder").click();
+    await userAS.page.getByTestId("attach-tab-options").click();
     await userAS.page.getByTestId("toggle-silent-send").click();
     await userAS.page.getByTestId("select-expire-timer").selectOption("1h");
+    await userAS.page.getByTestId("attach-tab-ladder").click();
     await userAS.page.getByTestId("send-ladder-btn").click();
     await userAS.page.locator('[data-testid^="ladder-card-"]').first().waitFor({ state: "visible", timeout: 8000 });
 
@@ -1560,7 +1569,7 @@ async function main() {
     });
     await quickTab3.setViewportSize({ width: 1280, height: 860 });
     await quickTab3.goto(`${WEB_URL}/?test_user=3`, { waitUntil: "domcontentloaded" });
-    await quickTab3.getByTestId("logout-btn").waitFor({ state: "visible", timeout: 12000 });
+    await quickTab3.getByTestId("nav-tab-chats").waitFor({ state: "visible", timeout: 12000 });
     await quickTab3.locator("header").getByText("ภูมิ").waitFor({ state: "visible", timeout: 8000 });
     await quickTab3.waitForFunction(
       () => !window.location.href.includes("test_user"),

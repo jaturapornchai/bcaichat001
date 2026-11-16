@@ -64,6 +64,7 @@ class _MainShellState extends State<MainShell> {
 
   // Progressive disclosure state
   String? _expandedFriendActionId;
+  String? _expandedConvActionId;
   String? _pendingDeleteFriendId;
   bool _showSecondaryChatFolders = false;
   String? _openSettingsSection; // 'notifications' | 'privacy' | 'security' | 'theme_tools' | 'admin'
@@ -463,12 +464,19 @@ class _MainShellState extends State<MainShell> {
   Future<void> _openChatWithFriend(
     AppUser friend, {
     required bool isWide,
+    String? callType, // 'audio' | 'video' = เปิดห้องแล้วโทรต่อทันที
   }) async {
     try {
       final conv = await ApiService.instance.openDirectConversation(friend.id);
       await _refreshConversationsAndFriends();
       if (!mounted) return;
       _selectConversation(conv, isWide: isWide);
+      if (callType != null) {
+        await CallInlineManager.instance.startCall(
+          conversationId: conv.id,
+          callType: callType,
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1837,6 +1845,32 @@ class _MainShellState extends State<MainShell> {
                                   runSpacing: 6,
                                   crossAxisAlignment: WrapCrossAlignment.center,
                                   children: [
+                                    for (final a in [
+                                      ('friend-call-audio-btn-', 'โทร', Icons.call_rounded, 'audio'),
+                                      ('friend-call-video-btn-', 'วิดีโอคอล', Icons.videocam_rounded, 'video'),
+                                    ])
+                                      OutlinedButton.icon(
+                                        key: Key('${a.$1}${f.id}'),
+                                        onPressed: () {
+                                          setState(() {
+                                            _expandedFriendActionId = null;
+                                          });
+                                          _openChatWithFriend(
+                                            f,
+                                            isWide: isWide,
+                                            callType: a.$4,
+                                          );
+                                        },
+                                        icon: Icon(a.$3, size: 15),
+                                        label: Text(
+                                          a.$2,
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                        style: OutlinedButton.styleFrom(
+                                          visualDensity: VisualDensity.compact,
+                                          minimumSize: const Size(0, 32),
+                                        ),
+                                      ),
                                     OutlinedButton.icon(
                                       onPressed: () async {
                                         setState(() {
@@ -2512,10 +2546,17 @@ class _MainShellState extends State<MainShell> {
                     );
 
                     final hasUnread = conv.unreadCount > 0;
-                    return Material(
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                    Material(
                       color: isSelected ? AppTheme.brandSoft : Colors.white,
                       child: InkWell(
                         onTap: () => _selectConversation(conv, isWide: isWide),
+                        onLongPress: () => setState(() {
+                          _expandedConvActionId =
+                              _expandedConvActionId == conv.id ? null : conv.id;
+                        }),
                         hoverColor: AppTheme.surfaceBg,
                         child: Stack(
                           children: [
@@ -2702,11 +2743,111 @@ class _MainShellState extends State<MainShell> {
                           ],
                         ),
                       ),
+                    ),
+                    if (_expandedConvActionId == conv.id)
+                      _buildConvActionStrip(conv),
+                      ],
                     );
                   },
                 ),
         ),
       ],
+    );
+  }
+
+  // แถบปุ่มลัดใต้แถวแชท (กดค้างที่แถวเพื่อเปิด/ปิด)
+  Widget _buildConvActionStrip(Conversation conv) {
+    final muted = conv.isEffectivelyMuted;
+    Future<void> run(Future<void> Function() action) async {
+      setState(() => _expandedConvActionId = null);
+      try {
+        await action();
+        await _refreshConversationsAndFriends();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_friendlyUiError(e, 'ทำรายการไม่สำเร็จ'))),
+        );
+      }
+    }
+
+    Widget btn(Key key, IconData icon, String label, VoidCallback onTap) {
+      return OutlinedButton.icon(
+        key: key,
+        onPressed: onTap,
+        icon: Icon(icon, size: 15),
+        label: Text(label, style: const TextStyle(fontSize: 12)),
+        style: OutlinedButton.styleFrom(
+          visualDensity: VisualDensity.compact,
+          minimumSize: const Size(0, 32),
+        ),
+      );
+    }
+
+    return Container(
+      key: Key('conv-actions-${conv.id}'),
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceBg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.borderSubtle),
+      ),
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          btn(
+            Key('conv-action-pin-${conv.id}'),
+            Icons.push_pin_outlined,
+            conv.isPinned ? 'เลิกปักหมุด' : 'ปักหมุด',
+            () => run(
+              () => ApiService.instance.updateConversationMeta(
+                conv.id,
+                isPinned: !conv.isPinned,
+              ),
+            ),
+          ),
+          btn(
+            Key('conv-action-mute-${conv.id}'),
+            muted
+                ? Icons.notifications_active_outlined
+                : Icons.notifications_off_outlined,
+            muted ? 'เปิดเสียง' : 'ปิดเสียง',
+            () => run(
+              () => ApiService.instance.updateConversationMeta(
+                conv.id,
+                muteDuration: muted ? 'off' : 'forever',
+                isMuted: !muted,
+              ),
+            ),
+          ),
+          btn(
+            Key('conv-action-archive-${conv.id}'),
+            conv.isArchived
+                ? Icons.unarchive_outlined
+                : Icons.archive_outlined,
+            conv.isArchived ? 'นำออกจากเก็บถาวร' : 'เก็บถาวร',
+            () => run(
+              () => ApiService.instance.updateConversationMeta(
+                conv.id,
+                isArchived: !conv.isArchived,
+              ),
+            ),
+          ),
+          if (conv.unreadCount > 0)
+            btn(
+              Key('conv-action-read-${conv.id}'),
+              Icons.done_all_rounded,
+              'อ่านแล้ว',
+              () => run(
+                () => ApiService.instance.markConversationRead(conv.id),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -3075,11 +3216,6 @@ class _MainShellState extends State<MainShell> {
               tooltip: 'รีเฟรชข้อมูลระบบ',
               icon: const Icon(Icons.refresh_rounded),
             ),
-          IconButton(
-            onPressed: widget.onLoggedOut,
-            tooltip: 'สลับบัญชี / ออกจากระบบ',
-            icon: const Icon(Icons.logout_rounded),
-          ),
         ],
       ),
       body: SingleChildScrollView(

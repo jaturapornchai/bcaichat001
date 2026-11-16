@@ -532,12 +532,25 @@ async function main() {
     await u1.page.getByTestId("chat-message-input").fill(dmText);
     await u1.page.getByTestId("chat-send-btn").click();
     await u1.page.locator('[data-testid^="message-item-"]').filter({ hasText: dmText }).first().waitFor({ state: "visible", timeout: 8000 });
+    // Familiar chat basics: day separator above the first message of the day, mic <-> send swap on an empty draft
+    const u1DaySeparator = u1.page.getByTestId("chat-day-separator").first();
+    await u1DaySeparator.waitFor({ state: "visible", timeout: 5000 });
+    assert.equal((await u1DaySeparator.innerText()).trim(), "วันนี้", "Day separator labels today's messages");
+    await u1.page.getByTestId("chat-mic-btn").waitFor({ state: "visible", timeout: 5000 });
+    assert.equal(await u1.page.getByTestId("chat-send-btn").count(), 0, "Send button replaces mic only while the draft has text");
 
     await u2.page.getByTestId("nav-tab-chats").click();
     const u2DmItem = u2.page.locator('[data-testid^="conv-item-"]').filter({ hasText: "ก้อง PW 1" }).first();
     await u2DmItem.waitFor({ state: "visible", timeout: 10000 });
     await u2DmItem.click();
     await u2.page.locator('[data-testid^="message-item-"]').filter({ hasText: dmText }).first().waitFor({ state: "visible", timeout: 8000 });
+    // Read marker belongs to the sender's own messages only (never under a message the viewer received)
+    await u1.page.locator('[data-testid^="message-item-"]').filter({ hasText: dmText }).filter({ hasText: "อ่านแล้ว" }).first().waitFor({ state: "visible", timeout: 8000 });
+    assert.equal(
+      await u2.page.locator('[data-testid^="message-item-"]').filter({ hasText: dmText }).filter({ hasText: "อ่านแล้ว" }).count(),
+      0,
+      "Receiver must not see a read marker under an incoming message"
+    );
     await shot(u1.page, "web-chat-two-pane");
     console.log("✅ Add Friend by Thai Phone & Real-time 1-1 Chat UI passed");
 
@@ -567,13 +580,14 @@ async function main() {
     });
     assert.ok(u2UserId, "U2 user_id resolved");
 
-    // 7a. Location Card via inline + tray (manual lat/lng folded behind toggle-manual-coords)
+    // 7a. Location Card: ปุ่มแชร์ตำแหน่งในถาด + เปิดแผนที่เต็มพื้นที่ทันที (ไม่มีฟอร์มในถาดแล้ว)
     await u1.page.getByTestId("plus-attach-toggle").click();
     await u1.page.getByTestId("plus-attach-tray").waitFor({ state: "visible", timeout: 5000 });
+    // กด + แล้วเห็นแค่เมนู ยังไม่เปิดรายละเอียดหัวข้อใด
+    assert.equal(await u1.page.locator('[data-testid^="send-contact-"]').count(), 0, "Plus tray opens as a plain menu");
+    assert.equal(await u1.page.getByTestId("send-ladder-btn").count(), 0, "Plus tray opens as a plain menu (no ladder form)");
     await u1.page.getByTestId("attach-tab-location").click();
-    assert.equal(await u1.page.getByTestId("loc-lat-input").count(), 0, "Manual coords folded initially");
-    // เลือกตำแหน่งบนแผนที่เต็มพื้นที่: แตะแผนที่ปักหมุด แล้วยืนยันกลับมาที่ถาด
-    await u1.page.getByTestId("loc-fullmap-open-btn").click();
+    // เลือกตำแหน่งบนแผนที่เต็มพื้นที่: แตะแผนที่ปักหมุด แล้วกดส่งได้เลย
     await u1.page.getByTestId("loc-fullmap-view").waitFor({ state: "visible", timeout: 5000 });
     assert.equal(await u1.page.getByTestId("loc-fullmap-confirm-btn").isDisabled(), true, "Confirm disabled before a pin is placed");
     await u1.page.locator('[data-testid="loc-fullmap-map"].leaflet-container').click({ position: { x: 120, y: 120 } });
@@ -604,6 +618,17 @@ async function main() {
     await u1.page.locator('[data-testid="loc-fullmap-map"][data-layer="satellite"]').waitFor({ timeout: 5000 });
     await u1.page.locator('[data-testid="loc-fullmap-map"] img.leaflet-tile[src*="s2cloudless"]').first().waitFor({ state: "attached", timeout: 5000 });
     assert.match(await u1.page.locator('[data-testid="loc-fullmap-map"] .leaflet-control-attribution').innerText(), /EOxCloudless/);
+    // ชั้นดาวเทียมจำกัดซูมไว้ที่ 14 (ระดับที่ภาพยังชัด): ไทล์ที่โหลดต้องไม่ลึกกว่า z14
+    await u1.page.waitForFunction(
+      () => {
+        const tiles = Array.from(document.querySelectorAll('[data-testid="loc-fullmap-map"] img.leaflet-tile[src*="s2cloudless"]'));
+        return tiles.length > 0 && tiles.every((t) => Number(/\/g\/(\d+)\//.exec(t.src)?.[1]) <= 14) && tiles.some((t) => /\/g\/14\//.test(t.src));
+      },
+      null,
+      { timeout: 5000 }
+    );
+    // ปุ่มซูมเข้าถูกปิดเมื่อถึงเพดานซูม (รอ animation ถอยซูมจบก่อน)
+    await u1.page.locator('[data-testid="loc-fullmap-map"] .leaflet-control-zoom-in[aria-disabled="true"]').waitFor({ timeout: 5000 });
     if (README_SHOTS_DIR) {
       await u1.page.locator('[data-testid="loc-fullmap-map"] img.leaflet-tile-loaded[src*="s2cloudless"]').nth(8).waitFor({ timeout: 15000 }).catch(() => {});
       await shot(u1.page, "web-location-satellite");
@@ -619,13 +644,8 @@ async function main() {
       { timeout: 5000 }
     );
     await u1.page.getByTestId("loc-fullmap-confirm-btn").click();
-    await u1.page.getByTestId("loc-fullmap-view").waitFor({ state: "detached", timeout: 5000 });
-    await u1.page.locator('[data-testid="loc-pick-map"][data-has-pin="true"]').waitFor({ state: "visible", timeout: 5000 });
-    await u1.page.getByTestId("loc-title-input").fill("สยามพารากอน PW");
-    await u1.page.getByTestId("toggle-manual-coords").click();
-    await u1.page.getByTestId("loc-lat-input").fill("13.7462");
-    await u1.page.getByTestId("loc-lng-input").fill("100.5347");
-    await u1.page.getByTestId("send-location-btn").click();
+    await u1.page.getByTestId("loc-fullmap-view").waitFor({ state: "detached", timeout: 8000 });
+    assert.equal(await u1.page.getByTestId("plus-attach-tray").count(), 0, "Tray closes after the location is sent");
     await u1.page.locator('[data-testid^="location-card-"]').first().waitFor({ state: "visible", timeout: 8000 });
     await u2.page.locator('[data-testid^="location-card-"]').first().waitFor({ state: "visible", timeout: 8000 });
     // แผนที่ฟรี (OpenStreetMap) ในการ์ดตำแหน่ง: มีหมุดและเครดิตแผนที่
@@ -656,6 +676,8 @@ async function main() {
     assert.equal(await u1.page.getByTestId("composer-active-modes").count(), 0, "No active mode banner initially");
     assert.equal(await u1.page.getByTestId("composer-ai-popover").count(), 0, "No AI chip clutter above composer");
     await u1.page.getByTestId("plus-attach-toggle").click();
+    assert.equal(await u1.page.getByTestId("toggle-silent-send").count(), 0, "+ tray opens as a plain icon menu (send options hidden until chosen)");
+    await u1.page.getByTestId("attach-tab-options").click();
     await u1.page.getByTestId("toggle-silent-send").click();
     await u1.page.getByTestId("select-expire-timer").selectOption("1h");
     await u1.page.getByTestId("plus-attach-toggle").click();
@@ -682,6 +704,7 @@ async function main() {
 
     const savedMsgCard = u1.page.locator('[data-testid^="message-item-"]').filter({ hasText: "ข้อความแก้ไขแล้ว PW" }).last();
     await savedMsgCard.locator('[data-testid^="msg-actions-toggle-"]').click();
+    assert.equal(await savedMsgCard.locator('[data-testid^="copy-msg-btn-"]').count(), 1, "Text message menu offers Copy");
     await savedMsgCard.locator('[data-testid^="save-keep-btn-"]').click();
     await u1.page.locator("text=บันทึกเข้า Keep").first().waitFor({ state: "visible", timeout: 8000 }).catch(() => {});
     await u1.page.getByTestId("mobile-back-btn").click();
@@ -691,6 +714,27 @@ async function main() {
     await assertZeroPopupsAndOverlays(u1.page, "wave4_keep_and_attachments");
     // Return U1 to U2 DM room for Wave 2 checks
     await u1.page.getByTestId("mobile-back-btn").click();
+    // Chat-list row actions (right-click on desktop / long-press on touch): toggle pin and restore it
+    const u1DmRow = u1.page.locator('[data-testid^="conv-item-"]').filter({ hasText: "แพร PW 2" }).first();
+    const u1RowActions = u1.page.locator('[data-testid^="conv-actions-"]');
+    const u1PinBtn = u1.page.locator('[data-testid^="conv-action-pin-"]').first();
+    assert.equal(await u1RowActions.count(), 0, "Chat-row actions stay hidden until long-press / right-click");
+    await u1DmRow.click({ button: "right" });
+    await u1PinBtn.waitFor({ state: "visible", timeout: 5000 });
+    const pinLabelBefore = (await u1PinBtn.innerText()).trim();
+    await u1PinBtn.click();
+    await u1RowActions.first().waitFor({ state: "detached", timeout: 8000 });
+    await u1DmRow.click({ button: "right" });
+    await u1PinBtn.waitFor({ state: "visible", timeout: 5000 });
+    const pinLabelAfter = (await u1PinBtn.innerText()).trim();
+    assert.deepEqual(
+      [pinLabelBefore, pinLabelAfter].sort(),
+      ["ปักหมุด", "เลิกปักหมุด"].sort(),
+      "Pin action flips the row between pinned and unpinned"
+    );
+    await u1PinBtn.click();
+    await u1RowActions.first().waitFor({ state: "detached", timeout: 8000 });
+    assert.equal(await u1.page.getByTestId("active-room-title").count(), 0, "Right-click on a chat row must not open the room");
     await u1.page.locator('[data-testid^="conv-item-"]').filter({ hasText: "แพร PW 2" }).first().click();
     await u1.page.getByTestId("active-room-title").filter({ hasText: "แพร PW 2" }).waitFor({ state: "visible", timeout: 8000 });
     await shot(u1.page, "web-rich-messages");
@@ -861,6 +905,7 @@ async function main() {
     // 10. Wave 3 (#56) Setup Recovery PIN (U1) & Mobile Viewport (390x844) Audit
     await u1.page.goto(WEB_URL, { waitUntil: "domcontentloaded" });
     await u1.page.getByTestId("nav-tab-services").click();
+    await u1.page.getByTestId("logout-btn").waitFor({ state: "visible", timeout: 8000 });
     assert.equal(await u1.page.getByTestId("settings-account-recovery").count(), 0, "Security section folded initially");
     await u1.page.getByTestId("settings-section-security").click();
     await u1.page.getByTestId("settings-account-recovery").waitFor({ state: "visible", timeout: 8000 });

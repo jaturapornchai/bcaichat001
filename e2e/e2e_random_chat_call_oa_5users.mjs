@@ -381,7 +381,7 @@ class TabSession {
     const onOaPath = this.page.url().includes("/oa");
     if (onOaPath) {
       await this.page.goto(`${WEB_URL}/`, { waitUntil: "domcontentloaded" });
-      await this.page.locator('[data-testid="logout-btn"]').waitFor({ state: "visible", timeout: 15000 });
+      await this.page.locator('[data-testid="nav-tab-chats"]').waitFor({ state: "visible", timeout: 15000 });
     }
     const mobileBack = this.page.locator('[data-testid="mobile-back-btn"]');
     if ((await mobileBack.count()) > 0 && (await mobileBack.first().isVisible())) {
@@ -416,7 +416,7 @@ class TabSession {
       if ((await chipAll.count()) > 0) await chipAll.first().click().catch(() => {});
       await item.waitFor({ state: "visible", timeout: 3000 }).catch(async () => {
         await this.page.reload({ waitUntil: "domcontentloaded" });
-        await this.page.locator('[data-testid="logout-btn"]').waitFor({ state: "visible", timeout: 15000 });
+        await this.page.locator('[data-testid="nav-tab-chats"]').waitFor({ state: "visible", timeout: 15000 });
         await this.ensureOnChatShell();
       });
     }
@@ -496,7 +496,7 @@ async function createLoggedInTabs(browser) {
 
     if (u.viaUrl) {
       await page.goto(`${WEB_URL}/?test_user=${u.slot}`, { waitUntil: "domcontentloaded" });
-      await page.locator('[data-testid="logout-btn"]').waitFor({ state: "visible", timeout: 20000 });
+      await page.locator('[data-testid="nav-tab-chats"]').waitFor({ state: "visible", timeout: 20000 });
     } else {
       await page.goto(`${WEB_URL}/`, { waitUntil: "domcontentloaded" });
       await page.locator('[data-testid="quick-test-users-box"]').waitFor({ state: "visible", timeout: 20000 });
@@ -507,7 +507,7 @@ async function createLoggedInTabs(browser) {
         checkedAllButtons = true;
       }
       await page.locator(`[data-testid="quick-test-user-${u.slot}"]`).click();
-      await page.locator('[data-testid="logout-btn"]').waitFor({ state: "visible", timeout: 20000 });
+      await page.locator('[data-testid="nav-tab-chats"]').waitFor({ state: "visible", timeout: 20000 });
     }
 
     const tok = await tab.getToken();
@@ -632,7 +632,7 @@ async function runSuite1ChatSimulation(tabs, rand) {
   // Reload/sync conversation lists on other tabs once so new DMs & new group are listed cleanly
   for (const t of [praemai, phoom, baibua, kin]) {
     await t.page.reload({ waitUntil: "domcontentloaded" });
-    await t.page.locator('[data-testid="logout-btn"]').waitFor({ state: "visible", timeout: 15000 });
+    await t.page.locator('[data-testid="nav-tab-chats"]').waitFor({ state: "visible", timeout: 15000 });
   }
 
   // Room pool for randomized interactions
@@ -716,7 +716,7 @@ async function runSuite1ChatSimulation(tabs, rand) {
       const pool = sentMsgs.get(room.id).filter((m) => m.type === "text");
       const target = pool[pool.length - 1];
       await recipient.page.locator(`[data-testid="msg-actions-toggle-${target.id}"]`).click();
-      await recipient.page.locator(`[data-testid="msg-action-bar-${target.id}"]`).getByRole("button", { name: "ตอบ" }).click();
+      await recipient.page.locator(`[data-testid="msg-action-bar-${target.id}"]`).getByRole("button", { name: "ตอบกลับ" }).click();
       const rTxt = `ตอบกลับรอบ${stepNum} จาก${recipient.user.name}`;
       await recipient.page.locator('[data-testid="chat-message-input"]').fill(rTxt);
       await recipient.page.locator('[data-testid="chat-send-btn"]').click();
@@ -768,12 +768,11 @@ async function runSuite1ChatSimulation(tabs, rand) {
     } else if (op === "location") {
       await sender.page.locator('[data-testid="plus-attach-toggle"]').click();
       await sender.page.locator('[data-testid="attach-tab-location"]').click();
-      const title = `แหล่งมรดกบ้านเชียง_${RUN_TAG}`;
-      await sender.page.locator('[data-testid="loc-title-input"]').fill(title);
-      await sender.page.locator('[data-testid="toggle-manual-coords"]').click();
-      await sender.page.locator('[data-testid="loc-lat-input"]').fill("17.4069");
-      await sender.page.locator('[data-testid="loc-lng-input"]').fill("103.2410");
-      await sender.page.locator('[data-testid="send-location-btn"]').click();
+      await sender.page.getByTestId("loc-fullmap-view").waitFor({ state: "visible", timeout: 5000 });
+      await sender.page.locator('[data-testid="loc-fullmap-map"].leaflet-container').click({ position: { x: 120, y: 120 } });
+      await sender.page.locator('[data-testid="loc-fullmap-map"][data-has-pin="true"]').waitFor({ state: "visible", timeout: 5000 });
+      await sender.page.getByTestId("loc-fullmap-confirm-btn").click();
+      await sender.page.getByTestId("loc-fullmap-view").waitFor({ state: "detached", timeout: 8000 });
       const msg = await waitForLatestNewMessageId(sender, room.id, prevIds);
       await recipient.page.locator(`[data-testid="location-card-${msg.id}"]`).waitFor({ state: "visible", timeout: 10000 });
       console.log(`  [${stepNum}/${opDeck.length}] location card in ${room.name}`);
@@ -814,6 +813,7 @@ async function runSuite1ChatSimulation(tabs, rand) {
       console.log(`  [${stepNum}/${opDeck.length}] poll + ${voters.length} votes live in ${room.name}`);
     } else if (op === "silent_expire") {
       await sender.page.locator('[data-testid="plus-attach-toggle"]').click();
+      await sender.page.locator('[data-testid="attach-tab-options"]').click();
       await sender.page.locator('[data-testid="toggle-silent-send"]').click();
       await sender.page.locator('[data-testid="select-expire-timer"]').selectOption("1h");
       await sender.page.locator('[data-testid="plus-attach-toggle"]').click();

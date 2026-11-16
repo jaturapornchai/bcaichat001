@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   ArrowLeft,
+  Archive,
   AtSign,
   BadgeCheck,
   Ban,
+  Bell,
   BellOff,
   Bot,
   Camera,
@@ -43,6 +45,7 @@ import {
   Trash2,
   UserPlus,
   Users,
+  Video,
   X,
 } from "lucide-react";
 import {
@@ -268,6 +271,7 @@ export function MainShell({
   const [showJoinGroup, setShowJoinGroup] = useState(false);
   const [showHiddenBlocked, setShowHiddenBlocked] = useState(false);
   const [openFriendMoreId, setOpenFriendMoreId] = useState<string | null>(null);
+  const [openConvActionsId, setOpenConvActionsId] = useState<string | null>(null);
 
   // Inline Create Group panel
   const [showCreateGroup, setShowCreateGroup] = useState(false);
@@ -703,6 +707,43 @@ export function MainShell({
       handleOpenRoom(conv.id);
     } catch (err) {
       notify(err instanceof Error ? err.message : "เปิดห้องแชทไม่สำเร็จ ลองใหม่อีกครั้ง");
+    }
+  };
+
+  // โทรหาเพื่อน: เปิดห้องส่วนตัวก่อน แล้วใช้ handleStartCall เดียวกับปุ่มโทรในห้องแชท
+  const handleCallFriend = async (friendId: string, callType: "audio" | "video") => {
+    try {
+      const conv = await api.openDirectConversation(friendId);
+      await refreshCore();
+      await handleStartCall(conv.id, callType);
+    } catch (err) {
+      notify(err instanceof Error ? err.message : "เริ่มสายสนทนาไม่สำเร็จ");
+    }
+  };
+
+  // กดค้าง/คลิกขวาที่แถวแชท: เปิดแถบเมนูด่วนใต้แถว
+  const convLongPressRef = useRef<{
+    timer: ReturnType<typeof setTimeout> | null;
+    x: number;
+    y: number;
+    fired: boolean;
+  }>({ timer: null, x: 0, y: 0, fired: false });
+  const cancelConvLongPress = () => {
+    const lp = convLongPressRef.current;
+    if (lp.timer) clearTimeout(lp.timer);
+    lp.timer = null;
+  };
+  const runConvAction = async (
+    convId: string,
+    payload: { is_pinned?: boolean; mute_duration?: "off" | "forever"; is_archived?: boolean },
+    errMsg: string
+  ) => {
+    try {
+      await api.updateConversationMeta(convId, payload);
+      await refreshCore();
+      setOpenConvActionsId(null);
+    } catch (err) {
+      notify(err instanceof Error ? err.message : errMsg);
     }
   };
 
@@ -1154,15 +1195,6 @@ export function MainShell({
               </span>
             </button>
           )}
-          <button
-            type="button"
-            data-testid="logout-btn"
-            onClick={onLogout}
-            className="inline-flex min-h-[36px] shrink-0 items-center gap-1 whitespace-nowrap rounded-lg border border-[var(--bc-border)] bg-[var(--bc-panel)] px-2 py-1 text-xs font-semibold text-[var(--bc-text)] hover:bg-red-50 hover:text-red-700"
-          >
-            <LogOut className="h-3.5 w-3.5 shrink-0" />
-            <span>ออก</span>
-          </button>
         </div>
       </header>
 
@@ -2123,7 +2155,7 @@ export function MainShell({
                       {showHiddenBlocked ? "ซ่อนรายการที่บล็อก/ซ่อน" : "ดูรายชื่อที่ซ่อน/บล็อก"}
                     </button>
                   </div>
-                  <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                  <div className={`grid grid-cols-1 gap-1.5 ${isSplitView ? "" : "sm:grid-cols-2"}`}>
                     {visibleFriends.map((f) => {
                       const moreOpen = openFriendMoreId === f.id;
                       const friendBcId = f.bc_id.startsWith("@") ? f.bc_id : `@${f.bc_id}`;
@@ -2219,6 +2251,24 @@ export function MainShell({
 
                           {moreOpen && (
                             <div className="flex flex-wrap items-center justify-end gap-1.5 border-t border-[var(--bc-border)]/70 pt-1.5">
+                              <button
+                                type="button"
+                                data-testid={`friend-call-audio-btn-${f.id}`}
+                                onClick={() => void handleCallFriend(f.id, "audio")}
+                                className="inline-flex min-h-[32px] items-center gap-1 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-card)] px-2.5 py-1 text-[11px] font-semibold text-[var(--bc-text)] hover:border-[var(--bc-primary)]"
+                              >
+                                <Phone className="h-3 w-3" />
+                                โทร
+                              </button>
+                              <button
+                                type="button"
+                                data-testid={`friend-call-video-btn-${f.id}`}
+                                onClick={() => void handleCallFriend(f.id, "video")}
+                                className="inline-flex min-h-[32px] items-center gap-1 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-card)] px-2.5 py-1 text-[11px] font-semibold text-[var(--bc-text)] hover:border-[var(--bc-primary)]"
+                              >
+                                <Video className="h-3 w-3" />
+                                วิดีโอคอล
+                              </button>
                               <button
                                 type="button"
                                 data-testid={`friend-hide-btn-${f.id}`}
@@ -2455,13 +2505,52 @@ export function MainShell({
 
                 {filteredConversations.map((c) => {
                   const selected = c.id === activeConvId;
+                  const mutedNow = isConversationMutedNow(c);
+                  const actionBtnCls =
+                    "inline-flex min-h-[32px] items-center gap-1 rounded-lg border border-[var(--bc-border)] bg-[var(--bc-card)] px-2.5 py-1 text-[11px] font-semibold text-[var(--bc-text)] hover:border-[var(--bc-primary)]";
                   return (
+                    <div key={c.id}>
                     <button
-                      key={c.id}
                       type="button"
                       data-testid={`conv-item-${c.id}`}
-                      onClick={() => handleOpenRoom(c.id)}
-                      className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-left transition ${
+                      onClick={() => {
+                        // กดค้างสำเร็จแล้วต้องไม่เปิดห้องซ้ำ
+                        if (convLongPressRef.current.fired) {
+                          convLongPressRef.current.fired = false;
+                          return;
+                        }
+                        handleOpenRoom(c.id);
+                      }}
+                      onPointerDown={(e) => {
+                        const lp = convLongPressRef.current;
+                        cancelConvLongPress();
+                        lp.fired = false;
+                        if (e.pointerType !== "touch") return;
+                        lp.x = e.clientX;
+                        lp.y = e.clientY;
+                        lp.timer = setTimeout(() => {
+                          lp.timer = null;
+                          lp.fired = true;
+                          setOpenConvActionsId(c.id);
+                        }, 500);
+                      }}
+                      onPointerMove={(e) => {
+                        const lp = convLongPressRef.current;
+                        if (lp.timer && Math.hypot(e.clientX - lp.x, e.clientY - lp.y) > 8) {
+                          cancelConvLongPress();
+                        }
+                      }}
+                      onPointerUp={cancelConvLongPress}
+                      onPointerCancel={cancelConvLongPress}
+                      onPointerLeave={cancelConvLongPress}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        // บนจอสัมผัส เมนูระบบอาจยิงตามหลังการกดค้าง ให้ timer จัดการเอง
+                        if (convLongPressRef.current.timer || convLongPressRef.current.fired) return;
+                        setOpenConvActionsId((prev) => (prev === c.id ? null : c.id));
+                      }}
+                      style={{ WebkitTouchCallout: "none" }}
+                      className={`flex w-full select-none items-center gap-2 px-2.5 py-1.5 text-left transition ${
                         selected
                           ? "bg-[var(--bc-soft)]/70"
                           : "bg-[var(--bc-card)] hover:bg-[var(--bc-panel)]"
@@ -2522,6 +2611,70 @@ export function MainShell({
                         </div>
                       </div>
                     </button>
+                    {openConvActionsId === c.id && (
+                      <div
+                        data-testid={`conv-actions-${c.id}`}
+                        className="flex flex-wrap items-center gap-1.5 border-t border-[var(--bc-border)]/70 bg-[var(--bc-panel)] px-2.5 py-1.5"
+                      >
+                        <button
+                          type="button"
+                          data-testid={`conv-action-pin-${c.id}`}
+                          onClick={() =>
+                            void runConvAction(c.id, { is_pinned: !c.is_pinned }, "อัปเดตสถานะปักหมุดไม่สำเร็จ")
+                          }
+                          className={actionBtnCls}
+                        >
+                          <Pin className="h-3 w-3" />
+                          {c.is_pinned ? "เลิกปักหมุด" : "ปักหมุด"}
+                        </button>
+                        <button
+                          type="button"
+                          data-testid={`conv-action-mute-${c.id}`}
+                          onClick={() =>
+                            void runConvAction(
+                              c.id,
+                              { mute_duration: mutedNow ? "off" : "forever" },
+                              "ตั้งค่าปิดเสียงไม่สำเร็จ"
+                            )
+                          }
+                          className={actionBtnCls}
+                        >
+                          {mutedNow ? <Bell className="h-3 w-3" /> : <BellOff className="h-3 w-3" />}
+                          {mutedNow ? "เปิดเสียง" : "ปิดเสียง"}
+                        </button>
+                        <button
+                          type="button"
+                          data-testid={`conv-action-archive-${c.id}`}
+                          onClick={() =>
+                            void runConvAction(c.id, { is_archived: !c.is_archived }, "อัปเดตสถานะเก็บถาวรไม่สำเร็จ")
+                          }
+                          className={actionBtnCls}
+                        >
+                          <Archive className="h-3 w-3" />
+                          {c.is_archived ? "นำออกจากเก็บถาวร" : "เก็บถาวร"}
+                        </button>
+                        {c.unread_count > 0 && (
+                          <button
+                            type="button"
+                            data-testid={`conv-action-read-${c.id}`}
+                            onClick={async () => {
+                              try {
+                                await api.markRead(c.id);
+                                await refreshCore();
+                                setOpenConvActionsId(null);
+                              } catch (err) {
+                                notify(err instanceof Error ? err.message : "ทำเครื่องหมายอ่านแล้วไม่สำเร็จ");
+                              }
+                            }}
+                            className={actionBtnCls}
+                          >
+                            <Check className="h-3 w-3" />
+                            อ่านแล้ว
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    </div>
                   );
                 })}
               </div>
@@ -4311,6 +4464,17 @@ export function MainShell({
                         )}
                       </div>
                     )}
+
+                    {/* ออกจากระบบ: แถวสุดท้ายของแท็บตั้งค่า (ย้ายจากแถบบนที่กดพลาดง่าย) */}
+                    <button
+                      type="button"
+                      data-testid="logout-btn"
+                      onClick={onLogout}
+                      className="flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-xl border border-[var(--bc-border)] bg-[var(--bc-card)] px-3 py-1.5 text-sm font-bold text-red-700 hover:bg-red-50"
+                    >
+                      <LogOut className="h-4 w-4 shrink-0" />
+                      <span>ออกจากระบบ</span>
+                    </button>
                   </>
                 )}
               </div>

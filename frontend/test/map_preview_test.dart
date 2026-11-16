@@ -110,6 +110,13 @@ void main() {
       final layer = tester.widget<TileLayer>(find.byType(TileLayer));
       expect(layer.urlTemplate, BcMapPreview.satelliteTileUrl);
       expect(layer.maxNativeZoom, BcMapPreview.satelliteMaxNativeZoom);
+      // ซูมถูกจำกัดไว้ที่ระดับที่ภาพดาวเทียมยังชัด (หมุดเดิมอยู่ที่ซูม 15 ต้องถอยลงมา)
+      final satMap = tester.widget<FlutterMap>(find.byType(FlutterMap));
+      expect(satMap.options.maxZoom, BcMapPreview.satelliteMaxNativeZoom);
+      expect(
+        satMap.mapController!.camera.zoom,
+        BcMapPreview.satelliteMaxNativeZoom,
+      );
       expect(find.text(BcMapPreview.satelliteCredit), findsOneWidget);
       await tester.tap(find.byKey(const Key('map-layer-btn')));
       await tester.pump();

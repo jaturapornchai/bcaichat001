@@ -99,6 +99,38 @@ String formatThaiTime(String? iso) {
   return DateFormat('dd/MM HH:mm').format(parsed);
 }
 
+// DateTime.weekday: 1 = จันทร์ ... 7 = อาทิตย์
+const _thaiWeekdaysShort = ['จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.', 'อา.'];
+const _thaiMonthsShort = [
+  'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+  'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.',
+];
+
+/// true = สองเวลาอยู่วันเดียวกันตามเวลาเครื่อง (อ่านค่าไม่ได้ถือว่าคนละวัน)
+bool isSameLocalDay(String? isoA, String? isoB) {
+  final a = DateTime.tryParse(isoA ?? '')?.toLocal();
+  final b = DateTime.tryParse(isoB ?? '')?.toLocal();
+  if (a == null || b == null) return false;
+  return a.year == b.year && a.month == b.month && a.day == b.day;
+}
+
+/// ป้ายคั่นวันในห้องแชท: วันนี้ / เมื่อวาน / ส. 14 พ.ย. (ต่างปีต่อท้ายด้วย พ.ศ.)
+/// คืน '' เมื่ออ่านวันที่ไม่ได้ — [now] มีไว้ให้ test กำหนดวันปัจจุบัน
+String formatThaiDay(String? iso, {DateTime? now}) {
+  final d = DateTime.tryParse(iso ?? '')?.toLocal();
+  if (d == null) return '';
+  final today = now ?? DateTime.now();
+  // เทียบด้วยวันที่แบบ UTC เพื่อไม่ให้ชั่วโมงที่ขาด/เกินของเขตเวลาทำให้นับวันเพี้ยน
+  final diffDays = DateTime.utc(today.year, today.month, today.day)
+      .difference(DateTime.utc(d.year, d.month, d.day))
+      .inDays;
+  if (diffDays == 0) return 'วันนี้';
+  if (diffDays == 1) return 'เมื่อวาน';
+  final label =
+      '${_thaiWeekdaysShort[d.weekday - 1]} ${d.day} ${_thaiMonthsShort[d.month - 1]}';
+  return d.year == today.year ? label : '$label ${d.year + 543}';
+}
+
 String formatFileSize(int bytes) {
   if (bytes <= 0) return '0 B';
   if (bytes < 1024) return '$bytes B';
