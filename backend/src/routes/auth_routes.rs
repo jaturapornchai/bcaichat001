@@ -127,7 +127,34 @@ async fn should_grant_initial_admin(
     Ok(human_admin_count == 0)
 }
 
-pub async fn auth_config_handler(State(state): State<AppState>) -> Result<Json<Value>, ApiError> {
+fn request_is_localhost(headers: &axum::http::HeaderMap) -> bool {
+    for xfh in headers.get_all("x-forwarded-host") {
+        let ok = xfh
+            .to_str()
+            .ok()
+            .map(crate::config::is_loopback_host_header)
+            .unwrap_or(false);
+        if !ok {
+            return false;
+        }
+    }
+    for host in headers.get_all(axum::http::header::HOST) {
+        let ok = host
+            .to_str()
+            .ok()
+            .map(crate::config::is_loopback_host_header)
+            .unwrap_or(false);
+        if !ok {
+            return false;
+        }
+    }
+    true
+}
+
+pub async fn auth_config_handler(
+    headers: axum::http::HeaderMap,
+    State(state): State<AppState>,
+) -> Result<Json<Value>, ApiError> {
     let eff = get_effective_auth_settings(&state)
         .await
         .map_err(ApiError::internal)?;
@@ -140,7 +167,8 @@ pub async fn auth_config_handler(State(state): State<AppState>) -> Result<Json<V
     let admin_bootstrap_enabled = !state.config.admin_bootstrap_code.trim().is_empty();
     let livekit_enabled = !state.config.livekit_api_key.trim().is_empty()
         && !state.config.livekit_api_secret.trim().is_empty();
-    let test_users: Vec<Value> = if state.config.enable_test_users {
+    let allow_test_users = state.config.enable_test_users && request_is_localhost(&headers);
+    let test_users: Vec<Value> = if allow_test_users {
         QUICK_TEST_USERS
             .iter()
             .map(|u| {
@@ -167,7 +195,7 @@ pub async fn auth_config_handler(State(state): State<AppState>) -> Result<Json<V
         "admin_bootstrap_enabled": admin_bootstrap_enabled,
         "livekit_enabled": livekit_enabled,
         "demo_enabled": false,
-        "test_users_enabled": state.config.enable_test_users,
+        "test_users_enabled": allow_test_users,
         "test_users": test_users,
     })))
 }
@@ -181,10 +209,12 @@ pub struct TestLoginPayload {
 }
 
 pub async fn test_login_handler(
+    headers: axum::http::HeaderMap,
     State(state): State<AppState>,
     Json(payload): Json<TestLoginPayload>,
 ) -> Result<Json<Value>, ApiError> {
-    if !state.config.enable_test_users {
+    let allow_test_users = state.config.enable_test_users && request_is_localhost(&headers);
+    if !allow_test_users {
         return Err(ApiError::forbidden(
             "ปิดใช้งานการเข้าสู่ระบบบัญชีทดสอบด่วนแล้ว",
         ));

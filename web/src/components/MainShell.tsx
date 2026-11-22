@@ -47,6 +47,7 @@ import {
   Users,
   Video,
   X,
+  Zap,
 } from "lucide-react";
 import {
   api,
@@ -68,6 +69,7 @@ import type {
   AccountRecoveryLogItem,
   AdminAuthSettings,
   AdminOverview,
+  AiConnectionTestResult,
   AiSettings,
   AuthConfig,
   BcIdCheckResult,
@@ -76,6 +78,7 @@ import type {
   ChatMessage,
   Conversation,
   FriendItem,
+  GameWsSignal,
   MiniAppItem,
   NoteItem,
   OtpChallengeResponse,
@@ -86,7 +89,7 @@ import type {
 } from "@/lib/types";
 import { CallWorkspaceBar } from "./CallWorkspaceBar";
 import { ChatRoomView, resolveMiniAppIframeUrl } from "./ChatRoomView";
-import { SITE_NAME, getShopSiteUrl, type SiteId } from "@/lib/site";
+import { SITE_NAME, getShopSiteUrl, isLocalhostRuntime, type SiteId } from "@/lib/site";
 import { OaConsoleWorkspace } from "./OaConsoleWorkspace";
 import { OaDiscoverView } from "./OaDiscoverView";
 import { QrCodeSvg } from "./QrCodeSvg";
@@ -171,6 +174,7 @@ interface MainShellProps {
   wsTick: number;
   lastWsConvId: string | null;
   latestCallEvent?: { seq: number; eventName: string; call: CallSession } | null;
+  latestGameEvent?: GameWsSignal | null;
   latestIncomingNotice?: { seq: number; conversationId: string; text: string } | null;
   onConversationsSynced?: (convs: Conversation[]) => void;
 }
@@ -190,6 +194,7 @@ export function MainShell({
   wsTick,
   lastWsConvId,
   latestCallEvent = null,
+  latestGameEvent = null,
   latestIncomingNotice = null,
   onConversationsSynced,
 }: MainShellProps) {
@@ -237,6 +242,9 @@ export function MainShell({
   // Owner / Admin state
   const [adminOverview, setAdminOverview] = useState<AdminOverview | null>(null);
   const [aiSettings, setAiSettings] = useState<AiSettings | null>(null);
+  const [aiTesting, setAiTesting] = useState(false);
+  const [aiTestResult, setAiTestResult] = useState<AiConnectionTestResult | null>(null);
+  const [aiSaving, setAiSaving] = useState(false);
   const [adminAuthSettings, setAdminAuthSettings] = useState<AdminAuthSettings | null>(null);
   const [smsApiKeyDraft, setSmsApiKeyDraft] = useState("");
   const [smsSecretKeyDraft, setSmsSecretKeyDraft] = useState("");
@@ -1200,7 +1208,7 @@ export function MainShell({
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5">
-          {testUsers.length > 0 && (
+          {isLocalhostRuntime() && testUsers.length > 0 && (
             <button
               type="button"
               data-testid="switch-test-user-toggle"
@@ -1222,7 +1230,7 @@ export function MainShell({
       </header>
 
       {/* Inline Quick Test Account Switcher Bar (Zero Popup) */}
-      {showSwitchTestUserBar && testUsers.length > 0 && (
+      {showSwitchTestUserBar && isLocalhostRuntime() && testUsers.length > 0 && (
         <div
           data-testid="switch-test-user-bar"
           className={`${
@@ -4081,7 +4089,7 @@ export function MainShell({
                                 ผู้ดูแลระบบ
                               </div>
                               <div className="truncate text-[11px] text-[var(--bc-muted)]">
-                                เปลี่ยน 7 ธีมทั้งระบบ ส่งข่าว AI และตั้งค่า SMS OTP / Google
+                                เปลี่ยน 7 ธีมทั้งระบบ ส่งข่าว ผู้ช่วย BC AI และตั้งค่า SMS OTP / Google
                               </div>
                             </div>
                           </div>
@@ -4236,38 +4244,61 @@ export function MainShell({
 
                               {aiSettings && (
                                 <form
+                                  data-testid="admin-ai-card"
                                   onSubmit={async (e) => {
                                     e.preventDefault();
+                                    setAiSaving(true);
                                     try {
                                       const updated = await api.adminUpdateAiSettings({
                                         enabled: aiSettings.enabled,
-                                        model: aiSettings.model,
                                         system_prompt: aiSettings.system_prompt,
                                         auto_reply_in_groups: aiSettings.auto_reply_in_groups,
                                         redact_confidential: aiSettings.redact_confidential,
+                                        proactive_game_invites:
+                                          aiSettings.proactive_game_invites ?? true,
                                       });
                                       setAiSettings(updated);
-                                      notify("บันทึกการตั้งค่าผู้ช่วย AI แล้ว");
+                                      notify("บันทึกการตั้งค่าผู้ช่วย BC AI แล้ว");
                                     } catch (err) {
                                       notify(
                                         err instanceof Error
                                           ? err.message
-                                          : "บันทึกการตั้งค่า AI ไม่สำเร็จ"
+                                          : "บันทึกการตั้งค่าผู้ช่วย BC AI ไม่สำเร็จ"
                                       );
+                                    } finally {
+                                      setAiSaving(false);
                                     }
                                   }}
-                                  className="bc-well space-y-1.5 rounded-xl p-2.5"
+                                  className="bc-well space-y-2 rounded-xl p-2.5"
                                 >
-                                  <div className="flex items-center justify-between gap-2">
-                                    <div className="bc-overline flex items-center gap-2">
-                                      <Sparkles className="h-4 w-4" />
-                                      <span>
-                                        ตั้งค่าผู้ช่วย AI ({aiSettings.masked_key || "พร้อมใช้งาน"})
-                                      </span>
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div className="bc-overline flex items-center gap-1.5">
+                                      <Sparkles className="h-4 w-4 shrink-0" />
+                                      <span>ตั้งค่าผู้ช่วย BC AI</span>
                                     </div>
-                                    <label className="inline-flex items-center gap-1.5 text-xs font-medium">
+                                    <span
+                                      data-testid="admin-ai-status-pill"
+                                      className={`bc-tag ${
+                                        aiSettings.system_ready && aiSettings.enabled
+                                          ? "bg-[#ecfdf3] text-[#085d3a] ring-1 ring-inset ring-[#abefc6]"
+                                          : !aiSettings.enabled
+                                            ? "bg-[var(--bc-card)] text-[var(--bc-muted)] ring-1 ring-inset ring-[var(--bc-line)]"
+                                            : "bg-[#fef3f2] text-[#912018] ring-1 ring-inset ring-[#fecdca]"
+                                      }`}
+                                    >
+                                      {aiSettings.system_ready && aiSettings.enabled
+                                        ? "ระบบจัดการอัตโนมัติ · พร้อมใช้งาน"
+                                        : !aiSettings.enabled
+                                          ? "ปิดใช้งาน"
+                                          : "ยังไม่พร้อมใช้งาน"}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex flex-col gap-1.5 pt-0.5">
+                                    <label className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--bc-text)]">
                                       <input
                                         type="checkbox"
+                                        data-testid="admin-ai-enabled"
                                         checked={aiSettings.enabled}
                                         onChange={(e) =>
                                           setAiSettings({
@@ -4276,26 +4307,155 @@ export function MainShell({
                                           })
                                         }
                                       />
-                                      <span>เปิดใช้งาน AI</span>
+                                      <span>เปิดใช้งานผู้ช่วย BC AI</span>
+                                    </label>
+                                    <label className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--bc-text)]">
+                                      <input
+                                        type="checkbox"
+                                        checked={aiSettings.auto_reply_in_groups}
+                                        onChange={(e) =>
+                                          setAiSettings({
+                                            ...aiSettings,
+                                            auto_reply_in_groups: e.target.checked,
+                                          })
+                                        }
+                                      />
+                                      <span>ตอบอัตโนมัติในกลุ่มเมื่อเรียก @ai</span>
+                                    </label>
+                                    <label className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--bc-text)]">
+                                      <input
+                                        type="checkbox"
+                                        checked={aiSettings.redact_confidential}
+                                        onChange={(e) =>
+                                          setAiSettings({
+                                            ...aiSettings,
+                                            redact_confidential: e.target.checked,
+                                          })
+                                        }
+                                      />
+                                      <span>ปกปิดข้อความลับ PIN ก่อนส่งให้ AI</span>
+                                    </label>
+                                    <label className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--bc-text)]">
+                                      <input
+                                        type="checkbox"
+                                        data-testid="admin-ai-proactive-games"
+                                        checked={aiSettings.proactive_game_invites ?? true}
+                                        onChange={(e) =>
+                                          setAiSettings({
+                                            ...aiSettings,
+                                            proactive_game_invites: e.target.checked,
+                                          })
+                                        }
+                                      />
+                                      <span>
+                                        ให้ BC AI ชวนเล่นเกมในกลุ่มอัตโนมัติ (เปิด/ปิดทั้งระบบ)
+                                      </span>
                                     </label>
                                   </div>
-                                  <textarea
-                                    rows={2}
-                                    value={aiSettings.system_prompt}
-                                    onChange={(e) =>
-                                      setAiSettings({
-                                        ...aiSettings,
-                                        system_prompt: e.target.value,
-                                      })
-                                    }
-                                    className="bc-input w-full"
-                                  />
-                                  <button
-                                    type="submit"
-                                    className="bc-btn bc-btn-primary"
-                                  >
-                                    บันทึกตั้งค่าผู้ช่วย AI
-                                  </button>
+
+                                  <div className="space-y-1">
+                                    <label
+                                      htmlFor="admin-ai-system-prompt"
+                                      className="bc-label block"
+                                    >
+                                      คำสั่งระบบ (System Prompt)
+                                    </label>
+                                    <textarea
+                                      id="admin-ai-system-prompt"
+                                      rows={2}
+                                      value={aiSettings.system_prompt}
+                                      onChange={(e) =>
+                                        setAiSettings({
+                                          ...aiSettings,
+                                          system_prompt: e.target.value,
+                                        })
+                                      }
+                                      className="bc-input w-full"
+                                    />
+                                  </div>
+
+                                  <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                                    <button
+                                      type="button"
+                                      data-testid="admin-ai-test-btn"
+                                      disabled={aiTesting}
+                                      onClick={async () => {
+                                        setAiTesting(true);
+                                        setAiTestResult(null);
+                                        try {
+                                          const res = await api.adminTestAiConnection();
+                                          setAiTestResult(res);
+                                          if (res.ok) {
+                                            notify(
+                                              `ทดสอบระบบ BC AI สำเร็จ (${res.latency_ms} ms)`
+                                            );
+                                          } else {
+                                            notify(res.error || "ทดสอบระบบ BC AI ไม่สำเร็จ");
+                                          }
+                                        } catch (err) {
+                                          const msg =
+                                            err instanceof Error
+                                              ? err.message
+                                              : "ทดสอบระบบ BC AI ไม่สำเร็จ";
+                                          setAiTestResult({
+                                            ok: false,
+                                            latency_ms: 0,
+                                            error: msg,
+                                          });
+                                          notify(msg);
+                                        } finally {
+                                          setAiTesting(false);
+                                        }
+                                      }}
+                                      className="bc-btn bc-btn-secondary inline-flex items-center gap-1.5"
+                                    >
+                                      <Zap className="h-3.5 w-3.5" />
+                                      <span>
+                                        {aiTesting ? "กำลังทดสอบ..." : "ทดสอบระบบ AI"}
+                                      </span>
+                                    </button>
+                                    <button
+                                      type="submit"
+                                      data-testid="admin-ai-save-btn"
+                                      disabled={aiSaving}
+                                      className="bc-btn bc-btn-primary inline-flex items-center gap-1.5"
+                                    >
+                                      <Check className="h-3.5 w-3.5" />
+                                      <span>
+                                        {aiSaving ? "กำลังบันทึก..." : "บันทึกตั้งค่า BC AI"}
+                                      </span>
+                                    </button>
+                                  </div>
+
+                                  {aiTestResult && (
+                                    <div
+                                      data-testid="admin-ai-test-result"
+                                      className={`bc-note ${
+                                        aiTestResult.ok ? "bc-note-ok" : "bc-note-danger"
+                                      } space-y-1`}
+                                    >
+                                      <div className="flex flex-wrap items-center justify-between gap-1 font-semibold">
+                                        <span>
+                                          {aiTestResult.ok
+                                            ? "ทดสอบระบบ BC AI สำเร็จ"
+                                            : "ทดสอบระบบ BC AI ไม่สำเร็จ"}
+                                        </span>
+                                        <span className="bc-num text-[11px]">
+                                          {aiTestResult.latency_ms} ms
+                                        </span>
+                                      </div>
+                                      {aiTestResult.ok && aiTestResult.reply && (
+                                        <div className="whitespace-pre-wrap text-[11px]">
+                                          ตัวอย่างคำตอบ: {aiTestResult.reply}
+                                        </div>
+                                      )}
+                                      {!aiTestResult.ok && aiTestResult.error && (
+                                        <div className="whitespace-pre-wrap text-[11px]">
+                                          {aiTestResult.error}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
                                 </form>
                               )}
                             </div>
@@ -4487,6 +4647,9 @@ export function MainShell({
                   setRunningMiniApp(null);
                   setActiveTab(isWide ? lastListTab : "chats");
                 }}
+                wsTick={wsTick}
+                lastWsConvId={lastWsConvId}
+                latestGameEvent={latestGameEvent}
                 onNotify={notify}
                 onStartCall={handleStartCall}
               />

@@ -1,8 +1,11 @@
 import type {
   AccountRecoveryLogItem,
+  ActiveGameState,
   AdminAuthSettings,
   AdminOverview,
+  AiAnalyzeMessageResult,
   AiAssistResult,
+  AiConnectionTestResult,
   AiSettings,
   AiSummaryResult,
   AlbumItem,
@@ -16,6 +19,10 @@ import type {
   ContactCardData,
   Conversation,
   FriendItem,
+  GameCatalogItem,
+  GameCatalogResponse,
+  GameSession,
+  GameSummary,
   GooglePollResponse,
   LadderGameData,
   LocationData,
@@ -35,12 +42,14 @@ import type {
   OaRichMenuItem,
   OaStaffMember,
   OtpChallengeResponse,
+  ProactiveGameInviteResult,
   RichCardPayload,
   RoomToneId,
   ThemePresetId,
   UserProfile,
   VaultResponse,
 } from "./types";
+import { isLocalhostRuntime } from "./site";
 
 const STORAGE_TOKEN_KEY = "bcaichat_tab_token";
 const STORAGE_USER_KEY = "bcaichat_tab_user";
@@ -348,6 +357,9 @@ export class ApiClient {
     slot?: number;
     user_id?: string;
   }): Promise<AuthSessionResponse> {
+    if (typeof window !== "undefined" && !isLocalhostRuntime()) {
+      throw new Error("ปิดใช้งานบัญชีทดสอบบนเซิร์ฟเวอร์จริงแล้ว");
+    }
     return this.request<AuthSessionResponse>(
       "/api/auth/test-login",
       {
@@ -656,6 +668,8 @@ export class ApiClient {
       is_archived?: boolean;
       name?: string;
       avatar_url?: string;
+      ai_game_auto_invite?: boolean;
+      ai_game_invite_cooldown_mins?: number;
     }
   ): Promise<Conversation> {
     return this.request<Conversation>(
@@ -1087,6 +1101,17 @@ export class ApiClient {
     });
   }
 
+  async analyzeMessageWithAi(payload: {
+    message_id: string;
+    prompt?: string;
+    post_to_chat?: boolean;
+  }): Promise<AiAnalyzeMessageResult> {
+    return this.request<AiAnalyzeMessageResult>("/api/ai/analyze-message", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
   async listMiniApps(): Promise<MiniAppItem[]> {
     return this.request<MiniAppItem[]>("/api/mini-apps");
   }
@@ -1139,17 +1164,20 @@ export class ApiClient {
 
   async adminUpdateAiSettings(payload: {
     enabled?: boolean;
-    api_key?: string;
-    clear_api_key?: boolean;
-    model?: string;
-    base_url?: string;
     system_prompt?: string;
     auto_reply_in_groups?: boolean;
     redact_confidential?: boolean;
+    proactive_game_invites?: boolean;
   }): Promise<AiSettings> {
     return this.request<AiSettings>("/api/admin/ai-settings", {
       method: "PUT",
       body: JSON.stringify(payload),
+    });
+  }
+
+  async adminTestAiConnection(): Promise<AiConnectionTestResult> {
+    return this.request<AiConnectionTestResult>("/api/admin/ai-test", {
+      method: "POST",
     });
   }
 
@@ -1603,6 +1631,277 @@ export class ApiClient {
       { method: "POST" }
     );
     return res.call;
+  }
+
+  // ---- BC Game Center (100-Game Solo/Group Catalog & 5 Engines) ----
+
+  private normalizeGameSession(raw: GameSession & Record<string, unknown>): GameSession {
+    const base = normalizeIdDoc(raw);
+    return {
+      ...base,
+      players: Array.isArray(base.players) ? base.players : [],
+      winner_names: Array.isArray(base.winner_names) ? base.winner_names : [],
+      round_index: Number(base.round_index ?? 0),
+      total_rounds: Number(base.total_rounds ?? 1),
+      round_revealed: Boolean(base.round_revealed),
+      proactive: Boolean(base.proactive),
+      host_message: String(base.host_message ?? ""),
+      current_question: base.current_question
+        ? {
+            ...base.current_question,
+            options: Array.isArray(base.current_question.options)
+              ? base.current_question.options
+              : [],
+            choice_counts: Array.isArray(base.current_question.choice_counts)
+              ? base.current_question.choice_counts
+              : [],
+          }
+        : null,
+      undercover: base.undercover
+        ? {
+            ...base.undercover,
+            clues: Array.isArray(base.undercover.clues) ? base.undercover.clues : [],
+            vote_counts:
+              base.undercover.vote_counts && typeof base.undercover.vote_counts === "object"
+                ? base.undercover.vote_counts
+                : {},
+          }
+        : null,
+      hint_race: base.hint_race
+        ? {
+            ...base.hint_race,
+            revealed_hints: Array.isArray(base.hint_race.revealed_hints)
+              ? base.hint_race.revealed_hints
+              : [],
+            my_guesses: Array.isArray(base.hint_race.my_guesses)
+              ? base.hint_race.my_guesses
+              : [],
+            total_hints: Number(base.hint_race.total_hints ?? 5),
+            hint_level: Number(base.hint_race.hint_level ?? 1),
+          }
+        : null,
+      party_vote: base.party_vote
+        ? {
+            ...base.party_vote,
+            options: Array.isArray(base.party_vote.options) ? base.party_vote.options : [],
+            choice_counts: Array.isArray(base.party_vote.choice_counts)
+              ? base.party_vote.choice_counts
+              : [],
+          }
+        : null,
+      creative_challenge: base.creative_challenge
+        ? {
+            ...base.creative_challenge,
+            entries: Array.isArray(base.creative_challenge.entries)
+              ? base.creative_challenge.entries
+              : [],
+            requires_image: Boolean(base.creative_challenge.requires_image),
+            my_submitted: Boolean(base.creative_challenge.my_submitted),
+          }
+        : null,
+    };
+  }
+
+  async listGameCatalog(params?: {
+    mode?: "all" | "solo" | "group";
+    category?: string;
+    q?: string;
+  }): Promise<GameCatalogResponse> {
+    const qs = new URLSearchParams();
+    if (params?.mode && params.mode !== "all") qs.set("mode", params.mode);
+    if (params?.category?.trim()) qs.set("category", params.category.trim());
+    if (params?.q?.trim()) qs.set("q", params.q.trim());
+    const query = qs.toString();
+    const res = await this.request<{
+      total?: number;
+      categories?: string[];
+      games?: GameCatalogItem[];
+    }>(`/api/games/catalog${query ? `?${query}` : ""}`);
+    const games = Array.isArray(res.games) ? res.games : [];
+    return {
+      total: Number(res.total ?? games.length),
+      categories: Array.isArray(res.categories) ? res.categories : [],
+      games,
+    };
+  }
+
+  async getActiveGame(convId: string): Promise<ActiveGameState> {
+    const res = await this.request<{
+      active_game?: (GameSession & Record<string, unknown>) | null;
+      recent_games?: Array<GameSummary & Record<string, unknown>>;
+      ai_game_auto_invite?: boolean;
+      ai_game_invite_cooldown_mins?: number;
+      proactive_enabled_globally?: boolean;
+    }>(`/api/conversations/${encodeURIComponent(convId)}/games/active`);
+    return {
+      active_game: res.active_game ? this.normalizeGameSession(res.active_game) : null,
+      recent_games: Array.isArray(res.recent_games)
+        ? res.recent_games.map((g) => ({
+            ...normalizeIdDoc(g),
+            winner_names: Array.isArray(g.winner_names) ? g.winner_names : [],
+            player_count: Number(g.player_count ?? 0),
+          }))
+        : [],
+      ai_game_auto_invite: Boolean(res.ai_game_auto_invite),
+      ai_game_invite_cooldown_mins: Number(res.ai_game_invite_cooldown_mins ?? 30),
+      proactive_enabled_globally: res.proactive_enabled_globally !== false,
+    };
+  }
+
+  async createGame(
+    convId: string,
+    payload: {
+      game_type?: string;
+      game_id?: string;
+      topic?: string;
+      question_count?: number;
+      auto_start?: boolean;
+    }
+  ): Promise<GameSession> {
+    const res = await this.request<GameSession & Record<string, unknown>>(
+      `/api/conversations/${encodeURIComponent(convId)}/games`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }
+    );
+    return this.normalizeGameSession(res);
+  }
+
+  async startRandomGame(
+    convId: string,
+    payload: {
+      mode?: "auto" | "solo" | "group";
+      category?: string;
+      auto_start?: boolean;
+    } = {}
+  ): Promise<GameSession> {
+    const res = await this.request<GameSession & Record<string, unknown>>(
+      `/api/conversations/${encodeURIComponent(convId)}/games/random`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }
+    );
+    return this.normalizeGameSession(res);
+  }
+
+  async triggerProactiveGameInvite(
+    convId: string,
+    payload: { force?: boolean; game_type?: string } = {}
+  ): Promise<ProactiveGameInviteResult> {
+    const res = await this.request<{
+      invited?: boolean;
+      reason?: string | null;
+      game?: (GameSession & Record<string, unknown>) | null;
+      message?: Record<string, unknown> | null;
+    }>(`/api/conversations/${encodeURIComponent(convId)}/games/proactive-invite`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    return {
+      invited: Boolean(res.invited),
+      reason: res.reason ?? null,
+      game: res.game ? this.normalizeGameSession(res.game) : null,
+      message: res.message ? normalizeMessage(res.message) : null,
+    };
+  }
+
+  async getGame(gameId: string): Promise<GameSession> {
+    const res = await this.request<GameSession & Record<string, unknown>>(
+      `/api/games/${encodeURIComponent(gameId)}`
+    );
+    return this.normalizeGameSession(res);
+  }
+
+  async joinGame(gameId: string): Promise<GameSession> {
+    const res = await this.request<GameSession & Record<string, unknown>>(
+      `/api/games/${encodeURIComponent(gameId)}/join`,
+      { method: "POST" }
+    );
+    return this.normalizeGameSession(res);
+  }
+
+  async startGame(gameId: string): Promise<GameSession> {
+    const res = await this.request<GameSession & Record<string, unknown>>(
+      `/api/games/${encodeURIComponent(gameId)}/start`,
+      { method: "POST" }
+    );
+    return this.normalizeGameSession(res);
+  }
+
+  async submitQuizAnswer(gameId: string, choiceIndex: number): Promise<GameSession> {
+    const res = await this.request<GameSession & Record<string, unknown>>(
+      `/api/games/${encodeURIComponent(gameId)}/answer`,
+      {
+        method: "POST",
+        body: JSON.stringify({ choice_index: choiceIndex }),
+      }
+    );
+    return this.normalizeGameSession(res);
+  }
+
+  async submitUndercoverClue(gameId: string, clue: string): Promise<GameSession> {
+    const res = await this.request<GameSession & Record<string, unknown>>(
+      `/api/games/${encodeURIComponent(gameId)}/clue`,
+      {
+        method: "POST",
+        body: JSON.stringify({ clue }),
+      }
+    );
+    return this.normalizeGameSession(res);
+  }
+
+  async submitUndercoverVote(gameId: string, targetUserId: string): Promise<GameSession> {
+    const res = await this.request<GameSession & Record<string, unknown>>(
+      `/api/games/${encodeURIComponent(gameId)}/vote`,
+      {
+        method: "POST",
+        body: JSON.stringify({ target_user_id: targetUserId }),
+      }
+    );
+    return this.normalizeGameSession(res);
+  }
+
+  async submitHintGuess(gameId: string, guess: string): Promise<GameSession> {
+    const res = await this.request<GameSession & Record<string, unknown>>(
+      `/api/games/${encodeURIComponent(gameId)}/guess`,
+      {
+        method: "POST",
+        body: JSON.stringify({ guess }),
+      }
+    );
+    return this.normalizeGameSession(res);
+  }
+
+  async submitCreativeEntry(
+    gameId: string,
+    payload: { text: string; image_message_id?: string }
+  ): Promise<GameSession> {
+    const res = await this.request<GameSession & Record<string, unknown>>(
+      `/api/games/${encodeURIComponent(gameId)}/submit`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }
+    );
+    return this.normalizeGameSession(res);
+  }
+
+  async advanceGame(gameId: string): Promise<GameSession> {
+    const res = await this.request<GameSession & Record<string, unknown>>(
+      `/api/games/${encodeURIComponent(gameId)}/next`,
+      { method: "POST" }
+    );
+    return this.normalizeGameSession(res);
+  }
+
+  async cancelGame(gameId: string): Promise<GameSession> {
+    const res = await this.request<GameSession & Record<string, unknown>>(
+      `/api/games/${encodeURIComponent(gameId)}/cancel`,
+      { method: "POST" }
+    );
+    return this.normalizeGameSession(res);
   }
 }
 

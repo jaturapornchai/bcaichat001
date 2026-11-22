@@ -34,6 +34,27 @@ class ApiService {
 
   static String get customBaseUrl => _overrideBaseUrl;
 
+  /// ตรวจว่า URL เซิร์ฟเวอร์เป็น localhost สำหรับรันทดสอบเท่านั้น
+  /// ไม่อนุญาตให้เปิดโหมดบัญชีทดสอบ/Demo บนโดเมนหรือ IP จริง
+  static bool isLocalhostUrl(String rawUrl) {
+    final trimmed = rawUrl.trim();
+    if (trimmed.isEmpty) return false;
+    final uri = Uri.tryParse(trimmed);
+    if (uri == null || !uri.hasScheme || uri.host.isEmpty) return false;
+    final scheme = uri.scheme.toLowerCase();
+    if (scheme != 'http' && scheme != 'https') return false;
+    final host = uri.host.toLowerCase().replaceAll('[', '').replaceAll(']', '');
+    return const {
+      'localhost',
+      '127.0.0.1',
+      '::1',
+      '10.0.2.2',
+      'oa.localhost',
+    }.contains(host);
+  }
+
+  bool get isLocalhostServer => isLocalhostUrl(baseUrl);
+
   static String _normalizeBaseUrl(String raw) {
     var trimmed = raw.trim();
     while (trimmed.endsWith('/')) {
@@ -430,6 +451,9 @@ class ApiService {
 
   /// Sign in or switch directly to a configured quick test account slot/user_id.
   Future<AuthResult> testQuickLogin({int? slot, String? userId}) async {
+    if (!isLocalhostServer) {
+      throw Exception('ปิดใช้งานบัญชีทดสอบบนเซิร์ฟเวอร์จริงแล้ว');
+    }
     final payload = <String, dynamic>{};
     if (slot != null) payload['slot'] = slot;
     if (userId != null && userId.trim().isNotEmpty) {
@@ -1178,6 +1202,8 @@ class ApiService {
     bool? isArchived,
     String? name,
     String? avatarUrl,
+    bool? aiGameAutoInvite,
+    int? aiGameInviteCooldownMins,
   }) async {
     final payload = <String, dynamic>{
       'folder': ?folder,
@@ -1189,6 +1215,8 @@ class ApiService {
       'is_archived': ?isArchived,
       'name': ?name,
       'avatar_url': ?avatarUrl,
+      'ai_game_auto_invite': ?aiGameAutoInvite,
+      'ai_game_invite_cooldown_mins': ?aiGameInviteCooldownMins,
     };
     final res = await http.put(
       Uri.parse('$baseUrl/api/conversations/$conversationId/meta'),
@@ -2089,17 +2117,17 @@ class ApiService {
   }
 
   // ---------------------------------------------------------------------------
-  // 25-28. DeepSeek AI Brain (Summarize, Assist, @ai Group Brain, Admin Settings)
+  // 25-28. BC AI Brain (Summarize, Assist, Vision/Doc Analyze, @ai Group Brain, Admin Settings)
   // ---------------------------------------------------------------------------
   Future<AiSummaryResult> summarizeConversation(String conversationId) async {
     final res = await http.post(
-      Uri.parse('$baseUrl/api/ai/summarize'),
+      Uri.parse('${ApiService.baseUrl}/api/ai/summarize'),
       headers: _headers,
       body: jsonEncode({'conversation_id': conversationId}),
     );
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw Exception(
-        'ไม่สามารถสรุปห้องแชทด้วย AI ได้ (${res.statusCode}): ${utf8.decode(res.bodyBytes)}',
+        'ไม่สามารถสรุปห้องแชทด้วยผู้ช่วย BC AI ได้ (${res.statusCode}): ${utf8.decode(res.bodyBytes)}',
       );
     }
     final decoded = jsonDecode(utf8.decode(res.bodyBytes));
@@ -2110,7 +2138,7 @@ class ApiService {
       summary: decoded.toString(),
       actionItems: const [],
       decisions: const [],
-      model: 'deepseek-chat',
+      model: kDefaultAiBrandName,
     );
   }
 
@@ -2120,7 +2148,7 @@ class ApiService {
     required String text,
   }) async {
     final res = await http.post(
-      Uri.parse('$baseUrl/api/ai/assist'),
+      Uri.parse('${ApiService.baseUrl}/api/ai/assist'),
       headers: _headers,
       body: jsonEncode({
         'conversation_id': conversationId,
@@ -2131,7 +2159,7 @@ class ApiService {
     );
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw Exception(
-        'เรียกสมองกล DeepSeek AI ไม่สำเร็จ (${res.statusCode}): ${utf8.decode(res.bodyBytes)}',
+        'เรียกผู้ช่วย BC AI ไม่สำเร็จ (${res.statusCode}): ${utf8.decode(res.bodyBytes)}',
       );
     }
     final decoded = jsonDecode(utf8.decode(res.bodyBytes));
@@ -2142,7 +2170,46 @@ class ApiService {
       suggestion: decoded.toString(),
       alternatives: const [],
       mode: mode,
-      model: 'deepseek-chat',
+      model: kDefaultAiBrandName,
+    );
+  }
+
+  Future<AiAnalyzeMessageResult> analyzeMessageWithAi({
+    required String messageId,
+    String? prompt,
+    bool postToChat = false,
+  }) async {
+    final cleanPrompt = prompt?.trim();
+    final res = await http
+        .post(
+          Uri.parse('${ApiService.baseUrl}/api/ai/analyze-message'),
+          headers: _headers,
+          body: jsonEncode({
+            'message_id': messageId,
+            if (cleanPrompt != null && cleanPrompt.isNotEmpty)
+              'prompt': cleanPrompt,
+            'post_to_chat': postToChat,
+          }),
+        )
+        .timeout(const Duration(seconds: 90));
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception(
+        _extractApiError(res, 'วิเคราะห์ภาพหรือเอกสารด้วย BC AI ไม่สำเร็จ'),
+      );
+    }
+    final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+    if (decoded is Map<String, dynamic>) {
+      return AiAnalyzeMessageResult.fromJson(decoded);
+    }
+    return AiAnalyzeMessageResult(
+      messageId: messageId,
+      conversationId: '',
+      fileName: 'ไฟล์แนบ',
+      mimeType: '',
+      mediaKind: 'document',
+      analysis: decoded.toString(),
+      model: kDefaultAiBrandName,
+      liveApi: false,
     );
   }
 
@@ -2150,7 +2217,7 @@ class ApiService {
   Future<void> loadBusinessTheme() async {
     try {
       final res = await http
-          .get(Uri.parse('$baseUrl/api/settings/theme'))
+          .get(Uri.parse('${ApiService.baseUrl}/api/settings/theme'))
           .timeout(const Duration(seconds: 5));
       if (res.statusCode == 200) {
         final decoded = jsonDecode(utf8.decode(res.bodyBytes));
@@ -2163,7 +2230,7 @@ class ApiService {
 
   Future<void> updateBusinessTheme(String code) async {
     final res = await http.put(
-      Uri.parse('$baseUrl/api/settings/theme'),
+      Uri.parse('${ApiService.baseUrl}/api/settings/theme'),
       headers: _headers,
       body: jsonEncode({'preset': code}),
     );
@@ -2179,57 +2246,71 @@ class ApiService {
 
   Future<AiAdminSettings> fetchAdminAiSettings() async {
     final res = await http.get(
-      Uri.parse('$baseUrl/api/admin/ai-settings'),
+      Uri.parse('${ApiService.baseUrl}/api/admin/ai-settings'),
       headers: _headers,
     );
     if (res.statusCode != 200) {
-      return const AiAdminSettings(
-        model: 'deepseek-chat',
-        maskedKey: 'ตั้งค่าบนเซิร์ฟเวอร์เรียบร้อย',
-        hasKey: true,
-        systemPrompt:
-            'คุณคือ BC AI ผู้ช่วยส่วนตัวประจำทุกห้องแชทของ BC Ai Chat ช่วยคิดคำตอบ เกลาข้อความ สรุปนัดหมาย และช่วยวางแผนกับครอบครัวและเพื่อนๆ อย่างเป็นกันเอง',
-        enabled: true,
+      return const AiAdminSettings();
+    }
+    final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+    if (decoded is Map<String, dynamic>) {
+      return AiAdminSettings.fromJson(decoded);
+    }
+    return const AiAdminSettings();
+  }
+
+  Future<AiAdminSettings> updateAdminAiSettings({
+    bool? enabled,
+    String? systemPrompt,
+    bool? autoReplyInGroups,
+    bool? redactConfidential,
+    bool? proactiveGameInvites,
+  }) async {
+    final body = <String, dynamic>{
+      'enabled': ?enabled,
+      if (systemPrompt != null) 'system_prompt': systemPrompt.trim(),
+      'auto_reply_in_groups': ?autoReplyInGroups,
+      'redact_confidential': ?redactConfidential,
+      'proactive_game_invites': ?proactiveGameInvites,
+    };
+    final res = await http.put(
+      Uri.parse('${ApiService.baseUrl}/api/admin/ai-settings'),
+      headers: _headers,
+      body: jsonEncode(body),
+    );
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception(
+        _extractApiError(res, 'บันทึกตั้งค่าผู้ช่วย BC AI ไม่สำเร็จ'),
       );
     }
     final decoded = jsonDecode(utf8.decode(res.bodyBytes));
     if (decoded is Map<String, dynamic>) {
       return AiAdminSettings.fromJson(decoded);
     }
-    return const AiAdminSettings(
-      model: 'deepseek-chat',
-      maskedKey: 'ตั้งค่าบนเซิร์ฟเวอร์เรียบร้อย',
-      hasKey: true,
-      systemPrompt: '',
-      enabled: true,
-    );
+    return fetchAdminAiSettings();
   }
 
-  Future<AiAdminSettings> updateAdminAiSettings({
-    required String model,
-    String? apiKey,
-    required String systemPrompt,
-    bool enabled = true,
-  }) async {
-    final cleanKey = apiKey?.trim();
-    final res = await http.put(
-      Uri.parse('$baseUrl/api/admin/ai-settings'),
-      headers: _headers,
-      body: jsonEncode({
-        'model': model,
-        if (cleanKey != null && cleanKey.isNotEmpty) 'api_key': cleanKey,
-        'system_prompt': systemPrompt.trim(),
-        'enabled': enabled,
-      }),
-    );
+  Future<AiConnectionTestResult> testAdminAiConnection() async {
+    final res = await http
+        .post(
+          Uri.parse('${ApiService.baseUrl}/api/admin/ai-test'),
+          headers: _headers,
+        )
+        .timeout(const Duration(seconds: 90));
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw Exception('บันทึกตั้งค่า DeepSeek AI ไม่สำเร็จ');
+      throw Exception(
+        _extractApiError(res, 'ทดสอบระบบผู้ช่วย BC AI ไม่สำเร็จ'),
+      );
     }
     final decoded = jsonDecode(utf8.decode(res.bodyBytes));
     if (decoded is Map<String, dynamic>) {
-      return AiAdminSettings.fromJson(decoded);
+      return AiConnectionTestResult.fromJson(decoded);
     }
-    return fetchAdminAiSettings();
+    return const AiConnectionTestResult(
+      ok: false,
+      latencyMs: 0,
+      error: 'รูปแบบผลการทดสอบระบบไม่ถูกต้อง',
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -2930,5 +3011,259 @@ class ApiService {
     return CallSessionDto.fromJson(
       Map<String, dynamic>.from((raw as Map?) ?? decoded),
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 16. BC Game Center (100-Game Catalog, Randomizer, 5 Engines & Proactive Host)
+  // ---------------------------------------------------------------------------
+  GameSession _parseGameSessionResponse(http.Response res, String fallbackErr) {
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception(_extractApiError(res, fallbackErr));
+    }
+    final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+    if (decoded is Map) {
+      final map = Map<String, dynamic>.from(decoded);
+      final raw = map['game'];
+      return GameSession.fromJson(
+        raw is Map ? Map<String, dynamic>.from(raw) : map,
+      );
+    }
+    throw Exception(fallbackErr);
+  }
+
+  Future<GameCatalogResponse> listGameCatalog({
+    String? mode,
+    String? category,
+    String? q,
+  }) async {
+    final params = <String, String>{};
+    if (mode != null && mode.trim().isNotEmpty && mode != 'all') {
+      params['mode'] = mode.trim();
+    }
+    if (category != null &&
+        category.trim().isNotEmpty &&
+        category.trim() != 'ทั้งหมด') {
+      params['category'] = category.trim();
+    }
+    if (q != null && q.trim().isNotEmpty) {
+      params['q'] = q.trim();
+    }
+    final uri = Uri.parse('$baseUrl/api/games/catalog').replace(
+      queryParameters: params.isEmpty ? null : params,
+    );
+    final res = await http.get(uri, headers: _headers);
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception(_extractApiError(res, 'โหลดคลังเกมไม่สำเร็จ'));
+    }
+    final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+    return GameCatalogResponse.fromJson(
+      decoded is Map ? Map<String, dynamic>.from(decoded) : const {},
+    );
+  }
+
+  Future<ActiveGameState> getActiveGame(String conversationId) async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/api/conversations/$conversationId/games/active'),
+      headers: _headers,
+    );
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception(_extractApiError(res, 'โหลดสถานะเกมในห้องไม่สำเร็จ'));
+    }
+    final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+    return ActiveGameState.fromJson(
+      decoded is Map ? Map<String, dynamic>.from(decoded) : const {},
+    );
+  }
+
+  Future<GameSession> createGame(
+    String conversationId, {
+    String? gameType,
+    String? gameId,
+    String? topic,
+    int? questionCount,
+    bool? autoStart,
+  }) async {
+    final body = <String, dynamic>{
+      if (gameType != null && gameType.trim().isNotEmpty)
+        'game_type': gameType.trim(),
+      if (gameId != null && gameId.trim().isNotEmpty) 'game_id': gameId.trim(),
+      if (topic != null && topic.trim().isNotEmpty) 'topic': topic.trim(),
+      'question_count': ?questionCount,
+      'auto_start': ?autoStart,
+    };
+    final res = await http
+        .post(
+          Uri.parse('$baseUrl/api/conversations/$conversationId/games'),
+          headers: _headers,
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 90));
+    return _parseGameSessionResponse(res, 'สร้างห้องเกมไม่สำเร็จ');
+  }
+
+  Future<GameSession> startRandomGame(
+    String conversationId, {
+    String mode = 'auto',
+    String? category,
+    bool? autoStart,
+  }) async {
+    final body = <String, dynamic>{
+      'mode': mode,
+      if (category != null &&
+          category.trim().isNotEmpty &&
+          category.trim() != 'ทั้งหมด')
+        'category': category.trim(),
+      'auto_start': ?autoStart,
+    };
+    final res = await http
+        .post(
+          Uri.parse('$baseUrl/api/conversations/$conversationId/games/random'),
+          headers: _headers,
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 90));
+    return _parseGameSessionResponse(res, 'สุ่มเกมไม่สำเร็จ');
+  }
+
+  Future<ProactiveGameInviteResult> triggerProactiveGameInvite(
+    String conversationId, {
+    bool? force,
+    String? gameType,
+  }) async {
+    final body = <String, dynamic>{
+      'force': ?force,
+      if (gameType != null && gameType.trim().isNotEmpty)
+        'game_type': gameType.trim(),
+    };
+    final res = await http
+        .post(
+          Uri.parse(
+            '$baseUrl/api/conversations/$conversationId/games/proactive-invite',
+          ),
+          headers: _headers,
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 90));
+    if (res.statusCode == 409) {
+      try {
+        final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+        if (decoded is Map && decoded.containsKey('invited')) {
+          return ProactiveGameInviteResult.fromJson(
+            Map<String, dynamic>.from(decoded),
+          );
+        }
+      } catch (_) {}
+      return ProactiveGameInviteResult(
+        invited: false,
+        reason: _extractApiError(res, 'ยังไม่สามารถชวนเล่นเกมในตอนนี้ได้'),
+      );
+    }
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception(_extractApiError(res, 'ให้ AI ชวนเล่นเกมไม่สำเร็จ'));
+    }
+    final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+    return ProactiveGameInviteResult.fromJson(
+      decoded is Map ? Map<String, dynamic>.from(decoded) : const {},
+    );
+  }
+
+  Future<GameSession> getGame(String gameId) async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/api/games/$gameId'),
+      headers: _headers,
+    );
+    return _parseGameSessionResponse(res, 'โหลดข้อมูลเกมไม่สำเร็จ');
+  }
+
+  Future<GameSession> joinGame(String gameId) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/api/games/$gameId/join'),
+      headers: _headers,
+    );
+    return _parseGameSessionResponse(res, 'เข้าร่วมเกมไม่สำเร็จ');
+  }
+
+  Future<GameSession> startGame(String gameId) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/api/games/$gameId/start'),
+      headers: _headers,
+    );
+    return _parseGameSessionResponse(res, 'เริ่มเกมไม่สำเร็จ');
+  }
+
+  Future<GameSession> submitQuizAnswer(String gameId, int choiceIndex) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/api/games/$gameId/answer'),
+      headers: _headers,
+      body: jsonEncode({'choice_index': choiceIndex}),
+    );
+    return _parseGameSessionResponse(res, 'ส่งคำตอบไม่สำเร็จ');
+  }
+
+  Future<GameSession> submitUndercoverClue(String gameId, String clue) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/api/games/$gameId/clue'),
+      headers: _headers,
+      body: jsonEncode({'clue': clue.trim()}),
+    );
+    return _parseGameSessionResponse(res, 'ส่งคำใบ้ไม่สำเร็จ');
+  }
+
+  Future<GameSession> submitUndercoverVote(
+    String gameId,
+    String targetUserId,
+  ) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/api/games/$gameId/vote'),
+      headers: _headers,
+      body: jsonEncode({'target_user_id': targetUserId}),
+    );
+    return _parseGameSessionResponse(res, 'ส่งผลโหวตไม่สำเร็จ');
+  }
+
+  Future<GameSession> submitHintGuess(String gameId, String guess) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/api/games/$gameId/guess'),
+      headers: _headers,
+      body: jsonEncode({'guess': guess.trim()}),
+    );
+    return _parseGameSessionResponse(res, 'ส่งคำทายไม่สำเร็จ');
+  }
+
+  Future<GameSession> submitCreativeEntry(
+    String gameId, {
+    required String text,
+    String? imageMessageId,
+  }) async {
+    final res = await http
+        .post(
+          Uri.parse('$baseUrl/api/games/$gameId/submit'),
+          headers: _headers,
+          body: jsonEncode({
+            'text': text.trim(),
+            if (imageMessageId != null && imageMessageId.trim().isNotEmpty)
+              'image_message_id': imageMessageId.trim(),
+          }),
+        )
+        .timeout(const Duration(seconds: 90));
+    return _parseGameSessionResponse(res, 'ส่งผลงานไม่สำเร็จ');
+  }
+
+  Future<GameSession> advanceGame(String gameId) async {
+    final res = await http
+        .post(
+          Uri.parse('$baseUrl/api/games/$gameId/next'),
+          headers: _headers,
+        )
+        .timeout(const Duration(seconds: 90));
+    return _parseGameSessionResponse(res, 'ไปรอบถัดไปไม่สำเร็จ');
+  }
+
+  Future<GameSession> cancelGame(String gameId) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/api/games/$gameId/cancel'),
+      headers: _headers,
+    );
+    return _parseGameSessionResponse(res, 'ยกเลิกเกมไม่สำเร็จ');
   }
 }

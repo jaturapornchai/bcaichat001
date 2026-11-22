@@ -320,8 +320,29 @@ pub struct ConversationDoc {
     pub pinned_message: Option<PinnedMessageSummary>,
     #[serde(default)]
     pub last_message: Option<LastMessageSummary>,
+    #[serde(default)]
+    pub ai_game_auto_invite: Option<bool>,
+    #[serde(default)]
+    pub ai_game_invite_cooldown_mins: Option<u32>,
+    #[serde(default)]
+    pub last_ai_game_invite_at: Option<String>,
+    #[serde(default)]
+    pub human_msgs_since_game_invite: u64,
     pub created_at: String,
     pub updated_at: String,
+}
+
+impl ConversationDoc {
+    pub fn effective_ai_game_auto_invite(&self) -> bool {
+        self.ai_game_auto_invite
+            .unwrap_or(self.conv_type == "group" && self.oa_id.is_none())
+    }
+
+    pub fn effective_ai_game_invite_cooldown_mins(&self) -> u32 {
+        self.ai_game_invite_cooldown_mins
+            .unwrap_or(30)
+            .clamp(1, 1440)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -403,6 +424,10 @@ pub struct ConversationDto {
     pub member_count: usize,
     pub members: Vec<ConversationMemberDto>,
     pub last_message: Option<LastMessageSummary>,
+    #[serde(default)]
+    pub ai_game_auto_invite: bool,
+    #[serde(default)]
+    pub ai_game_invite_cooldown_mins: u32,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -811,6 +836,8 @@ pub struct FileDoc {
     pub uploader_name: String,
     #[serde(default)]
     pub conversation_id: Option<String>,
+    #[serde(default)]
+    pub extracted_text: Option<String>,
     pub created_at: String,
 }
 
@@ -948,27 +975,66 @@ pub struct AiSettingsDoc {
     pub enabled: bool,
     #[serde(default)]
     pub api_key: String,
+    #[serde(default)]
     pub model: String,
+    #[serde(default)]
     pub base_url: String,
+    #[serde(default)]
     pub system_prompt: String,
     #[serde(default)]
     pub auto_reply_in_groups: bool,
     #[serde(default)]
     pub redact_confidential: bool,
+    #[serde(default = "default_true")]
+    pub proactive_game_invites: bool,
+    #[serde(default)]
     pub updated_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AiSettingsDto {
+    #[serde(default)]
     pub enabled: bool,
-    pub has_api_key: bool,
-    pub masked_key: String,
-    pub model: String,
-    pub base_url: String,
+    #[serde(default = "default_true")]
+    pub managed_by_system: bool,
+    #[serde(default)]
+    pub system_ready: bool,
+    #[serde(default)]
     pub system_prompt: String,
+    #[serde(default)]
     pub auto_reply_in_groups: bool,
+    #[serde(default)]
     pub redact_confidential: bool,
+    #[serde(default = "default_true")]
+    pub proactive_game_invites: bool,
+    #[serde(default)]
     pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AiConnectionTestResponse {
+    pub ok: bool,
+    pub latency_ms: u64,
+    #[serde(default)]
+    pub reply: Option<String>,
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AiAnalyzeMessageResponse {
+    pub message_id: String,
+    pub conversation_id: String,
+    pub file_name: String,
+    pub mime_type: String,
+    pub media_kind: String,
+    pub analysis: String,
+    #[serde(default)]
+    pub extracted_preview: Option<String>,
+    pub model: String,
+    pub live_api: bool,
+    #[serde(default)]
+    pub posted_message_id: Option<String>,
 }
 
 pub fn mask_secret_key(raw: &str) -> (bool, String) {
@@ -1400,6 +1466,417 @@ impl From<CallSessionDoc> for CallSessionDto {
     }
 }
 
+
+// =============================================================================
+// BC Game Center — 100 Solo/Group AI Games across 5 Playable Engines
+// =============================================================================
+
+fn default_one_usize() -> usize {
+    1
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GamePlayerDoc {
+    pub user_id: String,
+    #[serde(default)]
+    pub display_name: String,
+    #[serde(default)]
+    pub avatar_url: String,
+    #[serde(default)]
+    pub score: i64,
+    #[serde(default)]
+    pub joined_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuizQuestionDoc {
+    pub question: String,
+    #[serde(default)]
+    pub options: Vec<String>,
+    pub correct_index: usize,
+    #[serde(default)]
+    pub explanation: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuizRoundAnswerDoc {
+    pub choice_index: usize,
+    pub is_correct: bool,
+    pub points_awarded: i64,
+    #[serde(default)]
+    pub answered_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct UndercoverDataDoc {
+    #[serde(default)]
+    pub category: String,
+    #[serde(default)]
+    pub civilian_word: String,
+    #[serde(default)]
+    pub spy_word: String,
+    #[serde(default)]
+    pub spy_user_id: Option<String>,
+    #[serde(default)]
+    pub clues: HashMap<String, String>,
+    #[serde(default)]
+    pub votes: HashMap<String, String>,
+    #[serde(default)]
+    pub winner_side: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HintRaceRoundDoc {
+    pub answer: String,
+    #[serde(default)]
+    pub aliases: Vec<String>,
+    #[serde(default)]
+    pub hints: Vec<String>,
+    #[serde(default = "default_one_usize")]
+    pub hint_level: usize,
+    #[serde(default)]
+    pub solved_by_id: Option<String>,
+    #[serde(default)]
+    pub solved_by_name: Option<String>,
+    #[serde(default)]
+    pub guesses: HashMap<String, Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PartyVoteRoundDoc {
+    pub prompt: String,
+    #[serde(default)]
+    pub options: Vec<String>,
+    #[serde(default)]
+    pub commentary: String,
+    #[serde(default)]
+    pub votes: HashMap<String, usize>,
+    #[serde(default)]
+    pub scored: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreativeEntryDoc {
+    pub user_id: String,
+    #[serde(default)]
+    pub display_name: String,
+    pub text: String,
+    #[serde(default)]
+    pub image_message_id: Option<String>,
+    #[serde(default)]
+    pub image_url: Option<String>,
+    #[serde(default)]
+    pub score: Option<i64>,
+    #[serde(default)]
+    pub judge_comment: Option<String>,
+    #[serde(default)]
+    pub submitted_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreativeRoundDoc {
+    pub prompt: String,
+    #[serde(default)]
+    pub tip: String,
+    #[serde(default)]
+    pub requires_image: bool,
+    #[serde(default)]
+    pub entries: Vec<CreativeEntryDoc>,
+    #[serde(default)]
+    pub judged: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UndercoverWordPairDoc {
+    pub category: String,
+    pub civilian_word: String,
+    pub spy_word: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GameQuestionPackDoc {
+    #[serde(rename = "_id")]
+    pub id: String,
+    pub game_type: String,
+    pub topic_key: String,
+    #[serde(default)]
+    pub topic_label: String,
+    #[serde(default)]
+    pub questions: Vec<QuizQuestionDoc>,
+    #[serde(default)]
+    pub word_pairs: Vec<UndercoverWordPairDoc>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GameSessionDoc {
+    #[serde(rename = "_id")]
+    pub id: String,
+    pub conversation_id: String,
+    pub game_type: String, // "quiz" | "undercover" | "hint_race" | "party_vote" | "creative_challenge"
+    #[serde(default)]
+    pub catalog_id: String,
+    #[serde(default)]
+    pub emoji: String,
+    #[serde(default)]
+    pub category: String,
+    #[serde(default)]
+    pub play_mode: String,
+    #[serde(default)]
+    pub tagline: String,
+    pub title: String,
+    #[serde(default)]
+    pub topic: String,
+    pub status: String, // "lobby" | "playing" | "finished" | "cancelled"
+    #[serde(default)]
+    pub phase: String,
+    #[serde(default)]
+    pub proactive: bool,
+    #[serde(default)]
+    pub host_message: String,
+    pub created_by: String,
+    #[serde(default)]
+    pub created_by_name: String,
+    #[serde(default)]
+    pub players: Vec<GamePlayerDoc>,
+    #[serde(default)]
+    pub round_index: usize,
+    #[serde(default)]
+    pub total_rounds: usize,
+    #[serde(default)]
+    pub round_revealed: bool,
+    #[serde(default)]
+    pub round_started_at: Option<String>,
+    #[serde(default)]
+    pub questions: Vec<QuizQuestionDoc>,
+    #[serde(default)]
+    pub round_answers: HashMap<String, HashMap<String, QuizRoundAnswerDoc>>,
+    #[serde(default)]
+    pub undercover: Option<UndercoverDataDoc>,
+    #[serde(default)]
+    pub hint_rounds: Vec<HintRaceRoundDoc>,
+    #[serde(default)]
+    pub party_rounds: Vec<PartyVoteRoundDoc>,
+    #[serde(default)]
+    pub creative_rounds: Vec<CreativeRoundDoc>,
+    #[serde(default)]
+    pub winner_names: Vec<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GamePlayerDto {
+    pub user_id: String,
+    pub display_name: String,
+    #[serde(default)]
+    pub avatar_url: String,
+    #[serde(default)]
+    pub score: i64,
+    #[serde(default)]
+    pub answered: bool,
+    #[serde(default)]
+    pub voted: bool,
+    #[serde(default)]
+    pub clue: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuizQuestionViewDto {
+    pub question: String,
+    pub options: Vec<String>,
+    #[serde(default)]
+    pub correct_index: Option<usize>,
+    #[serde(default)]
+    pub explanation: Option<String>,
+    #[serde(default)]
+    pub my_choice: Option<usize>,
+    #[serde(default)]
+    pub choice_counts: Vec<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UndercoverClueDto {
+    pub user_id: String,
+    pub display_name: String,
+    pub clue: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UndercoverViewDto {
+    pub category: String,
+    #[serde(default)]
+    pub my_secret_word: Option<String>,
+    #[serde(default)]
+    pub my_clue: Option<String>,
+    #[serde(default)]
+    pub my_vote: Option<String>,
+    #[serde(default)]
+    pub clues: Vec<UndercoverClueDto>,
+    #[serde(default)]
+    pub vote_counts: HashMap<String, usize>,
+    #[serde(default)]
+    pub revealed_spy_id: Option<String>,
+    #[serde(default)]
+    pub revealed_spy_name: Option<String>,
+    #[serde(default)]
+    pub revealed_civilian_word: Option<String>,
+    #[serde(default)]
+    pub revealed_spy_word: Option<String>,
+    #[serde(default)]
+    pub winner_side: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HintRaceViewDto {
+    #[serde(default)]
+    pub revealed_hints: Vec<String>,
+    #[serde(default)]
+    pub total_hints: usize,
+    #[serde(default)]
+    pub hint_level: usize,
+    #[serde(default)]
+    pub solved_by_name: Option<String>,
+    #[serde(default)]
+    pub revealed_answer: Option<String>,
+    #[serde(default)]
+    pub my_guesses: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PartyVoteViewDto {
+    pub prompt: String,
+    #[serde(default)]
+    pub options: Vec<String>,
+    #[serde(default)]
+    pub my_choice: Option<usize>,
+    #[serde(default)]
+    pub choice_counts: Vec<usize>,
+    #[serde(default)]
+    pub commentary: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreativeEntryDto {
+    pub user_id: String,
+    pub display_name: String,
+    pub text: String,
+    #[serde(default)]
+    pub image_url: Option<String>,
+    #[serde(default)]
+    pub score: Option<i64>,
+    #[serde(default)]
+    pub judge_comment: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreativeChallengeViewDto {
+    pub prompt: String,
+    #[serde(default)]
+    pub tip: String,
+    #[serde(default)]
+    pub requires_image: bool,
+    #[serde(default)]
+    pub my_submitted: bool,
+    #[serde(default)]
+    pub entries: Vec<CreativeEntryDto>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GameSessionDto {
+    pub id: String,
+    pub conversation_id: String,
+    pub game_type: String,
+    #[serde(default)]
+    pub catalog_id: String,
+    #[serde(default)]
+    pub emoji: String,
+    #[serde(default)]
+    pub category: String,
+    #[serde(default)]
+    pub play_mode: String,
+    #[serde(default)]
+    pub tagline: String,
+    pub title: String,
+    #[serde(default)]
+    pub topic: String,
+    pub status: String,
+    #[serde(default)]
+    pub phase: String,
+    #[serde(default)]
+    pub proactive: bool,
+    #[serde(default)]
+    pub host_message: String,
+    pub created_by: String,
+    #[serde(default)]
+    pub created_by_name: String,
+    #[serde(default)]
+    pub players: Vec<GamePlayerDto>,
+    #[serde(default)]
+    pub round_index: usize,
+    #[serde(default)]
+    pub total_rounds: usize,
+    #[serde(default)]
+    pub round_revealed: bool,
+    #[serde(default)]
+    pub current_question: Option<QuizQuestionViewDto>,
+    #[serde(default)]
+    pub undercover: Option<UndercoverViewDto>,
+    #[serde(default)]
+    pub hint_race: Option<HintRaceViewDto>,
+    #[serde(default)]
+    pub party_vote: Option<PartyVoteViewDto>,
+    #[serde(default)]
+    pub creative_challenge: Option<CreativeChallengeViewDto>,
+    #[serde(default)]
+    pub winner_names: Vec<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GameSummaryDto {
+    pub id: String,
+    pub game_type: String,
+    #[serde(default)]
+    pub catalog_id: String,
+    #[serde(default)]
+    pub emoji: String,
+    pub title: String,
+    #[serde(default)]
+    pub topic: String,
+    pub status: String,
+    #[serde(default)]
+    pub winner_names: Vec<String>,
+    #[serde(default)]
+    pub player_count: usize,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActiveGameStateDto {
+    pub active_game: Option<GameSessionDto>,
+    #[serde(default)]
+    pub recent_games: Vec<GameSummaryDto>,
+    #[serde(default)]
+    pub ai_game_auto_invite: bool,
+    #[serde(default)]
+    pub ai_game_invite_cooldown_mins: u32,
+    #[serde(default)]
+    pub proactive_enabled_globally: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProactiveGameInviteResponse {
+    pub invited: bool,
+    #[serde(default)]
+    pub reason: Option<String>,
+    #[serde(default)]
+    pub game: Option<GameSessionDto>,
+    #[serde(default)]
+    pub message: Option<MessageDto>,
+}
 
 #[cfg(test)]
 mod tests {

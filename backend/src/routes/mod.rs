@@ -4,6 +4,7 @@ pub mod auth_routes;
 pub mod call_routes;
 pub mod chat_routes;
 pub mod file_routes;
+pub mod game_routes;
 pub mod miniapp_routes;
 pub mod oa_routes;
 pub mod push_routes;

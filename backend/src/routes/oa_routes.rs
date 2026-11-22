@@ -1203,6 +1203,10 @@ pub async fn follow_oa_handler(
                 last_message: None,
                 oa_id: Some(oa.id.clone()),
                 oa_handle: Some(oa.handle.clone()),
+                ai_game_auto_invite: None,
+                ai_game_invite_cooldown_mins: None,
+                last_ai_game_invite_at: None,
+                human_msgs_since_game_invite: 0,
                 created_at: now.clone(),
                 updated_at: now.clone(),
             };
@@ -2710,7 +2714,9 @@ pub async fn handle_customer_message_to_oa(
     }));
     crate::push::notify_target_users(state, conv, &msg_dto, &oa_recipients);
 
-    if msg.is_unsent || msg.msg_type != "text" || msg.content.trim().is_empty() {
+    let has_media_attachment =
+        msg.attachment.is_some() && matches!(msg.msg_type.as_str(), "image" | "file");
+    if msg.is_unsent || (!has_media_attachment && (msg.msg_type != "text" || msg.content.trim().is_empty())) {
         return;
     }
 
@@ -2727,48 +2733,53 @@ pub async fn handle_customer_message_to_oa(
     let bot_user = get_oa_bot_user(state, &oa).await;
     let normalized_text = msg.content.trim().to_lowercase();
 
-    // 3. Evaluate active keyword Auto-Reply rules first
-    let rules_coll = state.db.collection::<OaAutoReplyRuleDoc>("oa_auto_replies");
-    let rules: Vec<OaAutoReplyRuleDoc> = match rules_coll
-        .find(doc! { "oa_id": &oa.id, "is_active": true })
-        .await
+    // 3. Evaluate active keyword Auto-Reply rules first (for text messages or captioned attachments)
+    if !normalized_text.is_empty()
+        && !normalized_text.starts_with("[ส่งรูปภาพ]")
+        && !normalized_text.starts_with("[ไฟล์]")
     {
-        Ok(cursor) => cursor.try_collect().await.unwrap_or_default(),
-        Err(_) => vec![],
-    };
-
-    for rule in rules {
-        let kw = rule.keyword.trim().to_lowercase();
-        if kw.is_empty() {
-            continue;
-        }
-        let matched = if rule.match_mode == "exact" {
-            normalized_text == kw
-        } else {
-            normalized_text.contains(&kw)
+        let rules_coll = state.db.collection::<OaAutoReplyRuleDoc>("oa_auto_replies");
+        let rules: Vec<OaAutoReplyRuleDoc> = match rules_coll
+            .find(doc! { "oa_id": &oa.id, "is_active": true })
+            .await
+        {
+            Ok(cursor) => cursor.try_collect().await.unwrap_or_default(),
+            Err(_) => vec![],
         };
-        if matched {
-            let _ = rules_coll
-                .update_one(
-                    doc! { "_id": &rule.id },
-                    doc! { "$inc": { "hit_count": 1_i64 } },
+
+        for rule in rules {
+            let kw = rule.keyword.trim().to_lowercase();
+            if kw.is_empty() {
+                continue;
+            }
+            let matched = if rule.match_mode == "exact" {
+                normalized_text == kw
+            } else {
+                normalized_text.contains(&kw)
+            };
+            if matched {
+                let _ = rules_coll
+                    .update_one(
+                        doc! { "_id": &rule.id },
+                        doc! { "$inc": { "hit_count": 1_i64 } },
+                    )
+                    .await;
+                let msg_type = if rule.card_payload.is_some() {
+                    "rich_card"
+                } else {
+                    "text"
+                };
+                let _ = insert_oa_bot_message_raw(
+                    state,
+                    conv,
+                    &bot_user,
+                    msg_type,
+                    &rule.reply_text,
+                    rule.card_payload,
                 )
                 .await;
-            let msg_type = if rule.card_payload.is_some() {
-                "rich_card"
-            } else {
-                "text"
-            };
-            let _ = insert_oa_bot_message_raw(
-                state,
-                conv,
-                &bot_user,
-                msg_type,
-                &rule.reply_text,
-                rule.card_payload,
-            )
-            .await;
-            return;
+                return;
+            }
         }
     }
 

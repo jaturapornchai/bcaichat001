@@ -232,7 +232,7 @@ async fn test_full_bcaichat_auth_oa_calls_minio_and_mongo_flow() {
     config.livekit_url = "ws://127.0.0.1:7880".to_string();
     config.livekit_api_key = TEST_LK_KEY.to_string();
     config.livekit_api_secret = TEST_LK_SECRET.to_string();
-    config.deepseek_api_key.clear();
+    config.ai_enabled = false;
     config.enable_test_users = true;
 
     let state = AppState::init(config.clone()).await.expect("init AppState");
@@ -3281,16 +3281,96 @@ async fn test_quick_test_users_disabled_and_fail_closed_defaults() {
         Some("false"),
         Some("http://127.0.0.1:8096")
     ));
+    // HARD BLOCK: non-loopback PUBLIC_BASE_URL can NEVER enable test users even if ENABLE_TEST_USERS=true
+    assert!(!resolve_enable_test_users(
+        Some("true"),
+        Some("https://www.bcaichat.com")
+    ));
 
-    // 2. When enable_test_users == false, seed_initial_data skips 5 test users & POST /api/auth/test-login returns 403 Forbidden
+    // 2. When enable_test_users == false, seed_initial_data purges leftover TEST_USER_IDS & blocks test-login (403)
     let run_short = &uuid::Uuid::new_v4().simple().to_string()[..8];
     let mut config = AppConfig::from_env();
     config.mongodb_db = format!("bcaichat_api_it_notest_{run_short}");
-    config.enable_test_users = false;
-    config.deepseek_api_key.clear();
+    config.enable_test_users = true;
+    config.ai_enabled = false;
 
-    let state = AppState::init(config).await.expect("init AppState");
-    seed_initial_data(&state).await.expect("seed initial data");
+    // First seed as localhost dev so test users/friendships/test OA exist in DB
+    let dev_state = AppState::init(config.clone()).await.expect("init dev AppState");
+    seed_initial_data(&dev_state).await.expect("seed dev data");
+    let dev_app = create_router(dev_state.clone());
+
+    // 2a. Runtime Host / X-Forwarded-Host lockdown EVEN when enable_test_users == true!
+    // Covers reverse-proxy prod X-Forwarded-Host AND spoofed X-Forwarded-Host: localhost with prod Host!
+    for (host_val, xfh_opt) in [
+        ("www.bcaichat.com", None),
+        ("www.bcaichat.com", Some("localhost")),
+        ("127.0.0.1:8096", Some("oa.bcaichat.com")),
+        ("127.0.0.1:8096", Some("www.bcaichat.com, 127.0.0.1:8096")),
+    ] {
+        let mut cfg_req_b = Request::builder()
+            .method("GET")
+            .uri("/api/auth/config")
+            .header("host", host_val);
+        if let Some(xfh) = xfh_opt {
+            cfg_req_b = cfg_req_b.header("x-forwarded-host", xfh);
+        }
+        let cfg_req = cfg_req_b.body(Body::empty()).unwrap();
+        let cfg_resp = dev_app.clone().oneshot(cfg_req).await.unwrap();
+        assert_eq!(cfg_resp.status(), StatusCode::OK);
+        let cfg_json: Value = serde_json::from_slice(
+            &axum::body::to_bytes(cfg_resp.into_body(), 1024 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            cfg_json["test_users_enabled"], false,
+            "host={host_val} xfh={xfh_opt:?} must force test_users_enabled=false"
+        );
+        assert_eq!(cfg_json["test_users"].as_array().unwrap().len(), 0);
+
+        let mut login_req_b = Request::builder()
+            .method("POST")
+            .uri("/api/auth/test-login")
+            .header("content-type", "application/json")
+            .header("host", host_val);
+        if let Some(xfh) = xfh_opt {
+            login_req_b = login_req_b.header("x-forwarded-host", xfh);
+        }
+        let login_req = login_req_b
+            .body(Body::from(json!({ "slot": 1 }).to_string()))
+            .unwrap();
+        let login_resp = dev_app.clone().oneshot(login_req).await.unwrap();
+        assert_eq!(
+            login_resp.status(),
+            StatusCode::FORBIDDEN,
+            "host={host_val} xfh={xfh_opt:?} must return 403 on /api/auth/test-login"
+        );
+    }
+
+    // 2b. Genuine localhost Host / X-Forwarded-Host still works when enable_test_users == true
+    let local_cfg_req = Request::builder()
+        .method("GET")
+        .uri("/api/auth/config")
+        .header("host", "127.0.0.1:8096")
+        .header("x-forwarded-host", "oa.localhost:3096")
+        .body(Body::empty())
+        .unwrap();
+    let local_cfg_resp = dev_app.clone().oneshot(local_cfg_req).await.unwrap();
+    assert_eq!(local_cfg_resp.status(), StatusCode::OK);
+    let local_cfg_json: Value = serde_json::from_slice(
+        &axum::body::to_bytes(local_cfg_resp.into_body(), 1024 * 1024)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(local_cfg_json["test_users_enabled"], true);
+    assert_eq!(local_cfg_json["test_users"].as_array().unwrap().len(), 5);
+
+    // 3. Re-booting with enable_test_users == false purges ALL leftover test users & test artifacts!
+    config.enable_test_users = false;
+    let state = AppState::init(config).await.expect("init prod AppState");
+    seed_initial_data(&state).await.expect("seed prod data");
 
     let users_coll = state.db.collection::<mongodb::bson::Document>("users");
     let seeded_test_count = users_coll
@@ -3299,15 +3379,27 @@ async fn test_quick_test_users_disabled_and_fail_closed_defaults() {
         .expect("count test users");
     assert_eq!(
         seeded_test_count, 0,
-        "TEST_USER_IDS must NOT be seeded when enable_test_users == false"
+        "TEST_USER_IDS must be purged when enable_test_users == false"
     );
 
-    let oa_coll = state.db.collection::<mongodb::bson::Document>("official_accounts");
+    let oa_coll = state.db.collection::<mongodb::bson::Document>("oa_accounts");
     let seeded_oa_count = oa_coll
         .count_documents(mongodb::bson::doc! { "_id": "oa_test_chabanchiang" })
         .await
         .expect("count test shop");
     assert_eq!(seeded_oa_count, 0);
+
+    let friends_coll = state.db.collection::<mongodb::bson::Document>("friendships");
+    let test_friend_count = friends_coll
+        .count_documents(mongodb::bson::doc! {
+            "$or": [
+                { "user_id": { "$in": Vec::from(TEST_USER_IDS) } },
+                { "friend_id": { "$in": Vec::from(TEST_USER_IDS) } },
+            ]
+        })
+        .await
+        .expect("count test friendships");
+    assert_eq!(test_friend_count, 0);
 
     let app = create_router(state.clone());
 

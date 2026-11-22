@@ -392,7 +392,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 12),
                     _buildGoogleSection(),
-                    if (_authConfig.testUsersEnabled &&
+                    if (ApiService.instance.isLocalhostServer &&
+                        _authConfig.testUsersEnabled &&
                         _authConfig.testUsers.isNotEmpty) ...[
                       const SizedBox(height: 12),
                       _buildQuickTestUsersSection(),
@@ -733,7 +734,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _loginWithQuickTestUser(QuickTestUser u) async {
-    if (_isLoading) return;
+    if (!ApiService.instance.isLocalhostServer || _isLoading) return;
     setState(() {
       _isLoading = true;
       _errorMessage = null;

@@ -1,8 +1,13 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:bcaichat_app/models/models.dart';
 import 'package:bcaichat_app/services/api_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'fake_http.dart';
 
 void main() {
   test('ApiService derives WS URL and honors custom Server URL preference', () async {
@@ -562,5 +567,207 @@ void main() {
       normalizeFriendSearchQuery('  @kong.bc  ', mode: 'id'),
       'kong.bc',
     );
+  });
+
+  test('System-managed BC AI models, settings, test result, and analyze-message parse safely', () {
+    const defaultSettings = AiAdminSettings();
+    expect(defaultSettings.enabled, isTrue);
+    expect(defaultSettings.managedBySystem, isTrue);
+    expect(defaultSettings.systemReady, isTrue);
+    expect(defaultSettings.autoReplyInGroups, isTrue);
+    expect(defaultSettings.redactConfidential, isTrue);
+
+    final fallbackFromEmpty = AiAdminSettings.fromJson({});
+    expect(fallbackFromEmpty.enabled, isTrue);
+    expect(fallbackFromEmpty.managedBySystem, isTrue);
+    expect(fallbackFromEmpty.systemReady, isTrue);
+
+    final parsedSettings = AiAdminSettings.fromJson({
+      'enabled': true,
+      'managed_by_system': true,
+      'system_ready': false,
+      'system_prompt': 'ตอบสั้น กระชับ ภาษาไทย',
+      'auto_reply_in_groups': false,
+      'redact_confidential': true,
+      'updated_at': '2026-11-22T09:00:00Z',
+    });
+    expect(parsedSettings.managedBySystem, isTrue);
+    expect(parsedSettings.systemReady, isFalse);
+    expect(parsedSettings.autoReplyInGroups, isFalse);
+    expect(parsedSettings.redactConfidential, isTrue);
+    expect(parsedSettings.updatedAt, '2026-11-22T09:00:00Z');
+
+    final testOk = AiConnectionTestResult.fromJson({
+      'ok': true,
+      'latency_ms': 420,
+      'reply': 'สวัสดีครับ พร้อมใช้งานแล้ว',
+    });
+    expect(testOk.ok, isTrue);
+    expect(testOk.latencyMs, 420);
+    expect(testOk.reply, 'สวัสดีครับ พร้อมใช้งานแล้ว');
+    expect(testOk.error, isNull);
+
+    final testFail = AiConnectionTestResult.fromJson({
+      'ok': false,
+      'latency_ms': 15,
+      'error': 'timeout',
+    });
+    expect(testFail.ok, isFalse);
+    expect(testFail.error, 'timeout');
+
+    final summary = AiSummaryResult.fromJson({
+      'summary': 'นัดกินข้าวเย็น 18:00 น.',
+      'action_items': ['จองโต๊ะ 4 ที่'],
+      'decisions': ['เลือกร้านเดิม'],
+      'model': 'BC AI',
+      'live_api': true,
+      'message_count': 12,
+    });
+    expect(summary.model, 'BC AI');
+    expect(summary.liveApi, isTrue);
+    expect(summary.messageCount, 12);
+    final note = summary.toFormattedNote();
+    expect(note, contains('✨ สรุปแชทโดย BC AI'));
+
+    final assist = AiAssistResult.fromJson({
+      'mode': 'suggest_reply',
+      'result': 'ได้เลยครับ เดี๋ยวเจอกัน 6 โมงเย็น',
+      'suggestions': [
+        'ได้เลยครับ เดี๋ยวเจอกัน 6 โมงเย็น',
+        'ขอถึงช้าหน่อยประมาณ 18:15 นะครับ',
+        'รับทราบครับผม',
+      ],
+      'model': 'BC AI',
+      'live_api': true,
+    });
+    expect(assist.model, 'BC AI');
+    expect(assist.liveApi, isTrue);
+    expect(assist.suggestions, hasLength(3));
+    expect(assist.suggestion, 'ได้เลยครับ เดี๋ยวเจอกัน 6 โมงเย็น');
+
+    final imgAnalysis = AiAnalyzeMessageResult.fromJson({
+      'message_id': 'm_img_1',
+      'conversation_id': 'c1',
+      'file_name': 'receipt.png',
+      'mime_type': 'image/png',
+      'media_kind': 'image',
+      'analysis': 'ใบเสร็จค่ากาแฟ ยอดรวม 125 บาท',
+      'model': 'BC AI',
+      'live_api': true,
+      'posted_message_id': 'm_ai_99',
+    });
+    expect(imgAnalysis.isImage, isTrue);
+    expect(imgAnalysis.fileName, 'receipt.png');
+    expect(imgAnalysis.analysis, contains('125 บาท'));
+    expect(imgAnalysis.liveApi, isTrue);
+    expect(imgAnalysis.postedMessageId, 'm_ai_99');
+
+    final docAnalysis = AiAnalyzeMessageResult.fromJson({
+      'message_id': 'm_doc_1',
+      'conversation_id': 'c1',
+      'file_name': 'summary.docx',
+      'mime_type':
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'media_kind': 'document',
+      'analysis': 'เอกสารสรุปแผนท่องเที่ยว 3 วัน 2 คืน',
+      'extracted_preview': 'วันที่ 1 เชียงใหม่ ...',
+      'model': 'BC AI',
+      'live_api': true,
+    });
+    expect(docAnalysis.isImage, isFalse);
+    expect(docAnalysis.extractedPreview, 'วันที่ 1 เชียงใหม่ ...');
+  });
+
+  test('ApiService BC AI endpoints send strict minimal payloads with no client API/model fields', () async {
+    SharedPreferences.setMockInitialValues({});
+    await ApiService.instance.setCustomBaseUrl('http://127.0.0.1:8096');
+
+    final fake = FakeHttpOverrides((req) {
+      if (req.method == 'POST' && req.uri.path == '/api/admin/ai-test') {
+        return (
+          200,
+          {
+            'ok': true,
+            'latency_ms': 310,
+            'reply': 'พร้อมช่วยแชทแล้วครับ',
+          },
+        );
+      }
+      if (req.method == 'PUT' && req.uri.path == '/api/admin/ai-settings') {
+        final sent = jsonDecode(req.body) as Map<String, dynamic>;
+        return (
+          200,
+          {
+            'enabled': sent['enabled'] ?? true,
+            'managed_by_system': true,
+            'system_ready': true,
+            'system_prompt': sent['system_prompt'] ?? '',
+            'auto_reply_in_groups': sent['auto_reply_in_groups'] ?? true,
+            'redact_confidential': sent['redact_confidential'] ?? true,
+            'updated_at': '2026-11-22T09:10:00Z',
+          },
+        );
+      }
+      if (req.method == 'POST' && req.uri.path == '/api/ai/analyze-message') {
+        final sent = jsonDecode(req.body) as Map<String, dynamic>;
+        return (
+          200,
+          {
+            'message_id': sent['message_id'],
+            'conversation_id': 'c1',
+            'file_name': 'bill.pdf',
+            'mime_type': 'application/pdf',
+            'media_kind': 'document',
+            'analysis': 'ยอดรวม 450 บาท',
+            'extracted_preview': 'รายการอาหาร 450 บาท',
+            'model': 'BC AI',
+            'live_api': true,
+            'posted_message_id': sent['post_to_chat'] == true ? 'm_posted_1' : null,
+          },
+        );
+      }
+      return null;
+    });
+    HttpOverrides.global = fake;
+    addTearDown(() => HttpOverrides.global = null);
+
+    final testRes = await ApiService.instance.testAdminAiConnection();
+    expect(testRes.ok, isTrue);
+    expect(testRes.latencyMs, 310);
+    expect(fake.requests.last.uri.port, 8096);
+    expect(fake.requests.last.body, isEmpty);
+
+    final updated = await ApiService.instance.updateAdminAiSettings(
+      enabled: true,
+      systemPrompt: 'ผู้ช่วยครอบครัว',
+      autoReplyInGroups: false,
+      redactConfidential: true,
+    );
+    expect(updated.managedBySystem, isTrue);
+    expect(updated.autoReplyInGroups, isFalse);
+    final putBody = jsonDecode(fake.requests.last.body) as Map<String, dynamic>;
+    expect(
+      putBody.keys.toSet(),
+      equals({
+        'enabled',
+        'system_prompt',
+        'auto_reply_in_groups',
+        'redact_confidential',
+      }),
+    );
+
+    final analyzed = await ApiService.instance.analyzeMessageWithAi(
+      messageId: 'm_pdf_1',
+      prompt: 'อ่านข้อความ/ตัวเลข',
+      postToChat: true,
+    );
+    expect(analyzed.fileName, 'bill.pdf');
+    expect(analyzed.isImage, isFalse);
+    expect(analyzed.postedMessageId, 'm_posted_1');
+    final analyzeBody =
+        jsonDecode(fake.requests.last.body) as Map<String, dynamic>;
+    expect(analyzeBody['message_id'], 'm_pdf_1');
+    expect(analyzeBody['prompt'], 'อ่านข้อความ/ตัวเลข');
+    expect(analyzeBody['post_to_chat'], isTrue);
   });
 }

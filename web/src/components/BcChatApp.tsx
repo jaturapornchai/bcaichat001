@@ -19,13 +19,14 @@ import type {
   AuthConfig,
   CallSession,
   Conversation,
+  GameWsSignal,
   RoomToneId,
   ThemePresetId,
   UserProfile,
   WsEvent,
 } from "@/lib/types";
 import { LoginView } from "./LoginView";
-import { SITE_NAME, type SiteId } from "@/lib/site";
+import { isLocalhostRuntime, SITE_NAME, type SiteId } from "@/lib/site";
 import { MainShell } from "./MainShell";
 
 interface BcChatAppProps {
@@ -53,6 +54,7 @@ export function BcChatApp({ site = "chat" }: BcChatAppProps) {
     conversationId: string;
     text: string;
   } | null>(null);
+  const [latestGameEvent, setLatestGameEvent] = useState<GameWsSignal | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const userRef = useRef<UserProfile | null>(null);
@@ -80,6 +82,7 @@ export function BcChatApp({ site = "chat" }: BcChatAppProps) {
     applyAndSaveTheme("ban_chiang");
 
     const init = async () => {
+      const allowLocalDemo = isLocalhostRuntime();
       try {
         const [themeRes, cfgRes] = await Promise.allSettled([
           api.getTheme(),
@@ -89,19 +92,26 @@ export function BcChatApp({ site = "chat" }: BcChatAppProps) {
           applyAndSaveTheme(themeRes.value.preset);
         }
         if (active && cfgRes.status === "fulfilled") {
-          setAuthConfig(cfgRes.value);
+          setAuthConfig(
+            allowLocalDemo
+              ? cfgRes.value
+              : { ...cfgRes.value, test_users_enabled: false, test_users: [] }
+          );
         }
       } catch {
         // Keep default ban_chiang when backend is still booting
       }
 
       const rawTestSlot =
-        typeof window !== "undefined"
+        allowLocalDemo && typeof window !== "undefined"
           ? new URLSearchParams(window.location.search).get("test_user")
           : null;
       const testSlotNum = rawTestSlot ? Number(rawTestSlot) : NaN;
       const hasValidTestSlot =
-        Number.isInteger(testSlotNum) && testSlotNum >= 1 && testSlotNum <= 5;
+        allowLocalDemo &&
+        Number.isInteger(testSlotNum) &&
+        testSlotNum >= 1 &&
+        testSlotNum <= 5;
 
       if (hasValidTestSlot) {
         try {
@@ -249,6 +259,28 @@ export function BcChatApp({ site = "chat" }: BcChatAppProps) {
               call: callObj,
             }));
           }
+          if (evName === "game_updated" || evName === "conversation_updated") {
+            const convId = payload.conversation_id ? String(payload.conversation_id) : "";
+            setLatestGameEvent((prev) => ({
+              seq: (prev?.seq ?? 0) + 1,
+              eventName: evName,
+              conversationId: convId,
+              gameId: payload.game_id ? String(payload.game_id) : undefined,
+              status: payload.status ? String(payload.status) : undefined,
+              phase: payload.phase ? String(payload.phase) : undefined,
+              aiGameAutoInvite:
+                typeof payload.ai_game_auto_invite === "boolean"
+                  ? payload.ai_game_auto_invite
+                  : undefined,
+              aiGameInviteCooldownMins:
+                typeof payload.ai_game_invite_cooldown_mins === "number"
+                  ? payload.ai_game_invite_cooldown_mins
+                  : undefined,
+            }));
+            if (evName === "game_updated") {
+              return;
+            }
+          }
           if (evName && evName !== "connected" && evName !== "typing") {
             const rawMsg =
               payload.message && typeof payload.message === "object"
@@ -290,14 +322,17 @@ export function BcChatApp({ site = "chat" }: BcChatAppProps) {
     clearTabSession();
     setUser(null);
     setLatestCallEvent(null);
+    setLatestGameEvent(null);
     setLatestIncomingNotice(null);
   };
 
   const handleSwitchTestUser = useCallback(async (slot: number) => {
+    if (!isLocalhostRuntime()) return;
     const res = await api.testQuickLogin({ slot });
     setLoginError(null);
     setTabSession(res.token, res.user);
     setLatestCallEvent(null);
+    setLatestGameEvent(null);
     setLatestIncomingNotice(null);
     setUser(res.user);
   }, []);
@@ -328,10 +363,21 @@ export function BcChatApp({ site = "chat" }: BcChatAppProps) {
     );
   }
 
+  const allowLocalDemo = isLocalhostRuntime();
+  const effectiveAuthConfig: AuthConfig | null = authConfig
+    ? allowLocalDemo
+      ? authConfig
+      : { ...authConfig, test_users_enabled: false, test_users: [] }
+    : null;
+  const effectiveTestUsers =
+    allowLocalDemo && effectiveAuthConfig?.test_users_enabled
+      ? effectiveAuthConfig.test_users ?? []
+      : [];
+
   if (!user) {
     return (
       <LoginView
-        authConfig={authConfig}
+        authConfig={effectiveAuthConfig}
         onAuthenticated={handleAuthenticated}
         initialError={loginError}
         site={site}
@@ -343,10 +389,10 @@ export function BcChatApp({ site = "chat" }: BcChatAppProps) {
     <MainShell
       key={user.id}
       site={site}
-      authConfig={authConfig}
+      authConfig={effectiveAuthConfig}
       currentUser={user}
-      testUsers={authConfig?.test_users_enabled ? authConfig.test_users ?? [] : []}
-      onSwitchTestUser={handleSwitchTestUser}
+      testUsers={effectiveTestUsers}
+      onSwitchTestUser={allowLocalDemo ? handleSwitchTestUser : undefined}
       onUserUpdated={(updated) => {
         setUser(updated);
         const tok = getTabToken();
@@ -360,6 +406,7 @@ export function BcChatApp({ site = "chat" }: BcChatAppProps) {
       wsTick={wsTick}
       lastWsConvId={lastWsConvId}
       latestCallEvent={latestCallEvent}
+      latestGameEvent={latestGameEvent}
       latestIncomingNotice={latestIncomingNotice}
       onConversationsSynced={handleConversationsSynced}
     />

@@ -1,6 +1,8 @@
 pub mod auth;
 pub mod client_app;
 pub mod config;
+pub mod doc_extract;
+pub mod game_catalog;
 pub mod minio;
 pub mod models;
 pub mod push;
@@ -28,8 +30,8 @@ use crate::{
             admin_update_user_role_handler, get_theme_handler, update_theme_handler,
         },
         ai_routes::{
-            assist_message_handler, get_ai_settings_handler, summarize_conversation_handler,
-            update_ai_settings_handler,
+            analyze_message_handler, assist_message_handler, get_ai_settings_handler,
+            summarize_conversation_handler, test_ai_connection_handler, update_ai_settings_handler,
         },
         auth_routes::{
             add_friend_handler, admin_get_auth_settings_handler,
@@ -62,6 +64,13 @@ use crate::{
             update_conversation_meta_handler, update_note_handler, vote_poll_handler,
         },
         file_routes::{get_file_handler, upload_handler},
+        game_routes::{
+            answer_game_handler, cancel_game_handler, create_game_handler, get_active_game_handler,
+            get_game_handler, join_game_handler, list_game_catalog_handler, next_game_step_handler,
+            proactive_invite_game_handler, random_game_handler, start_game_handler,
+            submit_clue_handler, submit_creative_handler, submit_guess_handler,
+            submit_vote_handler,
+        },
         miniapp_routes::{list_active_mini_apps_handler, serve_miniapp_html_handler},
         oa_routes::{
             add_oa_admin_handler, claim_oa_coupon_handler, create_oa_auto_reply_handler,
@@ -307,13 +316,15 @@ pub fn create_router(state: AppState) -> Router {
         // บริการเสริม Mini-Apps
         .route("/api/mini-apps", get(list_active_mini_apps_handler))
         .route("/miniapp/:code", get(serve_miniapp_html_handler))
-        // DeepSeek AI Assistant Endpoints
+        // System-Managed BC AI Assistant Endpoints (secret .env config; no client model/API picker)
         .route("/api/ai/summarize", post(summarize_conversation_handler))
         .route("/api/ai/assist", post(assist_message_handler))
+        .route("/api/ai/analyze-message", post(analyze_message_handler))
         .route(
             "/api/admin/ai-settings",
             get(get_ai_settings_handler).put(update_ai_settings_handler),
         )
+        .route("/api/admin/ai-test", post(test_ai_connection_handler))
         .route(
             "/api/settings/theme",
             get(get_theme_handler).put(update_theme_handler),
@@ -398,6 +409,31 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/devices", post(register_device_handler))
         .route("/api/devices/:id", delete(unregister_device_handler))
         .route("/api/push/config", get(push_config_handler))
+        // BC Game Center (100 Solo/Group AI Games across 5 Engines + Proactive Host)
+        .route("/api/games/catalog", get(list_game_catalog_handler))
+        .route(
+            "/api/conversations/:id/games/active",
+            get(get_active_game_handler),
+        )
+        .route("/api/conversations/:id/games", post(create_game_handler))
+        .route(
+            "/api/conversations/:id/games/random",
+            post(random_game_handler),
+        )
+        .route(
+            "/api/conversations/:id/games/proactive-invite",
+            post(proactive_invite_game_handler),
+        )
+        .route("/api/games/:game_id", get(get_game_handler))
+        .route("/api/games/:game_id/join", post(join_game_handler))
+        .route("/api/games/:game_id/start", post(start_game_handler))
+        .route("/api/games/:game_id/answer", post(answer_game_handler))
+        .route("/api/games/:game_id/guess", post(submit_guess_handler))
+        .route("/api/games/:game_id/submit", post(submit_creative_handler))
+        .route("/api/games/:game_id/clue", post(submit_clue_handler))
+        .route("/api/games/:game_id/vote", post(submit_vote_handler))
+        .route("/api/games/:game_id/next", post(next_game_step_handler))
+        .route("/api/games/:game_id/cancel", post(cancel_game_handler))
         // WebSocket
         .route("/ws", get(ws_handler))
         .layer(DefaultBodyLimit::max(50 * 1024 * 1024))

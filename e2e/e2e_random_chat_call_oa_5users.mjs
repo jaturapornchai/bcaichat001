@@ -256,6 +256,10 @@ function spawnBackend(lkCreds) {
       GOOGLE_OAUTH_VERIFY_BASE: `http://127.0.0.1:${MOCK_AUTH_PORT}/google`,
       GOOGLE_CLIENT_ID: "mock_google_client_id.apps.googleusercontent.com",
       ADMIN_BOOTSTRAP_CODE: "SIM_ONLY_BOOTSTRAP_CODE",
+      AI_ENABLED: "false",
+      AI_GAME_PROACTIVE_ENABLED: "false",
+      AI_API_KEY: "",
+      OLLAMA_API_KEY: "",
       RUST_LOG: "warn",
     },
   });

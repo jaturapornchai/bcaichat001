@@ -544,7 +544,7 @@ async fn handover_briefing(state: &AppState, conv_id: &str, prompt: &str) -> Opt
     }
     history.reverse();
     let (reply, _, live) =
-        crate::routes::ai_routes::call_deepseek_brain(state, None, prompt, &history).await;
+        crate::routes::ai_routes::call_local_ai_brain(state, None, prompt, &history).await;
     live.then_some(reply)
 }
 

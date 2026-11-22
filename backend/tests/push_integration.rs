@@ -197,7 +197,7 @@ async fn test_push_to_offline_devices_and_call_notifications_through_fcm() {
     config.livekit_url = "ws://127.0.0.1:7880".to_string();
     config.livekit_api_key = "bcaichat_lk_dev_key".to_string();
     config.livekit_api_secret = "bcaichat_lk_dev_secret_key_2026_local_only".to_string(); // pragma: allowlist secret
-    config.deepseek_api_key.clear();
+    config.ai_enabled = false;
 
     let state = AppState::init(config).await.expect("init AppState");
     assert!(state.push.is_some(), "push must load the service account");

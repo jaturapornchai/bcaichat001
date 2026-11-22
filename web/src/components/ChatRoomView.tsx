@@ -26,6 +26,7 @@ import {
   EyeOff,
   FileText,
   Forward,
+  Gamepad2,
   Image as ImageIcon,
   Layers,
   Lock,
@@ -76,12 +77,16 @@ import {
   ROOM_TONES,
 } from "@/lib/themes";
 import type {
+  ActiveGameState,
+  AiAnalyzeMessageResult,
   AiAssistResult,
   AiSummaryResult,
   ChatMessage,
   ContactCardData,
   Conversation,
   FriendItem,
+  GameSession,
+  GameWsSignal,
   LadderEntry,
   MiniAppItem,
   OaCoupon,
@@ -89,6 +94,7 @@ import type {
   RoomToneId,
   UserProfile,
 } from "@/lib/types";
+import { GameCenterPanel } from "./GameCenterPanel";
 import { RoomSideModal, type SidePanelTab } from "./RoomSideModal";
 import { StickerArt, UserAvatar } from "./StickerArt";
 
@@ -191,6 +197,9 @@ interface ChatRoomViewProps {
   onCloseMiniApp?: () => void;
   onOpenConversation?: (convId: string) => void;
   onBackMobile?: () => void;
+  wsTick?: number;
+  lastWsConvId?: string | null;
+  latestGameEvent?: GameWsSignal | null;
   onNotify: (msg: string) => void;
   onStartCall?: (conversationId: string, callType: "audio" | "video") => Promise<void>;
 }
@@ -211,6 +220,9 @@ export function ChatRoomView({
   onCloseMiniApp,
   onOpenConversation,
   onBackMobile,
+  wsTick = 0,
+  lastWsConvId = null,
+  latestGameEvent = null,
   onNotify,
   onStartCall,
 }: ChatRoomViewProps) {
@@ -265,10 +277,15 @@ export function ChatRoomView({
 
   // Inline side panels & inline AI / Card trays
   const [sideTab, setSideTab] = useState<SidePanelTab | null>(null);
-  const [aiModalMode, setAiModalMode] = useState<"summary" | "assist" | null>(null);
+  const [aiModalMode, setAiModalMode] = useState<"summary" | "assist" | "analyze" | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiSummary, setAiSummary] = useState<AiSummaryResult | null>(null);
   const [aiAssist, setAiAssist] = useState<AiAssistResult | null>(null);
+  const [aiAnalyzeTarget, setAiAnalyzeTarget] = useState<ChatMessage | null>(null);
+  const [aiAnalyzeResult, setAiAnalyzeResult] = useState<AiAnalyzeMessageResult | null>(null);
+  const [aiAnalyzePrompt, setAiAnalyzePrompt] = useState("");
+  const [aiAnalyzeError, setAiAnalyzeError] = useState<string | null>(null);
+  const [aiAnalyzePosting, setAiAnalyzePosting] = useState(false);
   const [assistMode, setAssistMode] = useState<
     "polish" | "formal" | "suggest_reply" | "translate_en" | "action_plan"
   >("suggest_reply");
@@ -316,6 +333,98 @@ export function ChatRoomView({
   const [oaCoupons, setOaCoupons] = useState<OaCoupon[]>([]);
   const [loadingCoupons, setLoadingCoupons] = useState(false);
 
+  // BC Game Center (100-Game Solo/Group Catalog & 5 Engines)
+  const [showGameCenter, setShowGameCenter] = useState(false);
+  const [gameState, setGameState] = useState<ActiveGameState | null>(null);
+  const [viewingGame, setViewingGame] = useState<GameSession | null>(null);
+  const [gameLoading, setGameLoading] = useState(false);
+  const [joiningGameCardId, setJoiningGameCardId] = useState<string | null>(null);
+  const [mutingGameRoom, setMutingGameRoom] = useState(false);
+  const showGameCenterRef = useRef(false);
+  showGameCenterRef.current = showGameCenter;
+  const viewingGameIdRef = useRef<string | null>(null);
+  viewingGameIdRef.current = viewingGame?.id ?? null;
+
+  const loadActiveGame = useCallback(async () => {
+    setGameLoading(true);
+    try {
+      const state = await api.getActiveGame(conversation.id);
+      setGameState(state);
+      if (state.active_game) {
+        setViewingGame(state.active_game);
+      } else if (
+        viewingGameIdRef.current &&
+        state.recent_games.some((g) => g.id === viewingGameIdRef.current)
+      ) {
+        try {
+          const finishedDetail = await api.getGame(viewingGameIdRef.current);
+          setViewingGame(finishedDetail);
+        } catch {
+          // Keep previous snapshot
+        }
+      }
+    } catch {
+      // Ignore silent failure when endpoint not reachable
+    } finally {
+      setGameLoading(false);
+    }
+  }, [conversation.id]);
+
+  useEffect(() => {
+    void loadActiveGame();
+  }, [loadActiveGame]);
+
+  useEffect(() => {
+    if (!latestGameEvent) return;
+    if (latestGameEvent.conversationId && latestGameEvent.conversationId !== conversation.id) {
+      return;
+    }
+    let cancelled = false;
+    const syncFromWs = async () => {
+      try {
+        const state = await api.getActiveGame(conversation.id);
+        if (cancelled) return;
+        setGameState(state);
+        if (state.active_game) {
+          setViewingGame(state.active_game);
+        } else if (
+          latestGameEvent.eventName === "game_updated" &&
+          latestGameEvent.status === "finished" &&
+          latestGameEvent.gameId &&
+          (showGameCenterRef.current || viewingGameIdRef.current === latestGameEvent.gameId)
+        ) {
+          const detail = await api.getGame(latestGameEvent.gameId);
+          if (!cancelled) setViewingGame(detail);
+        } else if (
+          latestGameEvent.eventName === "game_updated" &&
+          latestGameEvent.status === "cancelled" &&
+          (!latestGameEvent.gameId || viewingGameIdRef.current === latestGameEvent.gameId)
+        ) {
+          setViewingGame(null);
+        }
+      } catch {
+        // Ignore transient WS sync error
+      }
+    };
+    void syncFromWs();
+    return () => {
+      cancelled = true;
+    };
+  }, [latestGameEvent, conversation.id]);
+
+  // Also refresh active game banner if wsTick brought a new game_invite card
+  useEffect(() => {
+    if (wsTick === 0) return;
+    if (lastWsConvId && lastWsConvId !== conversation.id) return;
+    const latestMsg = messages[messages.length - 1];
+    if (
+      latestMsg?.card_payload?.kind === "game_invite" ||
+      latestMsg?.card_payload?.kind === "game_result"
+    ) {
+      void loadActiveGame();
+    }
+  }, [wsTick, lastWsConvId, conversation.id, messages, loadActiveGame]);
+
   const loadOaCoupons = useCallback(async () => {
     if (!conversation.oa_id) return;
     setLoadingCoupons(true);
@@ -356,8 +465,15 @@ export function ChatRoomView({
     setMentionQuery(null);
     setShowCardModal(false);
     setAiModalMode(null);
+    setAiAnalyzeTarget(null);
+    setAiAnalyzeResult(null);
+    setAiAnalyzePrompt("");
+    setAiAnalyzeError(null);
     setShowOaCoupons(false);
     setOaCoupons([]);
+    setShowGameCenter(false);
+    setGameState(null);
+    setViewingGame(null);
     setShowRichMenu(true);
     setShowPlusTray(false);
     setShowManualCoords(false);
@@ -496,16 +612,27 @@ export function ChatRoomView({
 
   const handleFileUpload = async (file: File) => {
     setUploading(true);
+    const caption = draft.trim();
+    const mentionsToSend = caption ? [...selectedMentions] : [];
     try {
       const att = await api.uploadFile(file, file.name, conversation.id);
       const isImg = att.mime_type.startsWith("image/");
       const isAudio = att.mime_type.startsWith("audio/");
-      await api.sendMessage(conversation.id, {
+      const sent = await api.sendMessage(conversation.id, {
         type: isImg ? "image" : isAudio ? "audio" : "file",
-        content: file.name,
+        content: caption || file.name,
         attachment: att,
         ...buildCommonSendOpts(),
+        mentions: mentionsToSend.length > 0 ? mentionsToSend : undefined,
       });
+      if (isConfidential) {
+        setUnlockedIds((prev) => ({ ...prev, [sent.id]: true }));
+      }
+      if (caption) {
+        setDraft("");
+        setMentionQuery(null);
+        setSelectedMentions([]);
+      }
       resetPerMessageFlags();
       playChime("sent");
       await onRefreshMessages();
@@ -821,6 +948,92 @@ export function ChatRoomView({
     }
   };
 
+  const handleApplyAiDraft = (rawText: string) => {
+    const text = rawText.trim();
+    if (!text) return;
+    setDraft(text);
+    setAiModalMode(null);
+    inputRef.current?.focus();
+  };
+
+  const handleQuickSendAiText = async (rawText: string) => {
+    const text = rawText.trim();
+    if (!text || sending) return;
+    setSending(true);
+    try {
+      const sent = await api.sendMessage(conversation.id, {
+        type: "text",
+        content: text,
+        ...buildCommonSendOpts(),
+      });
+      if (isConfidential) {
+        setUnlockedIds((prev) => ({ ...prev, [sent.id]: true }));
+      }
+      setAiModalMode(null);
+      resetPerMessageFlags();
+      playChime("sent");
+      await onRefreshMessages();
+      await onConversationUpdated();
+    } catch (err) {
+      onNotify(err instanceof Error ? err.message : "ส่งข้อความไม่สำเร็จ");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleAnalyzeMessage = async (
+    targetMsg: ChatMessage,
+    opts?: { prompt?: string; postToChat?: boolean }
+  ) => {
+    const isNewTarget = aiAnalyzeTarget?.id !== targetMsg.id;
+    const promptText =
+      opts?.prompt !== undefined ? opts.prompt.trim() : isNewTarget ? "" : aiAnalyzePrompt.trim();
+
+    setSideTab(null);
+    setShowCardModal(false);
+    setShowPlusTray(false);
+    setShowStickerPicker(false);
+    setShowComposerAi(false);
+    setAiAnalyzeTarget(targetMsg);
+    setAiModalMode("analyze");
+    setAiAnalyzeError(null);
+
+    if (isNewTarget && opts?.prompt === undefined) {
+      setAiAnalyzePrompt("");
+      setAiAnalyzeResult(null);
+    }
+
+    if (opts?.postToChat) {
+      setAiAnalyzePosting(true);
+    } else {
+      setAiLoading(true);
+    }
+
+    try {
+      const res = await api.analyzeMessageWithAi({
+        message_id: targetMsg.id,
+        prompt: promptText || undefined,
+        post_to_chat: opts?.postToChat ?? false,
+      });
+      setAiAnalyzeResult(res);
+      if (opts?.postToChat) {
+        await onRefreshMessages();
+        await onConversationUpdated();
+        onNotify("ส่งผลวิเคราะห์ AI เข้าห้องแชทแล้ว");
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "วิเคราะห์ภาพ/เอกสารไม่สำเร็จ";
+      setAiAnalyzeError(msg);
+      onNotify(msg);
+    } finally {
+      if (opts?.postToChat) {
+        setAiAnalyzePosting(false);
+      } else {
+        setAiLoading(false);
+      }
+    }
+  };
+
   const handleReact = async (msgId: string, emoji: string) => {
     try {
       playChime("react");
@@ -879,8 +1092,88 @@ export function ChatRoomView({
     onCloseMiniApp?.();
     setShowCardModal(false);
     setAiModalMode(null);
+    setShowGameCenter(false);
     setSideTab((prev) => (prev === tab ? null : tab));
   };
+
+  const openGameCenter = useCallback(() => {
+    onCloseMiniApp?.();
+    setShowPlusTray(false);
+    setShowCardModal(false);
+    setAiModalMode(null);
+    setSideTab(null);
+    setShowGameCenter(true);
+    void loadActiveGame();
+  }, [onCloseMiniApp, loadActiveGame]);
+
+  const toggleGameCenter = () => {
+    if (showGameCenter) {
+      setShowGameCenter(false);
+    } else {
+      openGameCenter();
+    }
+  };
+
+  const handleJoinFromInviteCard = async (gameId: string) => {
+    if (!gameId) {
+      openGameCenter();
+      return;
+    }
+    setJoiningGameCardId(gameId);
+    try {
+      let session: GameSession;
+      try {
+        session = await api.joinGame(gameId);
+      } catch {
+        session = await api.getGame(gameId);
+      }
+      setViewingGame(session);
+      onCloseMiniApp?.();
+      setShowPlusTray(false);
+      setShowCardModal(false);
+      setAiModalMode(null);
+      setSideTab(null);
+      setShowGameCenter(true);
+      void loadActiveGame();
+    } catch (err) {
+      onNotify(err instanceof Error ? err.message : "เปิดห้องเกมไม่สำเร็จ");
+    } finally {
+      setJoiningGameCardId(null);
+    }
+  };
+
+  const handleDisableAutoInviteFromCard = async () => {
+    setMutingGameRoom(true);
+    try {
+      await api.updateConversationMeta(conversation.id, {
+        ai_game_auto_invite: false,
+      });
+      await Promise.all([onConversationUpdated(), loadActiveGame()]);
+      onNotify("ปิดไม่ให้ BC AI ชวนเล่นเกมอัตโนมัติในห้องนี้แล้ว (เปิดใหม่ได้ในหน้าเกมกลุ่ม AI)");
+    } catch (err) {
+      onNotify(err instanceof Error ? err.message : "ปิดชวนเล่นเกมไม่สำเร็จ");
+    } finally {
+      setMutingGameRoom(false);
+    }
+  };
+
+  const activeGame =
+    gameState?.active_game &&
+    (gameState.active_game.status === "lobby" || gameState.active_game.status === "playing")
+      ? gameState.active_game
+      : null;
+
+  const roomImageMessages = useMemo(
+    () =>
+      messages.filter(
+        (m) =>
+          m.type === "image" &&
+          !m.is_unsent &&
+          !m.is_confidential &&
+          Boolean(m.attachment?.url)
+      ),
+    [messages]
+  );
 
   const isDarkRoom = toneOption.isDark;
   const isShopRoom = Boolean(conversation.oa_id) || conversation.type === "oa";
@@ -1047,6 +1340,23 @@ export function ChatRoomView({
               )}
             </button>
 
+            {(conversation.type === "group" || Boolean(activeGame)) && !isShopRoom && (
+              <button
+                type="button"
+                data-testid="room-btn-game"
+                onClick={toggleGameCenter}
+                title="เกมกลุ่ม/เดี่ยว AI (100 เกม)"
+                aria-label="เกมกลุ่ม AI"
+                aria-expanded={showGameCenter}
+                className={`bc-btn bc-btn-sm relative h-9 w-8 shrink-0 gap-1 px-0 sm:w-auto sm:px-2.5 ${
+                  showGameCenter || activeGame ? "bc-btn-primary" : "bc-btn-soft"
+                }`}
+              >
+                <Gamepad2 className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">เกม</span>
+              </button>
+            )}
+
             <button
               type="button"
               data-testid="btn-ai-summarize"
@@ -1161,8 +1471,37 @@ export function ChatRoomView({
         </div>
       )}
 
+      {/* Live Active Game Banner */}
+      {activeGame && !showGameCenter && !sideTab && !runningMiniApp && (
+        <div
+          data-testid="active-game-banner"
+          className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--bc-line)] bg-[var(--bc-tint-strong)] px-2.5 py-1.5 text-xs"
+        >
+          <div className="flex min-w-0 items-center gap-1.5">
+            <Gamepad2 className="h-4 w-4 shrink-0 text-[var(--bc-primary)]" />
+            <span className="truncate font-semibold text-[var(--bc-deep)]">
+              {activeGame.emoji || "🎮"} {activeGame.title} · ผู้เล่น {activeGame.players.length} คน
+            </span>
+            <span className="bc-tag shrink-0">
+              {activeGame.status === "lobby" ? "รอเข้าวง" : "กำลังเล่น"}
+            </span>
+          </div>
+          <button
+            type="button"
+            data-testid="active-game-banner-open"
+            onClick={() => {
+              setViewingGame(activeGame);
+              openGameCenter();
+            }}
+            className="bc-btn bc-btn-primary bc-btn-sm shrink-0"
+          >
+            เปิดเกม
+          </button>
+        </div>
+      )}
+
       {/* Pinned Announcement Banner */}
-      {conversation.pinned_message && !sideTab && !runningMiniApp && (
+      {conversation.pinned_message && !showGameCenter && !sideTab && !runningMiniApp && (
         <div className="bc-glass flex shrink-0 items-center justify-between gap-1.5 border-b border-[var(--bc-line)] px-2.5 py-1 text-xs">
           <div className="flex min-w-0 items-center gap-1.5">
             <Pin className="h-3.5 w-3.5 shrink-0 text-[var(--bc-primary)]" />
@@ -1215,6 +1554,26 @@ export function ChatRoomView({
             className="w-full flex-1 border-0"
           />
         </div>
+      ) : showGameCenter ? (
+        <GameCenterPanel
+          conversation={conversation}
+          currentUser={currentUser}
+          gameState={gameState}
+          viewingGame={viewingGame}
+          roomImageMessages={roomImageMessages}
+          loading={gameLoading}
+          onGameUpdated={(next) => {
+            setViewingGame(next);
+            if (!next) {
+              void loadActiveGame();
+            }
+          }}
+          onRefreshState={loadActiveGame}
+          onConversationUpdated={onConversationUpdated}
+          onRefreshMessages={onRefreshMessages}
+          onNotify={onNotify}
+          onClose={() => setShowGameCenter(false)}
+        />
       ) : sideTab ? (
         <RoomSideModal
           openTab={sideTab}
@@ -1569,27 +1928,73 @@ export function ChatRoomView({
                                       className="max-h-64 w-auto object-contain"
                                     />
                                   </a>
-                                  <div className="text-[11px] opacity-80">{msg.attachment.file_name}</div>
+                                  {msg.content.trim() &&
+                                    msg.content.trim() !== msg.attachment.file_name && (
+                                      <div className="whitespace-pre-wrap text-xs leading-relaxed">
+                                        {msg.content}
+                                      </div>
+                                    )}
+                                  <div className="flex flex-wrap items-center justify-between gap-1.5">
+                                    <div className="min-w-0 truncate text-[11px] opacity-80">
+                                      {msg.attachment.file_name}
+                                    </div>
+                                    {!msg.is_unsent &&
+                                      !msg.is_confidential &&
+                                      !msg.confidential_pin && (
+                                        <button
+                                          type="button"
+                                          data-testid={`ai-analyze-msg-${msg.id}`}
+                                          onClick={() => void handleAnalyzeMessage(msg)}
+                                          className="bc-btn bc-btn-soft bc-btn-sm inline-flex !min-h-[26px] shrink-0 items-center gap-1 !px-2 text-[11px]"
+                                        >
+                                          <Sparkles className="h-3 w-3 shrink-0" />
+                                          <span>AI อ่านภาพ</span>
+                                        </button>
+                                      )}
+                                  </div>
                                 </div>
                               )}
 
                               {msg.type === "file" && msg.attachment && (
-                                <a
-                                  href={resolveMediaUrl(msg.attachment.url)}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="bc-well flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs"
-                                >
-                                  <FileText className="h-5 w-5 shrink-0 text-[var(--bc-primary)]" />
-                                  <div className="min-w-0">
-                                    <div className="truncate font-semibold text-[var(--bc-text)]">
-                                      {msg.attachment.file_name}
+                                <div className="space-y-1.5">
+                                  <a
+                                    href={resolveMediaUrl(msg.attachment.url)}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="bc-well flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs"
+                                  >
+                                    <FileText className="h-5 w-5 shrink-0 text-[var(--bc-primary)]" />
+                                    <div className="min-w-0 flex-1">
+                                      <div className="truncate font-semibold text-[var(--bc-text)]">
+                                        {msg.attachment.file_name}
+                                      </div>
+                                      <div className="text-[10px] text-[var(--bc-muted)]">
+                                        {formatFileSize(msg.attachment.file_size)} • ไฟล์เก็บถาวร
+                                      </div>
                                     </div>
-                                    <div className="text-[10px] text-[var(--bc-muted)]">
-                                      {formatFileSize(msg.attachment.file_size)} • ไฟล์เก็บถาวร
-                                    </div>
-                                  </div>
-                                </a>
+                                  </a>
+                                  {msg.content.trim() &&
+                                    msg.content.trim() !== msg.attachment.file_name && (
+                                      <div className="whitespace-pre-wrap text-xs leading-relaxed">
+                                        {msg.content}
+                                      </div>
+                                    )}
+                                  {!msg.is_unsent &&
+                                    !msg.is_confidential &&
+                                    !msg.confidential_pin && (
+                                      <div className="flex items-center justify-end">
+                                        <button
+                                          type="button"
+                                          data-testid={`ai-analyze-msg-${msg.id}`}
+                                          onClick={() => void handleAnalyzeMessage(msg)}
+                                          className="bc-btn bc-btn-soft bc-btn-sm inline-flex !min-h-[26px] shrink-0 items-center gap-1 !px-2 text-[11px]"
+                                        >
+                                          <Sparkles className="h-3 w-3 shrink-0" />
+                                          <span>AI อ่านเอกสาร</span>
+                                        </button>
+                                      </div>
+                                    )}
+                                </div>
                               )}
 
                               {msg.type === "audio" && msg.attachment && (
@@ -1637,7 +2042,139 @@ export function ChatRoomView({
                               )}
 
                               {msg.type === "rich_card" && msg.card_payload && (
-                                msg.card_payload.kind === "oa_coupon" ? (
+                                msg.card_payload.kind === "game_invite" ? (
+                                  <div
+                                    data-testid={`game-invite-card-${String(msg.card_payload.game_id || msg.id)}`}
+                                    className="w-full min-w-[220px] max-w-[300px] overflow-hidden rounded-xl border border-[var(--bc-line-strong)] bg-white text-[var(--bc-text)] shadow-[var(--bc-elev-1)]"
+                                  >
+                                    <div className="flex items-center justify-between gap-2 bg-[image:var(--bc-grad-primary)] px-3 py-1.5 text-xs font-semibold text-white">
+                                      <span className="inline-flex min-w-0 items-center gap-1">
+                                        <Gamepad2 className="h-3.5 w-3.5 shrink-0" />
+                                        <span className="truncate">
+                                          {String(
+                                            msg.card_payload.emoji ||
+                                              (msg.card_payload.game_type === "undercover"
+                                                ? "🕵️"
+                                                : msg.card_payload.game_type === "hint_race"
+                                                  ? "💡"
+                                                  : msg.card_payload.game_type === "party_vote"
+                                                    ? "🗳️"
+                                                    : msg.card_payload.game_type ===
+                                                        "creative_challenge"
+                                                      ? "🎨"
+                                                      : "🧠")
+                                          )}{" "}
+                                          {msg.card_payload.game_type === "undercover"
+                                            ? "ใครคือสายลับ"
+                                            : msg.card_payload.game_type === "hint_race"
+                                              ? "ทายคำใบ้สายฟ้า"
+                                              : msg.card_payload.game_type === "party_vote"
+                                                ? "โหวตทายใจกลุ่ม"
+                                                : msg.card_payload.game_type ===
+                                                    "creative_challenge"
+                                                  ? "ประลองครีเอทีฟ AI"
+                                                  : "ควิซสายฟ้า AI"}
+                                        </span>
+                                      </span>
+                                      {Boolean(msg.card_payload.proactive) && (
+                                        <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[10px]">
+                                          ✨ BC AI ชวนเล่น
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="space-y-1.5 p-2.5 text-xs">
+                                      <div className="font-bold text-[var(--bc-text)]">
+                                        {String(msg.card_payload.title || "เกมกลุ่ม BC AI")}
+                                      </div>
+                                      {Boolean(msg.card_payload.topic) && (
+                                        <div className="inline-flex items-center">
+                                          <span className="bc-tag">
+                                            หัวข้อ: {String(msg.card_payload.topic)}
+                                          </span>
+                                        </div>
+                                      )}
+                                      <div className="leading-snug text-[var(--bc-muted)]">
+                                        {String(
+                                          msg.card_payload.host_message ||
+                                            msg.content ||
+                                            "มาเล่นเกมสนุกๆ กับเพื่อนในห้องกัน!"
+                                        )}
+                                      </div>
+                                      <div className="flex flex-col gap-1 pt-0.5">
+                                        <button
+                                          type="button"
+                                          data-testid="game-invite-join-btn"
+                                          disabled={
+                                            joiningGameCardId ===
+                                            String(msg.card_payload.game_id || "")
+                                          }
+                                          onClick={() =>
+                                            void handleJoinFromInviteCard(
+                                              String(msg.card_payload?.game_id || "")
+                                            )
+                                          }
+                                          className="bc-btn bc-btn-primary bc-btn-sm w-full gap-1"
+                                        >
+                                          <span>
+                                            {joiningGameCardId ===
+                                            String(msg.card_payload.game_id || "")
+                                              ? "กำลังเข้าห้องเกม..."
+                                              : "🎮 เข้าร่วมเล่นเลย"}
+                                          </span>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          data-testid="game-invite-mute-btn"
+                                          disabled={mutingGameRoom}
+                                          onClick={() => void handleDisableAutoInviteFromCard()}
+                                          className="bc-btn bc-btn-secondary bc-btn-sm w-full gap-1"
+                                        >
+                                          <span>🔕 ปิดชวนเล่นห้องนี้</span>
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : msg.card_payload.kind === "game_result" ? (
+                                  <div
+                                    data-testid={`game-result-card-${String(msg.card_payload.game_id || msg.id)}`}
+                                    className="w-full min-w-[220px] max-w-[300px] overflow-hidden rounded-xl border border-[var(--bc-line-strong)] bg-white text-[var(--bc-text)] shadow-[var(--bc-elev-1)]"
+                                  >
+                                    <div className="flex items-center justify-between gap-2 bg-[image:var(--bc-grad-primary)] px-3 py-1.5 text-xs font-semibold text-white">
+                                      <span className="truncate">
+                                        🏆 {String(msg.card_payload.title || "สรุปผลเกมกลุ่ม AI")}
+                                      </span>
+                                    </div>
+                                    <div className="space-y-1.5 p-2.5 text-xs">
+                                      {Boolean(msg.card_payload.heading) && (
+                                        <div className="font-bold text-[var(--bc-primary)]">
+                                          {String(msg.card_payload.heading)}
+                                        </div>
+                                      )}
+                                      {Boolean(msg.card_payload.subtitle) && (
+                                        <div className="whitespace-pre-line text-[var(--bc-text)]">
+                                          {String(msg.card_payload.subtitle)}
+                                        </div>
+                                      )}
+                                      {Boolean(msg.content) && !msg.card_payload.subtitle && (
+                                        <div className="whitespace-pre-line text-[var(--bc-text)]">
+                                          {msg.content}
+                                        </div>
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          void handleJoinFromInviteCard(
+                                            String(msg.card_payload?.game_id || "")
+                                          )
+                                        }
+                                        className="bc-btn bc-btn-soft bc-btn-sm mt-1 w-full gap-1"
+                                      >
+                                        <Gamepad2 className="h-3.5 w-3.5" />
+                                        <span>ดูตารางคะแนน / เล่นอีกครั้ง</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : msg.card_payload.kind === "oa_coupon" ? (
                                   <div className="w-full min-w-[210px] max-w-[280px] overflow-hidden rounded-xl border border-[var(--bc-line-strong)] bg-white text-[var(--bc-text)] shadow-[var(--bc-elev-1)]">
                                     <div className="flex items-center justify-between gap-2 bg-[image:var(--bc-grad-primary)] px-3 py-1.5 text-xs font-semibold text-white">
                                       <span className="inline-flex items-center gap-1 truncate">
@@ -2508,30 +3045,69 @@ export function ChatRoomView({
             </form>
           )}
 
-          {/* Inline AI Tray (Summary & Personal Assist — Zero Modal) */}
+          {/* Inline AI Tray (Summary, Personal Assist & Image/Document Analysis — Zero Modal) */}
           {aiModalMode && (
             <div
               data-testid="ai-inline-tray"
-              className="bc-tray bc-rise-in max-h-[38dvh] shrink-0 space-y-1.5 overflow-y-auto p-2"
+              className="bc-tray bc-rise-in max-h-[46dvh] shrink-0 space-y-1.5 overflow-y-auto p-2"
             >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--bc-primary)]">
-                  <Sparkles className="h-4 w-4 shrink-0" />
-                  <span>
-                    {aiModalMode === "summary"
-                      ? "✨ AI สรุปการคุยในห้อง"
-                      : "🪄 ผู้ช่วย AI ส่วนตัว — คิดคำตอบ & เกลาข้อความ"}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setAiModalMode(null)}
-                  aria-label="ปิดแถบผู้ช่วย AI"
-                  className="bc-iconbtn h-8 w-8 text-[var(--bc-muted)]"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
+              {(() => {
+                const isAnalyzeImage =
+                  aiAnalyzeResult?.media_kind === "image" ||
+                  (!aiAnalyzeResult && aiAnalyzeTarget?.type === "image");
+                const activeMeta =
+                  !aiLoading && aiModalMode === "summary" && aiSummary
+                    ? { live: aiSummary.live_api, model: aiSummary.model }
+                    : !aiLoading && aiModalMode === "assist" && aiAssist
+                      ? { live: aiAssist.live_api, model: aiAssist.model }
+                      : !aiLoading && aiModalMode === "analyze" && aiAnalyzeResult
+                        ? { live: aiAnalyzeResult.live_api, model: aiAnalyzeResult.model }
+                        : null;
+                return (
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs font-semibold text-[var(--bc-primary)]">
+                      <Sparkles className="h-4 w-4 shrink-0" />
+                      <span>
+                        {aiModalMode === "summary"
+                          ? "✨ AI สรุปการคุยในห้อง"
+                          : aiModalMode === "analyze"
+                            ? isAnalyzeImage
+                              ? "AI อ่านภาพ"
+                              : "AI อ่านเอกสาร"
+                            : "🪄 ผู้ช่วย AI ส่วนตัว — คิดคำตอบ & เกลาข้อความ"}
+                      </span>
+                      {aiModalMode === "analyze" && (
+                        <span
+                          data-testid="ai-analyze-kind-badge"
+                          className="bc-tag bg-[var(--bc-tint-strong)] text-[var(--bc-deep)]"
+                        >
+                          {isAnalyzeImage ? "วิเคราะห์ภาพ" : "อ่านเอกสาร"}
+                        </span>
+                      )}
+                      {activeMeta && (
+                        <span
+                          data-testid="ai-tray-status-badge"
+                          className={`bc-tag ${
+                            activeMeta.live
+                              ? "bg-[#ecfdf3] text-[#085d3a] ring-1 ring-inset ring-[#abefc6]"
+                              : "bg-[var(--bc-panel)] text-[var(--bc-muted)] ring-1 ring-inset ring-[var(--bc-line)]"
+                          }`}
+                        >
+                          {activeMeta.live ? "BC AI อัจฉริยะ" : "โหมดสำรองในระบบ"}
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAiModalMode(null)}
+                      aria-label="ปิดแถบผู้ช่วย AI"
+                      className="bc-iconbtn h-8 w-8 shrink-0 text-[var(--bc-muted)]"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                );
+              })()}
 
               {aiModalMode === "assist" && (
                 <div className="flex flex-wrap items-center gap-1">
@@ -2556,12 +3132,136 @@ export function ChatRoomView({
                 </div>
               )}
 
+              {aiModalMode === "analyze" && aiAnalyzeTarget && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-[11px] text-[var(--bc-muted)]">
+                    {aiAnalyzeTarget.type === "image" ? (
+                      <ImageIcon className="h-3.5 w-3.5 shrink-0 text-[var(--bc-primary)]" />
+                    ) : (
+                      <FileText className="h-3.5 w-3.5 shrink-0 text-[var(--bc-primary)]" />
+                    )}
+                    <span className="min-w-0 truncate font-medium text-[var(--bc-text)]">
+                      {aiAnalyzeResult?.file_name ||
+                        aiAnalyzeTarget.attachment?.file_name ||
+                        "ไฟล์แนบ"}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1">
+                    {(["สรุปใจความ", "อ่านข้อความ/ตัวเลข", "แปลเป็นไทย"] as const).map(
+                      (quickPrompt) => (
+                        <button
+                          key={quickPrompt}
+                          type="button"
+                          disabled={aiLoading || aiAnalyzePosting}
+                          onClick={() => {
+                            setAiAnalyzePrompt(quickPrompt);
+                            void handleAnalyzeMessage(aiAnalyzeTarget, { prompt: quickPrompt });
+                          }}
+                          className={`bc-chip shrink-0 ${
+                            aiAnalyzePrompt.trim() === quickPrompt ? "is-active" : ""
+                          }`}
+                        >
+                          {quickPrompt}
+                        </button>
+                      )
+                    )}
+                  </div>
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void handleAnalyzeMessage(aiAnalyzeTarget, { prompt: aiAnalyzePrompt });
+                    }}
+                    className="flex items-center gap-1.5"
+                  >
+                    <input
+                      type="text"
+                      data-testid="ai-analyze-prompt-input"
+                      value={aiAnalyzePrompt}
+                      onChange={(e) => setAiAnalyzePrompt(e.target.value)}
+                      placeholder="ถามเพิ่มเติมเกี่ยวกับภาพหรือเอกสารนี้..."
+                      className="bc-input min-w-0 flex-1 !min-h-[32px] !py-1 text-xs"
+                    />
+                    <button
+                      type="submit"
+                      data-testid="ai-analyze-ask-btn"
+                      disabled={aiLoading || aiAnalyzePosting}
+                      className="bc-btn bc-btn-secondary bc-btn-sm shrink-0"
+                    >
+                      ถามเพิ่ม
+                    </button>
+                  </form>
+                </div>
+              )}
+
               {aiLoading ? (
                 <div className="py-4 text-center text-xs text-[var(--bc-muted)]">
-                  กำลังประมวลผลด้วยสมองกล BC AI...
+                  {aiModalMode === "analyze"
+                    ? "กำลังวิเคราะห์ภาพ/เอกสารด้วย BC AI..."
+                    : "กำลังประมวลผลด้วย BC AI..."}
                 </div>
+              ) : aiModalMode === "analyze" ? (
+                aiAnalyzeError ? (
+                  <div className="bc-note bc-note-danger">{aiAnalyzeError}</div>
+                ) : aiAnalyzeResult ? (
+                  <div className="bc-card space-y-2 p-2.5 text-xs">
+                    <div
+                      data-testid="ai-analyze-result-text"
+                      className="whitespace-pre-wrap leading-relaxed text-[var(--bc-text)]"
+                    >
+                      {aiAnalyzeResult.analysis}
+                    </div>
+                    {aiAnalyzeResult.extracted_preview &&
+                      aiAnalyzeResult.extracted_preview.trim() && (
+                        <details className="bc-well rounded-lg px-2 py-1.5 text-[11px]">
+                          <summary className="cursor-pointer font-medium text-[var(--bc-muted)]">
+                            ดูตัวอย่างข้อความที่อ่านได้จากเอกสาร
+                          </summary>
+                          <pre className="mt-1 max-h-28 overflow-y-auto whitespace-pre-wrap break-words font-sans text-[11px] leading-relaxed text-[var(--bc-text)]">
+                            {aiAnalyzeResult.extracted_preview}
+                          </pre>
+                        </details>
+                      )}
+                    <div className="flex flex-wrap items-center justify-end gap-1.5 pt-0.5">
+                      <button
+                        type="button"
+                        data-testid="ai-analyze-copy-btn"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(aiAnalyzeResult.analysis);
+                            onNotify("คัดลอกผลวิเคราะห์แล้ว");
+                          } catch {
+                            onNotify("คัดลอกข้อความไม่สำเร็จ");
+                          }
+                        }}
+                        className="bc-btn bc-btn-secondary bc-btn-sm inline-flex items-center gap-1"
+                      >
+                        <Copy className="h-3 w-3" />
+                        <span>คัดลอก</span>
+                      </button>
+                      {aiAnalyzeTarget && (
+                        <button
+                          type="button"
+                          data-testid="ai-analyze-post-btn"
+                          disabled={aiAnalyzePosting}
+                          onClick={() =>
+                            void handleAnalyzeMessage(aiAnalyzeTarget, {
+                              prompt: aiAnalyzePrompt,
+                              postToChat: true,
+                            })
+                          }
+                          className="bc-btn bc-btn-primary bc-btn-sm inline-flex items-center gap-1"
+                        >
+                          <Send className="h-3 w-3" />
+                          <span>
+                            {aiAnalyzePosting ? "กำลังส่ง..." : "ส่งเข้าห้องแชท"}
+                          </span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : null
               ) : aiModalMode === "summary" && aiSummary ? (
-                <div className="bc-card space-y-2 p-3 text-xs">
+                <div className="bc-card space-y-2 p-2.5 text-xs">
                   <p className="whitespace-pre-wrap leading-relaxed text-[var(--bc-text)]">
                     {aiSummary.summary}
                   </p>
@@ -2575,48 +3275,103 @@ export function ChatRoomView({
                       </ul>
                     </div>
                   )}
-                  <div className="flex justify-end gap-2 pt-1">
+                  {aiSummary.decisions.length > 0 && (
+                    <div>
+                      <div className="font-semibold text-[var(--bc-primary)]">ข้อสรุปสำคัญ:</div>
+                      <ul className="list-disc pl-4">
+                        {aiSummary.decisions.map((d, i) => (
+                          <li key={i}>{d}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+                    <span className="bc-num text-[11px] text-[var(--bc-muted)]">
+                      สรุปจาก {aiSummary.message_count} ข้อความ
+                    </span>
                     <button
                       type="button"
                       onClick={() => void handleOpenAiSummary(true)}
-                      className="bc-btn bc-btn-primary"
+                      className="bc-btn bc-btn-primary bc-btn-sm"
                     >
                       โพสต์สรุปเข้าห้องแชท
                     </button>
                   </div>
                 </div>
               ) : aiModalMode === "assist" && aiAssist ? (
-                <div className="bc-card space-y-2 p-3 text-xs">
-                  <div className="whitespace-pre-wrap leading-relaxed text-[var(--bc-text)]">
-                    {aiAssist.result}
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDraft(aiAssist.result);
-                        setAiModalMode(null);
-                      }}
-                      className="bc-btn bc-btn-primary"
-                    >
-                      นำไปใช้ในช่องแชท
-                    </button>
-                    {aiAssist.suggestions.map((sg, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => {
-                          setDraft(sg);
-                          setAiModalMode(null);
-                        }}
-                        className="bc-btn bc-btn-secondary text-left"
-                      >
-                        ตัวเลือก {idx + 1}: {sg.slice(0, 50)}
-                        {sg.length > 50 ? "..." : ""}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                (() => {
+                  const cleanSuggestions = aiAssist.suggestions
+                    .map((s) => s.trim())
+                    .filter(Boolean);
+                  const showMultiSuggestions = cleanSuggestions.length > 1;
+                  return (
+                    <div className="bc-card space-y-2 p-2.5 text-xs">
+                      {!showMultiSuggestions && (
+                        <>
+                          <div className="whitespace-pre-wrap leading-relaxed text-[var(--bc-text)]">
+                            {aiAssist.result}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                            <button
+                              type="button"
+                              onClick={() => handleApplyAiDraft(aiAssist.result)}
+                              className="bc-btn bc-btn-primary bc-btn-sm"
+                            >
+                              นำไปใช้ในช่องแชท
+                            </button>
+                            <button
+                              type="button"
+                              disabled={sending || !aiAssist.result.trim()}
+                              onClick={() => void handleQuickSendAiText(aiAssist.result)}
+                              className="bc-btn bc-btn-secondary bc-btn-sm inline-flex items-center gap-1"
+                            >
+                              <Send className="h-3 w-3" />
+                              <span>ส่งเลย</span>
+                            </button>
+                          </div>
+                        </>
+                      )}
+
+                      {cleanSuggestions.length > 0 &&
+                        (showMultiSuggestions ||
+                          cleanSuggestions[0] !== aiAssist.result.trim()) && (
+                          <div className="space-y-1.5">
+                            <div className="text-[11px] font-medium text-[var(--bc-muted)]">
+                              แตะคำตอบเพื่อใส่ช่องแชท หรือกดส่งเลย:
+                            </div>
+                            {cleanSuggestions.map((sg, idx) => (
+                              <div
+                                key={`${idx}-${sg.slice(0, 16)}`}
+                                className="bc-well flex items-center gap-1.5 rounded-xl p-1.5"
+                              >
+                                <button
+                                  type="button"
+                                  data-testid={`ai-suggestion-use-${idx}`}
+                                  onClick={() => handleApplyAiDraft(sg)}
+                                  className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg px-1.5 py-1 text-left text-xs text-[var(--bc-text)] hover:bg-[var(--bc-tint)]"
+                                >
+                                  <span className="bc-tag shrink-0">#{idx + 1}</span>
+                                  <span className="min-w-0 flex-1 whitespace-pre-wrap leading-snug">
+                                    {sg}
+                                  </span>
+                                </button>
+                                <button
+                                  type="button"
+                                  data-testid={`ai-suggestion-send-${idx}`}
+                                  disabled={sending}
+                                  onClick={() => void handleQuickSendAiText(sg)}
+                                  className="bc-btn bc-btn-primary bc-btn-sm shrink-0 inline-flex items-center gap-1"
+                                >
+                                  <Send className="h-3 w-3" />
+                                  <span>ส่งเลย</span>
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                    </div>
+                  );
+                })()
               ) : null}
             </div>
           )}
@@ -2859,7 +3614,17 @@ export function ChatRoomView({
                 className="bc-tray bc-rise-in mb-1.5 max-h-[46dvh] space-y-2 overflow-y-auto rounded-xl p-2 text-xs"
               >
                 <div className="flex items-start justify-between gap-1.5">
-                  <div className="grid flex-1 grid-cols-3 gap-1.5 sm:grid-cols-6">
+                  <div className="grid flex-1 grid-cols-3 gap-1.5 sm:grid-cols-7">
+                    <button
+                      type="button"
+                      data-testid="attach-tab-game"
+                      title="เกมกลุ่ม/เดี่ยว AI (100 เกม)"
+                      onClick={openGameCenter}
+                      className={`bc-tile ${showGameCenter ? "bg-[var(--bc-tint)]" : ""}`}
+                    >
+                      <Gamepad2 className="bc-tile-icon !h-9 !w-9 shrink-0 !p-2" />
+                      <span className="truncate">เกมกลุ่ม AI</span>
+                    </button>
                     <button
                       type="button"
                       data-testid="attach-tab-location"
@@ -3316,14 +4081,15 @@ export function ChatRoomView({
               </button>
 
               <label
-                title="แนบรูปหรือไฟล์"
-                aria-label="แนบรูปหรือไฟล์"
+                title="แนบรูปหรือเอกสาร (PDF, Word, Excel, PowerPoint, Text)"
+                aria-label="แนบรูปหรือเอกสาร"
                 className={`bc-iconbtn shrink-0 cursor-pointer text-[var(--bc-primary)] ${
                   uploading ? "opacity-60" : ""
                 }`}
               >
                 <ImageIcon className="h-4 w-4" />
                 <input
+                  data-testid="chat-file-input"
                   type="file"
                   className="hidden"
                   onChange={(e) => {

@@ -85,6 +85,7 @@ export interface EventData {
 }
 
 export interface RichCardPayload {
+  kind?: string;
   app_code?: string;
   title?: string;
   color_hex?: string;
@@ -97,6 +98,14 @@ export interface RichCardPayload {
   approved_at?: string;
   approval_comment?: string;
   action_url?: string;
+  game_id?: string;
+  game_type?: string;
+  catalog_id?: string;
+  emoji?: string;
+  topic?: string;
+  play_mode?: string;
+  proactive?: boolean;
+  host_message?: string;
   [key: string]: unknown;
 }
 
@@ -215,6 +224,8 @@ export interface Conversation {
   muted_until?: string | null;
   is_archived: boolean;
   is_blocked_by_me?: boolean;
+  ai_game_auto_invite?: boolean;
+  ai_game_invite_cooldown_mins?: number;
   invite_token: string;
   admin_ids: string[];
   member_ids?: string[];
@@ -331,14 +342,33 @@ export interface AdminOverview {
 
 export interface AiSettings {
   enabled: boolean;
-  has_api_key: boolean;
-  masked_key: string;
-  model: string;
-  base_url: string;
+  managed_by_system: boolean;
+  system_ready: boolean;
   system_prompt: string;
   auto_reply_in_groups: boolean;
   redact_confidential: boolean;
+  proactive_game_invites?: boolean;
   updated_at: string;
+}
+
+export interface AiConnectionTestResult {
+  ok: boolean;
+  latency_ms: number;
+  reply?: string | null;
+  error?: string | null;
+}
+
+export interface AiAnalyzeMessageResult {
+  message_id: string;
+  conversation_id: string;
+  file_name: string;
+  mime_type: string;
+  media_kind: "image" | "document" | string;
+  analysis: string;
+  extracted_preview?: string | null;
+  model: string;
+  live_api: boolean;
+  posted_message_id?: string | null;
 }
 
 export interface AiSummaryResult {
@@ -660,6 +690,180 @@ export interface CallJoinResponse {
   token: string;
 }
 
+export type GameEngineType =
+  | "quiz"
+  | "undercover"
+  | "hint_race"
+  | "party_vote"
+  | "creative_challenge"
+  | string;
+
+export type GamePlayMode = "solo" | "group" | "both" | string;
+export type GameStatus = "lobby" | "playing" | "finished" | "cancelled" | string;
+
+export interface GameCatalogItem {
+  number: number;
+  id: string;
+  name: string;
+  tagline: string;
+  emoji: string;
+  category: string;
+  play_mode: GamePlayMode;
+  min_players: number;
+  engine: GameEngineType;
+  ai_topic_hint?: string;
+  default_rounds: number;
+}
+
+export interface GameCatalogResponse {
+  total: number;
+  categories: string[];
+  games: GameCatalogItem[];
+}
+
+export interface GamePlayer {
+  user_id: string;
+  display_name: string;
+  avatar_url: string;
+  score: number;
+  answered: boolean;
+  voted: boolean;
+  clue?: string | null;
+}
+
+export interface QuizQuestionView {
+  question: string;
+  options: string[];
+  correct_index?: number | null;
+  explanation?: string | null;
+  my_choice?: number | null;
+  choice_counts: number[];
+}
+
+export interface UndercoverClue {
+  user_id: string;
+  display_name: string;
+  clue: string;
+}
+
+export interface UndercoverView {
+  category: string;
+  my_secret_word?: string | null;
+  my_clue?: string | null;
+  my_vote?: string | null;
+  clues: UndercoverClue[];
+  vote_counts: Record<string, number>;
+  revealed_spy_id?: string | null;
+  revealed_spy_name?: string | null;
+  revealed_civilian_word?: string | null;
+  revealed_spy_word?: string | null;
+  winner_side?: "civilians" | "spy" | string | null;
+}
+
+export interface HintRaceView {
+  revealed_hints: string[];
+  total_hints: number;
+  hint_level: number;
+  solved_by_name?: string | null;
+  revealed_answer?: string | null;
+  my_guesses: string[];
+}
+
+export interface PartyVoteView {
+  prompt: string;
+  options: string[];
+  my_choice?: number | null;
+  choice_counts: number[];
+  commentary?: string | null;
+}
+
+export interface CreativeEntry {
+  user_id: string;
+  display_name: string;
+  text: string;
+  image_url?: string | null;
+  score?: number | null;
+  judge_comment?: string | null;
+}
+
+export interface CreativeChallengeView {
+  prompt: string;
+  tip: string;
+  requires_image: boolean;
+  my_submitted: boolean;
+  entries: CreativeEntry[];
+}
+
+export interface GameSession {
+  id: string;
+  conversation_id: string;
+  game_type: GameEngineType;
+  catalog_id?: string;
+  emoji?: string;
+  category?: string;
+  play_mode?: GamePlayMode;
+  tagline?: string;
+  title: string;
+  topic: string;
+  status: GameStatus;
+  phase: string;
+  proactive: boolean;
+  host_message: string;
+  created_by: string;
+  created_by_name: string;
+  players: GamePlayer[];
+  round_index: number;
+  total_rounds: number;
+  round_revealed: boolean;
+  current_question?: QuizQuestionView | null;
+  undercover?: UndercoverView | null;
+  hint_race?: HintRaceView | null;
+  party_vote?: PartyVoteView | null;
+  creative_challenge?: CreativeChallengeView | null;
+  winner_names: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GameSummary {
+  id: string;
+  game_type: GameEngineType;
+  catalog_id?: string;
+  emoji?: string;
+  title: string;
+  topic: string;
+  status: GameStatus;
+  winner_names: string[];
+  player_count: number;
+  created_at: string;
+}
+
+export interface ActiveGameState {
+  active_game: GameSession | null;
+  recent_games: GameSummary[];
+  ai_game_auto_invite: boolean;
+  ai_game_invite_cooldown_mins: number;
+  proactive_enabled_globally: boolean;
+}
+
+export interface ProactiveGameInviteResult {
+  invited: boolean;
+  reason?: string | null;
+  game?: GameSession | null;
+  message?: ChatMessage | null;
+}
+
+export interface GameWsSignal {
+  seq: number;
+  eventName: string;
+  conversationId: string;
+  gameId?: string;
+  status?: string;
+  phase?: string;
+  aiGameAutoInvite?: boolean;
+  aiGameInviteCooldownMins?: number;
+}
+
 export interface WsEvent {
   event?: string;
   type?: string;
@@ -669,6 +873,11 @@ export interface WsEvent {
   preset?: string;
   call_id?: string;
   oa_id?: string;
+  game_id?: string;
+  status?: string;
+  phase?: string;
+  ai_game_auto_invite?: boolean;
+  ai_game_invite_cooldown_mins?: number;
   call?: CallSession;
   message?: Record<string, unknown>;
   [key: string]: unknown;

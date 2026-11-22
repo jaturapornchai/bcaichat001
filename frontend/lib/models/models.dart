@@ -16,6 +16,20 @@ int _toInt(dynamic value, [int fallback = 0]) {
   return fallback;
 }
 
+int? _toNullableInt(dynamic value) {
+  if (value == null) return null;
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value is String) return int.tryParse(value.trim());
+  return null;
+}
+
+String? _toNullableString(dynamic value) {
+  if (value == null) return null;
+  final s = value.toString().trim();
+  return s.isEmpty ? null : s;
+}
+
 bool _toBool(dynamic value, [bool fallback = false]) {
   if (value is bool) return value;
   if (value is String) return value.toLowerCase() == 'true';
@@ -1032,6 +1046,13 @@ class ChatMessage {
         return '$prefix[ข้อความเสียง]$dur';
       case 'rich_card':
         final title = cardPayload?['title']?.toString() ?? cleanContent;
+        final cardKind = cardPayload?['kind']?.toString() ?? '';
+        if (cardKind == 'game_invite') {
+          return '$prefix🎮 $title';
+        }
+        if (cardKind == 'game_result') {
+          return '$prefix🏆 $title';
+        }
         return '$prefix[การ์ดโต้ตอบ] $title';
       case 'poll':
         final q = poll?.question ?? cleanContent;
@@ -1134,6 +1155,8 @@ class Conversation {
   final ChatMessage? pinnedMessage;
   final ChatMessage? lastMessage;
   final AppUser? peerUser;
+  final bool aiGameAutoInvite;
+  final int aiGameInviteCooldownMins;
   final String updatedAt;
 
   const Conversation({
@@ -1158,6 +1181,8 @@ class Conversation {
     this.pinnedMessage,
     this.lastMessage,
     this.peerUser,
+    this.aiGameAutoInvite = false,
+    this.aiGameInviteCooldownMins = 30,
     required this.updatedAt,
   });
 
@@ -1183,6 +1208,8 @@ class Conversation {
     bool? isBlockedByMe,
     bool? isArchived,
     int? unreadCount,
+    bool? aiGameAutoInvite,
+    int? aiGameInviteCooldownMins,
   }) => Conversation(
     id: id,
     kind: kind,
@@ -1205,6 +1232,9 @@ class Conversation {
     pinnedMessage: pinnedMessage,
     lastMessage: lastMessage,
     peerUser: peerUser,
+    aiGameAutoInvite: aiGameAutoInvite ?? this.aiGameAutoInvite,
+    aiGameInviteCooldownMins:
+        aiGameInviteCooldownMins ?? this.aiGameInviteCooldownMins,
     updatedAt: updatedAt,
   );
 
@@ -1258,10 +1288,18 @@ class Conversation {
         (json['oa_handle'] ?? json['oaHandle'])?.toString().trim() ?? '';
     final rawMutedUntil =
         (json['muted_until'] ?? json['mutedUntil'])?.toString().trim() ?? '';
+    final resolvedKind = (json['kind'] ?? json['type'] ?? 'direct').toString();
+    final defaultAutoInvite = resolvedKind == 'group' && rawOaId.isEmpty;
+    final rawAutoInvite =
+        json['ai_game_auto_invite'] ?? json['aiGameAutoInvite'];
+    final rawCooldown = _toInt(
+      json['ai_game_invite_cooldown_mins'] ?? json['aiGameInviteCooldownMins'],
+      30,
+    );
 
     return Conversation(
       id: _extractId(json),
-      kind: (json['kind'] ?? json['type'] ?? 'direct').toString(),
+      kind: resolvedKind,
       name: (json['name'] ?? json['title'] ?? 'ห้องสนทนา').toString(),
       avatarUrl: (json['avatar_url'] ?? json['avatarUrl'] ?? '').toString(),
       folder: (json['folder'] ?? 'personal').toString(),
@@ -1300,6 +1338,10 @@ class Conversation {
           : (rawPeer is Map
                 ? AppUser.fromJson(Map<String, dynamic>.from(rawPeer))
                 : null),
+      aiGameAutoInvite: rawAutoInvite == null
+          ? defaultAutoInvite
+          : _toBool(rawAutoInvite, defaultAutoInvite),
+      aiGameInviteCooldownMins: rawCooldown > 0 ? rawCooldown : 30,
       updatedAt: (json['updated_at'] ?? json['updatedAt'] ?? '').toString(),
     );
   }
@@ -1573,17 +1615,23 @@ class AdminOverview {
   }
 }
 
+const String kDefaultAiBrandName = 'BC AI';
+
 class AiSummaryResult {
   final String summary;
   final List<String> actionItems;
   final List<String> decisions;
   final String model;
+  final bool liveApi;
+  final int messageCount;
 
   const AiSummaryResult({
     required this.summary,
     required this.actionItems,
     required this.decisions,
-    required this.model,
+    this.model = kDefaultAiBrandName,
+    this.liveApi = false,
+    this.messageCount = 0,
   });
 
   factory AiSummaryResult.fromJson(Map<String, dynamic> json) {
@@ -1621,19 +1669,23 @@ class AiSummaryResult {
       }
     }
 
+    final rawModel = (json['model'] ?? '').toString().trim();
+
     return AiSummaryResult(
       summary: rawSummary.isNotEmpty
           ? rawSummary
           : 'สรุปผลการสนทนาในห้องแชทเรียบร้อยแล้ว',
       actionItems: actions,
       decisions: decisions,
-      model: (json['model'] ?? 'deepseek-chat').toString(),
+      model: rawModel.isNotEmpty ? rawModel : kDefaultAiBrandName,
+      liveApi: _toBool(json['live_api'] ?? json['liveApi'], false),
+      messageCount: _toInt(json['message_count'] ?? json['messageCount'], 0),
     );
   }
 
   String toFormattedNote() {
     final buf = StringBuffer();
-    buf.writeln('✨ สรุปแชทโดยสมองกล DeepSeek AI ($model)');
+    buf.writeln('✨ สรุปแชทโดย BC AI');
     buf.writeln('📌 สรุปประเด็นสำคัญ:');
     buf.writeln(summary);
     if (actionItems.isNotEmpty) {
@@ -1657,13 +1709,17 @@ class AiAssistResult {
   final List<String> alternatives;
   final String mode;
   final String model;
+  final bool liveApi;
 
   const AiAssistResult({
     required this.suggestion,
     required this.alternatives,
     required this.mode,
-    required this.model,
+    this.model = kDefaultAiBrandName,
+    this.liveApi = false,
   });
+
+  List<String> get suggestions => alternatives;
 
   factory AiAssistResult.fromJson(Map<String, dynamic> json) {
     final mainText =
@@ -1675,55 +1731,170 @@ class AiAssistResult {
                 '')
             .toString()
             .trim();
-    final rawAlt = json['alternatives'] ?? json['options'] ?? json['suggestions'];
+    final rawAlt =
+        json['suggestions'] ?? json['alternatives'] ?? json['options'];
     final altList = rawAlt is List
         ? rawAlt
               .map((e) => e.toString().trim())
               .where((e) => e.isNotEmpty)
               .toList()
         : <String>[];
+    final rawModel = (json['model'] ?? '').toString().trim();
 
     return AiAssistResult(
-      suggestion: mainText,
+      suggestion: mainText.isNotEmpty
+          ? mainText
+          : (altList.isNotEmpty ? altList.first : ''),
       alternatives: altList,
-      mode: (json['mode'] ?? 'polite').toString(),
-      model: (json['model'] ?? 'deepseek-chat').toString(),
+      mode: (json['mode'] ?? 'polish').toString(),
+      model: rawModel.isNotEmpty ? rawModel : kDefaultAiBrandName,
+      liveApi: _toBool(json['live_api'] ?? json['liveApi'], false),
     );
   }
 }
 
 class AiAdminSettings {
-  final String model;
-  final String maskedKey;
-  final bool hasKey;
-  final String systemPrompt;
   final bool enabled;
+  final bool managedBySystem;
+  final bool systemReady;
+  final String systemPrompt;
+  final bool autoReplyInGroups;
+  final bool redactConfidential;
+  final bool proactiveGameInvites;
+  final String updatedAt;
 
   const AiAdminSettings({
-    required this.model,
-    required this.maskedKey,
-    required this.hasKey,
-    required this.systemPrompt,
-    required this.enabled,
+    this.enabled = true,
+    this.managedBySystem = true,
+    this.systemReady = true,
+    this.systemPrompt =
+        'คุณคือ BC AI ผู้ช่วยส่วนตัวประจำทุกห้องแชทของ BC Ai Chat ช่วยคิดคำตอบ เกลาข้อความ สรุปนัดหมาย และช่วยวางแผนกับครอบครัวและเพื่อนๆ อย่างเป็นกันเอง',
+    this.autoReplyInGroups = true,
+    this.redactConfidential = true,
+    this.proactiveGameInvites = true,
+    this.updatedAt = '',
   });
 
   factory AiAdminSettings.fromJson(Map<String, dynamic> json) {
-    final masked =
-        (json['masked_key'] ?? json['api_key_masked'] ?? json['maskedKey'] ?? '')
-            .toString();
     return AiAdminSettings(
-      model: (json['model'] ?? 'deepseek-chat').toString(),
-      maskedKey: masked.isNotEmpty ? masked : 'ตั้งค่าผ่านระบบหลังบ้าน',
-      hasKey: _toBool(
-        json['has_key'] ?? json['hasKey'] ?? json['configured'],
-        masked.isNotEmpty,
+      enabled: _toBool(json['enabled'], true),
+      managedBySystem: _toBool(
+        json['managed_by_system'] ?? json['managedBySystem'],
+        true,
+      ),
+      systemReady: _toBool(
+        json['system_ready'] ?? json['systemReady'],
+        true,
       ),
       systemPrompt:
           (json['system_prompt'] ??
                   json['systemPrompt'] ??
                   'คุณคือ BC AI ผู้ช่วยส่วนตัวประจำทุกห้องแชทของ BC Ai Chat ช่วยคิดคำตอบ เกลาข้อความ สรุปนัดหมาย และช่วยวางแผนกับครอบครัวและเพื่อนๆ อย่างเป็นกันเอง')
               .toString(),
-      enabled: _toBool(json['enabled'], true),
+      autoReplyInGroups: _toBool(
+        json['auto_reply_in_groups'] ?? json['autoReplyInGroups'],
+        true,
+      ),
+      redactConfidential: _toBool(
+        json['redact_confidential'] ?? json['redactConfidential'],
+        true,
+      ),
+      proactiveGameInvites: _toBool(
+        json['proactive_game_invites'] ?? json['proactiveGameInvites'],
+        true,
+      ),
+      updatedAt: (json['updated_at'] ?? json['updatedAt'] ?? '').toString(),
+    );
+  }
+}
+
+class AiConnectionTestResult {
+  final bool ok;
+  final int latencyMs;
+  final String? reply;
+  final String? error;
+
+  const AiConnectionTestResult({
+    required this.ok,
+    required this.latencyMs,
+    this.reply,
+    this.error,
+  });
+
+  factory AiConnectionTestResult.fromJson(Map<String, dynamic> json) {
+    final rawReply = (json['reply'] ?? '').toString().trim();
+    final rawErr = (json['error'] ?? '').toString().trim();
+    return AiConnectionTestResult(
+      ok: _toBool(json['ok'], false),
+      latencyMs: _toInt(json['latency_ms'] ?? json['latencyMs'], 0),
+      reply: rawReply.isNotEmpty ? rawReply : null,
+      error: rawErr.isNotEmpty ? rawErr : null,
+    );
+  }
+}
+
+class AiAnalyzeMessageResult {
+  final String messageId;
+  final String conversationId;
+  final String fileName;
+  final String mimeType;
+  final String mediaKind;
+  final String analysis;
+  final String? extractedPreview;
+  final String model;
+  final bool liveApi;
+  final String? postedMessageId;
+
+  const AiAnalyzeMessageResult({
+    required this.messageId,
+    required this.conversationId,
+    required this.fileName,
+    required this.mimeType,
+    required this.mediaKind,
+    required this.analysis,
+    this.extractedPreview,
+    this.model = kDefaultAiBrandName,
+    this.liveApi = false,
+    this.postedMessageId,
+  });
+
+  bool get isImage =>
+      mediaKind.toLowerCase() == 'image' ||
+      mimeType.toLowerCase().startsWith('image/');
+
+  factory AiAnalyzeMessageResult.fromJson(Map<String, dynamic> json) {
+    final rawModel = (json['model'] ?? '').toString().trim();
+    final rawPreview =
+        (json['extracted_preview'] ?? json['extractedPreview'] ?? '')
+            .toString()
+            .trim();
+    final rawPosted =
+        (json['posted_message_id'] ?? json['postedMessageId'] ?? '')
+            .toString()
+            .trim();
+    final mime = (json['mime_type'] ?? json['mimeType'] ?? '').toString().trim();
+    final rawKind = (json['media_kind'] ?? json['mediaKind'] ?? '')
+        .toString()
+        .trim();
+    final kind = rawKind.isNotEmpty
+        ? rawKind
+        : (mime.toLowerCase().startsWith('image/') ? 'image' : 'document');
+    return AiAnalyzeMessageResult(
+      messageId:
+          (json['message_id'] ?? json['messageId'] ?? '').toString().trim(),
+      conversationId:
+          (json['conversation_id'] ?? json['conversationId'] ?? '')
+              .toString()
+              .trim(),
+      fileName:
+          (json['file_name'] ?? json['fileName'] ?? 'ไฟล์แนบ').toString().trim(),
+      mimeType: mime,
+      mediaKind: kind,
+      analysis: (json['analysis'] ?? json['result'] ?? '').toString().trim(),
+      extractedPreview: rawPreview.isNotEmpty ? rawPreview : null,
+      model: rawModel.isNotEmpty ? rawModel : kDefaultAiBrandName,
+      liveApi: _toBool(json['live_api'] ?? json['liveApi'], false),
+      postedMessageId: rawPosted.isNotEmpty ? rawPosted : null,
     );
   }
 }
@@ -2807,6 +2978,746 @@ class CallJoinSession {
       livekitUrl:
           (json['livekit_url'] ?? json['livekitUrl'] ?? '').toString(),
       token: (json['token'] ?? '').toString(),
+    );
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// BC Game Center (100-Game Solo/Group Catalog + 5 Engines + Proactive Host)
+// ---------------------------------------------------------------------------
+
+class GameCatalogItem {
+  final int number;
+  final String id;
+  final String name;
+  final String tagline;
+  final String emoji;
+  final String category;
+  final String playMode; // solo | group | both
+  final int minPlayers;
+  final String engine; // quiz | undercover | hint_race | party_vote | creative_challenge
+  final String aiTopicHint;
+  final int defaultRounds;
+
+  const GameCatalogItem({
+    required this.number,
+    required this.id,
+    required this.name,
+    this.tagline = '',
+    this.emoji = '🎮',
+    this.category = 'เพื่อน',
+    this.playMode = 'both',
+    this.minPlayers = 1,
+    this.engine = 'quiz',
+    this.aiTopicHint = '',
+    this.defaultRounds = 5,
+  });
+
+  bool get supportsSolo => playMode == 'solo' || playMode == 'both';
+  bool get supportsGroup => playMode == 'group' || playMode == 'both';
+
+  String get playModeLabel {
+    switch (playMode) {
+      case 'solo':
+        return 'เล่นคนเดียว';
+      case 'group':
+        return 'เล่นเป็นกลุ่ม';
+      default:
+        return 'เดี่ยว+กลุ่ม';
+    }
+  }
+
+  String get engineLabel {
+    switch (engine) {
+      case 'quiz':
+        return 'ควิซสายฟ้า';
+      case 'undercover':
+        return 'ใครคือสายลับ';
+      case 'hint_race':
+        return 'ทายคำใบ้';
+      case 'party_vote':
+        return 'โหวตฮา';
+      case 'creative_challenge':
+        return 'สร้างสรรค์ AI';
+      default:
+        return engine;
+    }
+  }
+
+  factory GameCatalogItem.fromJson(Map<String, dynamic> json) {
+    final playMode = (json['play_mode'] ?? json['playMode'] ?? 'both')
+        .toString()
+        .trim();
+    return GameCatalogItem(
+      number: _toInt(json['number'], 0),
+      id: _extractId(json),
+      name: (json['name'] ?? '').toString(),
+      tagline: (json['tagline'] ?? '').toString(),
+      emoji: (json['emoji'] ?? '🎮').toString(),
+      category: (json['category'] ?? 'เพื่อน').toString(),
+      playMode: playMode.isEmpty ? 'both' : playMode,
+      minPlayers: _toInt(
+        json['min_players'] ?? json['minPlayers'],
+        playMode == 'group' ? 2 : 1,
+      ),
+      engine: (json['engine'] ?? 'quiz').toString(),
+      aiTopicHint:
+          (json['ai_topic_hint'] ?? json['aiTopicHint'] ?? '').toString(),
+      defaultRounds: _toInt(json['default_rounds'] ?? json['defaultRounds'], 5),
+    );
+  }
+}
+
+class GameCatalogResponse {
+  final int total;
+  final List<String> categories;
+  final List<GameCatalogItem> games;
+
+  const GameCatalogResponse({
+    this.total = 0,
+    this.categories = const [],
+    this.games = const [],
+  });
+
+  factory GameCatalogResponse.fromJson(Map<String, dynamic> json) {
+    final rawCats = json['categories'];
+    final rawGames = json['games'];
+    final games = rawGames is List
+        ? rawGames
+              .whereType<Map>()
+              .map(
+                (e) => GameCatalogItem.fromJson(Map<String, dynamic>.from(e)),
+              )
+              .toList()
+        : const <GameCatalogItem>[];
+    return GameCatalogResponse(
+      total: _toInt(json['total'], games.length),
+      categories: rawCats is List
+          ? rawCats.map((e) => e.toString()).where((s) => s.isNotEmpty).toList()
+          : const [],
+      games: games,
+    );
+  }
+}
+
+class GamePlayer {
+  final String userId;
+  final String displayName;
+  final String avatarUrl;
+  final int score;
+  final bool answered;
+  final bool voted;
+  final String? clue;
+
+  const GamePlayer({
+    required this.userId,
+    required this.displayName,
+    this.avatarUrl = '',
+    this.score = 0,
+    this.answered = false,
+    this.voted = false,
+    this.clue,
+  });
+
+  factory GamePlayer.fromJson(Map<String, dynamic> json) {
+    return GamePlayer(
+      userId: (json['user_id'] ?? json['userId'] ?? json['id'] ?? '').toString(),
+      displayName:
+          (json['display_name'] ?? json['displayName'] ?? 'ผู้เล่น').toString(),
+      avatarUrl: (json['avatar_url'] ?? json['avatarUrl'] ?? '').toString(),
+      score: _toInt(json['score'], 0),
+      answered: _toBool(json['answered'], false),
+      voted: _toBool(json['voted'], false),
+      clue: _toNullableString(json['clue']),
+    );
+  }
+}
+
+class QuizQuestionView {
+  final String question;
+  final List<String> options;
+  final int? correctIndex;
+  final String? explanation;
+  final int? myChoice;
+  final List<int> choiceCounts;
+
+  const QuizQuestionView({
+    required this.question,
+    this.options = const [],
+    this.correctIndex,
+    this.explanation,
+    this.myChoice,
+    this.choiceCounts = const [],
+  });
+
+  factory QuizQuestionView.fromJson(Map<String, dynamic> json) {
+    final rawOpts = json['options'];
+    final rawCounts = json['choice_counts'] ?? json['choiceCounts'];
+    return QuizQuestionView(
+      question: (json['question'] ?? '').toString(),
+      options: rawOpts is List
+          ? rawOpts.map((e) => e.toString()).toList()
+          : const [],
+      correctIndex: _toNullableInt(
+        json['correct_index'] ?? json['correctIndex'],
+      ),
+      explanation: _toNullableString(json['explanation']),
+      myChoice: _toNullableInt(json['my_choice'] ?? json['myChoice']),
+      choiceCounts: rawCounts is List
+          ? rawCounts.map((e) => _toInt(e, 0)).toList()
+          : const [],
+    );
+  }
+}
+
+class UndercoverClue {
+  final String userId;
+  final String displayName;
+  final String clue;
+
+  const UndercoverClue({
+    required this.userId,
+    required this.displayName,
+    required this.clue,
+  });
+
+  factory UndercoverClue.fromJson(Map<String, dynamic> json) {
+    return UndercoverClue(
+      userId: (json['user_id'] ?? json['userId'] ?? '').toString(),
+      displayName:
+          (json['display_name'] ?? json['displayName'] ?? 'ผู้เล่น').toString(),
+      clue: (json['clue'] ?? '').toString(),
+    );
+  }
+}
+
+class UndercoverView {
+  final String category;
+  final String? mySecretWord;
+  final String? myClue;
+  final String? myVote;
+  final List<UndercoverClue> clues;
+  final Map<String, int> voteCounts;
+  final String? revealedSpyId;
+  final String? revealedSpyName;
+  final String? revealedCivilianWord;
+  final String? revealedSpyWord;
+  final String? winnerSide;
+
+  const UndercoverView({
+    this.category = '',
+    this.mySecretWord,
+    this.myClue,
+    this.myVote,
+    this.clues = const [],
+    this.voteCounts = const {},
+    this.revealedSpyId,
+    this.revealedSpyName,
+    this.revealedCivilianWord,
+    this.revealedSpyWord,
+    this.winnerSide,
+  });
+
+  factory UndercoverView.fromJson(Map<String, dynamic> json) {
+    final rawClues = json['clues'];
+    final rawVotes = json['vote_counts'] ?? json['voteCounts'];
+    final voteMap = <String, int>{};
+    if (rawVotes is Map) {
+      rawVotes.forEach((k, v) {
+        voteMap[k.toString()] = _toInt(v, 0);
+      });
+    }
+    return UndercoverView(
+      category: (json['category'] ?? '').toString(),
+      mySecretWord: _toNullableString(
+        json['my_secret_word'] ?? json['mySecretWord'],
+      ),
+      myClue: _toNullableString(json['my_clue'] ?? json['myClue']),
+      myVote: _toNullableString(json['my_vote'] ?? json['myVote']),
+      clues: rawClues is List
+          ? rawClues
+                .whereType<Map>()
+                .map(
+                  (e) => UndercoverClue.fromJson(Map<String, dynamic>.from(e)),
+                )
+                .toList()
+          : const [],
+      voteCounts: voteMap,
+      revealedSpyId: _toNullableString(
+        json['revealed_spy_id'] ?? json['revealedSpyId'],
+      ),
+      revealedSpyName: _toNullableString(
+        json['revealed_spy_name'] ?? json['revealedSpyName'],
+      ),
+      revealedCivilianWord: _toNullableString(
+        json['revealed_civilian_word'] ?? json['revealedCivilianWord'],
+      ),
+      revealedSpyWord: _toNullableString(
+        json['revealed_spy_word'] ?? json['revealedSpyWord'],
+      ),
+      winnerSide: _toNullableString(json['winner_side'] ?? json['winnerSide']),
+    );
+  }
+}
+
+class HintRaceView {
+  final List<String> revealedHints;
+  final int totalHints;
+  final int hintLevel;
+  final String? solvedByName;
+  final String? revealedAnswer;
+  final List<String> myGuesses;
+
+  const HintRaceView({
+    this.revealedHints = const [],
+    this.totalHints = 5,
+    this.hintLevel = 1,
+    this.solvedByName,
+    this.revealedAnswer,
+    this.myGuesses = const [],
+  });
+
+  factory HintRaceView.fromJson(Map<String, dynamic> json) {
+    final rawHints = json['revealed_hints'] ?? json['revealedHints'];
+    final rawGuesses = json['my_guesses'] ?? json['myGuesses'];
+    final hints = rawHints is List
+        ? rawHints.map((e) => e.toString()).toList()
+        : const <String>[];
+    return HintRaceView(
+      revealedHints: hints,
+      totalHints: _toInt(json['total_hints'] ?? json['totalHints'], 5),
+      hintLevel: _toInt(
+        json['hint_level'] ?? json['hintLevel'],
+        hints.isNotEmpty ? hints.length : 1,
+      ),
+      solvedByName: _toNullableString(
+        json['solved_by_name'] ?? json['solvedByName'],
+      ),
+      revealedAnswer: _toNullableString(
+        json['revealed_answer'] ?? json['revealedAnswer'],
+      ),
+      myGuesses: rawGuesses is List
+          ? rawGuesses.map((e) => e.toString()).toList()
+          : const [],
+    );
+  }
+}
+
+class PartyVoteView {
+  final String prompt;
+  final List<String> options;
+  final int? myChoice;
+  final List<int> choiceCounts;
+  final String? commentary;
+
+  const PartyVoteView({
+    required this.prompt,
+    this.options = const [],
+    this.myChoice,
+    this.choiceCounts = const [],
+    this.commentary,
+  });
+
+  factory PartyVoteView.fromJson(Map<String, dynamic> json) {
+    final rawOpts = json['options'];
+    final rawCounts = json['choice_counts'] ?? json['choiceCounts'];
+    return PartyVoteView(
+      prompt: (json['prompt'] ?? '').toString(),
+      options: rawOpts is List
+          ? rawOpts.map((e) => e.toString()).toList()
+          : const [],
+      myChoice: _toNullableInt(json['my_choice'] ?? json['myChoice']),
+      choiceCounts: rawCounts is List
+          ? rawCounts.map((e) => _toInt(e, 0)).toList()
+          : const [],
+      commentary: _toNullableString(json['commentary']),
+    );
+  }
+}
+
+class CreativeEntry {
+  final String userId;
+  final String displayName;
+  final String text;
+  final String? imageUrl;
+  final int? score;
+  final String? judgeComment;
+
+  const CreativeEntry({
+    required this.userId,
+    required this.displayName,
+    required this.text,
+    this.imageUrl,
+    this.score,
+    this.judgeComment,
+  });
+
+  factory CreativeEntry.fromJson(Map<String, dynamic> json) {
+    return CreativeEntry(
+      userId: (json['user_id'] ?? json['userId'] ?? '').toString(),
+      displayName:
+          (json['display_name'] ?? json['displayName'] ?? 'ผู้เล่น').toString(),
+      text: (json['text'] ?? '').toString(),
+      imageUrl: _toNullableString(json['image_url'] ?? json['imageUrl']),
+      score: _toNullableInt(json['score']),
+      judgeComment: _toNullableString(
+        json['judge_comment'] ?? json['judgeComment'],
+      ),
+    );
+  }
+}
+
+class CreativeChallengeView {
+  final String prompt;
+  final String tip;
+  final bool requiresImage;
+  final bool mySubmitted;
+  final List<CreativeEntry> entries;
+
+  const CreativeChallengeView({
+    required this.prompt,
+    this.tip = '',
+    this.requiresImage = false,
+    this.mySubmitted = false,
+    this.entries = const [],
+  });
+
+  factory CreativeChallengeView.fromJson(Map<String, dynamic> json) {
+    final rawEntries = json['entries'];
+    return CreativeChallengeView(
+      prompt: (json['prompt'] ?? '').toString(),
+      tip: (json['tip'] ?? '').toString(),
+      requiresImage: _toBool(
+        json['requires_image'] ?? json['requiresImage'],
+        false,
+      ),
+      mySubmitted: _toBool(json['my_submitted'] ?? json['mySubmitted'], false),
+      entries: rawEntries is List
+          ? rawEntries
+                .whereType<Map>()
+                .map(
+                  (e) => CreativeEntry.fromJson(Map<String, dynamic>.from(e)),
+                )
+                .toList()
+          : const [],
+    );
+  }
+}
+
+class GameSession {
+  final String id;
+  final String conversationId;
+  final String gameType; // quiz | undercover | hint_race | party_vote | creative_challenge
+  final String catalogId;
+  final String emoji;
+  final String category;
+  final String playMode;
+  final String tagline;
+  final String title;
+  final String topic;
+  final String status; // lobby | playing | finished | cancelled
+  final String phase;
+  final bool proactive;
+  final String hostMessage;
+  final String createdBy;
+  final String createdByName;
+  final List<GamePlayer> players;
+  final int roundIndex;
+  final int totalRounds;
+  final bool roundRevealed;
+  final QuizQuestionView? currentQuestion;
+  final UndercoverView? undercover;
+  final HintRaceView? hintRace;
+  final PartyVoteView? partyVote;
+  final CreativeChallengeView? creativeChallenge;
+  final List<String> winnerNames;
+  final String createdAt;
+  final String updatedAt;
+
+  const GameSession({
+    required this.id,
+    required this.conversationId,
+    required this.gameType,
+    this.catalogId = '',
+    this.emoji = '🎮',
+    this.category = '',
+    this.playMode = 'both',
+    this.tagline = '',
+    required this.title,
+    this.topic = '',
+    required this.status,
+    this.phase = 'lobby',
+    this.proactive = false,
+    this.hostMessage = '',
+    this.createdBy = '',
+    this.createdByName = '',
+    this.players = const [],
+    this.roundIndex = 0,
+    this.totalRounds = 1,
+    this.roundRevealed = false,
+    this.currentQuestion,
+    this.undercover,
+    this.hintRace,
+    this.partyVote,
+    this.creativeChallenge,
+    this.winnerNames = const [],
+    this.createdAt = '',
+    this.updatedAt = '',
+  });
+
+  bool get isQuiz => gameType == 'quiz';
+  bool get isUndercover => gameType == 'undercover';
+  bool get isHintRace => gameType == 'hint_race';
+  bool get isPartyVote => gameType == 'party_vote';
+  bool get isCreativeChallenge => gameType == 'creative_challenge';
+
+  bool get isLobby => status == 'lobby';
+  bool get isPlaying => status == 'playing';
+  bool get isFinished => status == 'finished';
+  bool get isCancelled => status == 'cancelled';
+  bool get isActive => isLobby || isPlaying;
+
+  int get minPlayersRequired => (isUndercover || playMode == 'group') ? 2 : 1;
+
+  bool hasPlayer(String userId) =>
+      userId.isNotEmpty && players.any((p) => p.userId == userId);
+
+  String get defaultEmoji {
+    if (emoji.trim().isNotEmpty) return emoji;
+    switch (gameType) {
+      case 'quiz':
+        return '🧠';
+      case 'undercover':
+        return '🕵️';
+      case 'hint_race':
+        return '💡';
+      case 'party_vote':
+        return '🗳️';
+      case 'creative_challenge':
+        return '✍️';
+      default:
+        return '🎮';
+    }
+  }
+
+  factory GameSession.fromJson(Map<String, dynamic> json) {
+    final rawPlayers = json['players'];
+    final rawWinners = json['winner_names'] ?? json['winnerNames'];
+    final rawQuiz = json['current_question'] ?? json['currentQuestion'];
+    final rawUc = json['undercover'];
+    final rawHint = json['hint_race'] ?? json['hintRace'];
+    final rawParty = json['party_vote'] ?? json['partyVote'];
+    final rawCreative =
+        json['creative_challenge'] ?? json['creativeChallenge'];
+    final gType = (json['game_type'] ?? json['gameType'] ?? 'quiz').toString();
+    final rawEmoji = (json['emoji'] ?? '').toString().trim();
+
+    return GameSession(
+      id: _extractId(json),
+      conversationId:
+          (json['conversation_id'] ?? json['conversationId'] ?? '').toString(),
+      gameType: gType,
+      catalogId: (json['catalog_id'] ?? json['catalogId'] ?? '').toString(),
+      emoji: rawEmoji.isNotEmpty
+          ? rawEmoji
+          : (gType == 'undercover'
+                ? '🕵️'
+                : (gType == 'quiz' ? '🧠' : '🎮')),
+      category: (json['category'] ?? '').toString(),
+      playMode: (json['play_mode'] ?? json['playMode'] ?? 'both').toString(),
+      tagline: (json['tagline'] ?? '').toString(),
+      title: (json['title'] ?? 'เกมกลุ่ม AI').toString(),
+      topic: (json['topic'] ?? '').toString(),
+      status: (json['status'] ?? 'lobby').toString(),
+      phase: (json['phase'] ?? 'lobby').toString(),
+      proactive: _toBool(json['proactive'], false),
+      hostMessage:
+          (json['host_message'] ?? json['hostMessage'] ?? '').toString(),
+      createdBy: (json['created_by'] ?? json['createdBy'] ?? '').toString(),
+      createdByName:
+          (json['created_by_name'] ?? json['createdByName'] ?? '').toString(),
+      players: rawPlayers is List
+          ? rawPlayers
+                .whereType<Map>()
+                .map((e) => GamePlayer.fromJson(Map<String, dynamic>.from(e)))
+                .toList()
+          : const [],
+      roundIndex: _toInt(json['round_index'] ?? json['roundIndex'], 0),
+      totalRounds: _toInt(json['total_rounds'] ?? json['totalRounds'], 1),
+      roundRevealed: _toBool(
+        json['round_revealed'] ?? json['roundRevealed'],
+        false,
+      ),
+      currentQuestion: rawQuiz is Map
+          ? QuizQuestionView.fromJson(Map<String, dynamic>.from(rawQuiz))
+          : null,
+      undercover: rawUc is Map
+          ? UndercoverView.fromJson(Map<String, dynamic>.from(rawUc))
+          : null,
+      hintRace: rawHint is Map
+          ? HintRaceView.fromJson(Map<String, dynamic>.from(rawHint))
+          : null,
+      partyVote: rawParty is Map
+          ? PartyVoteView.fromJson(Map<String, dynamic>.from(rawParty))
+          : null,
+      creativeChallenge: rawCreative is Map
+          ? CreativeChallengeView.fromJson(
+              Map<String, dynamic>.from(rawCreative),
+            )
+          : null,
+      winnerNames: rawWinners is List
+          ? rawWinners
+                .map((e) => e.toString())
+                .where((s) => s.isNotEmpty)
+                .toList()
+          : const [],
+      createdAt: (json['created_at'] ?? json['createdAt'] ?? '').toString(),
+      updatedAt: (json['updated_at'] ?? json['updatedAt'] ?? '').toString(),
+    );
+  }
+}
+
+class GameSummary {
+  final String id;
+  final String gameType;
+  final String catalogId;
+  final String emoji;
+  final String title;
+  final String topic;
+  final String status;
+  final List<String> winnerNames;
+  final int playerCount;
+  final String createdAt;
+
+  const GameSummary({
+    required this.id,
+    required this.gameType,
+    this.catalogId = '',
+    this.emoji = '🎮',
+    required this.title,
+    this.topic = '',
+    required this.status,
+    this.winnerNames = const [],
+    this.playerCount = 0,
+    this.createdAt = '',
+  });
+
+  factory GameSummary.fromJson(Map<String, dynamic> json) {
+    final rawWinners = json['winner_names'] ?? json['winnerNames'];
+    final gType = (json['game_type'] ?? json['gameType'] ?? 'quiz').toString();
+    final rawEmoji = (json['emoji'] ?? '').toString().trim();
+    return GameSummary(
+      id: _extractId(json),
+      gameType: gType,
+      catalogId: (json['catalog_id'] ?? json['catalogId'] ?? '').toString(),
+      emoji: rawEmoji.isNotEmpty
+          ? rawEmoji
+          : (gType == 'undercover'
+                ? '🕵️'
+                : (gType == 'quiz' ? '🧠' : '🎮')),
+      title: (json['title'] ?? 'เกม AI').toString(),
+      topic: (json['topic'] ?? '').toString(),
+      status: (json['status'] ?? 'finished').toString(),
+      winnerNames: rawWinners is List
+          ? rawWinners
+                .map((e) => e.toString())
+                .where((s) => s.isNotEmpty)
+                .toList()
+          : const [],
+      playerCount: _toInt(json['player_count'] ?? json['playerCount'], 0),
+      createdAt: (json['created_at'] ?? json['createdAt'] ?? '').toString(),
+    );
+  }
+}
+
+class ActiveGameState {
+  final GameSession? activeGame;
+  final List<GameSummary> recentGames;
+  final bool aiGameAutoInvite;
+  final int aiGameInviteCooldownMins;
+  final bool proactiveEnabledGlobally;
+
+  const ActiveGameState({
+    this.activeGame,
+    this.recentGames = const [],
+    this.aiGameAutoInvite = true,
+    this.aiGameInviteCooldownMins = 30,
+    this.proactiveEnabledGlobally = true,
+  });
+
+  ActiveGameState copyWith({
+    GameSession? activeGame,
+    bool clearActiveGame = false,
+    List<GameSummary>? recentGames,
+    bool? aiGameAutoInvite,
+    int? aiGameInviteCooldownMins,
+    bool? proactiveEnabledGlobally,
+  }) => ActiveGameState(
+    activeGame: clearActiveGame ? null : (activeGame ?? this.activeGame),
+    recentGames: recentGames ?? this.recentGames,
+    aiGameAutoInvite: aiGameAutoInvite ?? this.aiGameAutoInvite,
+    aiGameInviteCooldownMins:
+        aiGameInviteCooldownMins ?? this.aiGameInviteCooldownMins,
+    proactiveEnabledGlobally:
+        proactiveEnabledGlobally ?? this.proactiveEnabledGlobally,
+  );
+
+  factory ActiveGameState.fromJson(Map<String, dynamic> json) {
+    final rawActive = json['active_game'] ?? json['activeGame'];
+    final rawRecent = json['recent_games'] ?? json['recentGames'];
+    final cooldown = _toInt(
+      json['ai_game_invite_cooldown_mins'] ?? json['aiGameInviteCooldownMins'],
+      30,
+    );
+    return ActiveGameState(
+      activeGame: rawActive is Map
+          ? GameSession.fromJson(Map<String, dynamic>.from(rawActive))
+          : null,
+      recentGames: rawRecent is List
+          ? rawRecent
+                .whereType<Map>()
+                .map((e) => GameSummary.fromJson(Map<String, dynamic>.from(e)))
+                .toList()
+          : const [],
+      aiGameAutoInvite: _toBool(
+        json['ai_game_auto_invite'] ?? json['aiGameAutoInvite'],
+        true,
+      ),
+      aiGameInviteCooldownMins: cooldown > 0 ? cooldown : 30,
+      proactiveEnabledGlobally: _toBool(
+        json['proactive_enabled_globally'] ?? json['proactiveEnabledGlobally'],
+        true,
+      ),
+    );
+  }
+}
+
+class ProactiveGameInviteResult {
+  final bool invited;
+  final String? reason;
+  final GameSession? game;
+  final ChatMessage? message;
+
+  const ProactiveGameInviteResult({
+    required this.invited,
+    this.reason,
+    this.game,
+    this.message,
+  });
+
+  factory ProactiveGameInviteResult.fromJson(Map<String, dynamic> json) {
+    final rawGame = json['game'];
+    final rawMsg = json['message'];
+    return ProactiveGameInviteResult(
+      invited: _toBool(json['invited'], false),
+      reason: _toNullableString(json['reason']),
+      game: rawGame is Map
+          ? GameSession.fromJson(Map<String, dynamic>.from(rawGame))
+          : null,
+      message: rawMsg is Map
+          ? ChatMessage.fromJson(Map<String, dynamic>.from(rawMsg))
+          : null,
     );
   }
 }

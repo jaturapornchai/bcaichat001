@@ -241,7 +241,10 @@ function spawnIsolatedBackend(mockUrl) {
     LIVEKIT_URL: "ws://127.0.0.1:7880",
     LIVEKIT_API_KEY: lk.apiKey,
     LIVEKIT_API_SECRET: lk.apiSecret,
-    DEEPSEEK_API_KEY: "",
+    AI_ENABLED: "false",
+    AI_GAME_PROACTIVE_ENABLED: "false",
+    AI_API_KEY: "",
+    OLLAMA_API_KEY: "",
     FCM_SERVICE_ACCOUNT_FILE: "",
   };
 

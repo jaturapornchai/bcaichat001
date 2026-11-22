@@ -1,6 +1,6 @@
 # BC Ai Chat
 
-แอปแชทส่วนตัว ครอบครัว และแก๊งเพื่อนภาษาไทย พร้อมผู้ช่วย AI (`DeepSeek`), คลังรูปภาพและไฟล์ถาวร (`MinIO`), การโทรด้วยเสียงและวิดีโอ (`LiveKit SFU`), บัญชีทางการร้านค้าและทีมแอดมิน (`BC Ai Chat OA`), และห้องแชทข้ามแพลตฟอร์ม (`Web`, `Android`, `iOS`, `Windows`, `macOS`) แบบ **Mobile-First ไร้ Popup รบกวน** บนอัตลักษณ์ศิลปะร่วมสมัย **ธีมดินเผาบ้านเชียง (`ban_chiang`)** ปลอดลิขสิทธิ์ 100%
+แอปแชทส่วนตัว ครอบครัว และแก๊งเพื่อนภาษาไทย พร้อมผู้ช่วย **BC AI** (จัดการโมเดลและ API Key เป็นความลับฝั่งเซิร์ฟเวอร์อัตโนมัติ — อ่านภาพ Vision และเอกสาร PDF/DOCX/XLSX/PPTX/Text ได้), **BC Game Center** (คลังเกม AI 100 เกม เล่นคนเดียวและเล่นกลุ่ม พร้อมสุ่มเกมไม่ซ้ำและ **Proactive AI Game Host** ชวนเล่นอัตโนมัติ เปิด/ปิดได้), คลังรูปภาพและไฟล์ถาวร (`MinIO`), การโทรด้วยเสียงและวิดีโอ (`LiveKit SFU`), บัญชีทางการร้านค้าและทีมแอดมิน (`BC Ai Chat OA`), และห้องแชทข้ามแพลตฟอร์ม (`Web`, `Android`, `iOS`, `Windows`, `macOS`) แบบ **Mobile-First ไร้ Popup รบกวน** บนอัตลักษณ์ศิลปะร่วมสมัย **ธีมดินเผาบ้านเชียง (`ban_chiang`)** ปลอดลิขสิทธิ์ 100%
 
 ---
 
@@ -43,7 +43,7 @@
 
 ## Objective
 
-**BC Ai Chat** พัฒนาขึ้นเพื่อเป็นพื้นที่สื่อสารส่วนตัวที่ปลอดภัย ใช้งานง่าย และครบครันสำหรับครอบครัว แก๊งเพื่อน และร้านค้ารายย่อย โดยผสานการยืนยันตัวตนด้วย **เบอร์โทรศัพท์ OTP (SMSMKT)** และ **Google OAuth2**, ระบบ **กู้คืนบัญชีด้วยตนเอง (PIN 6 หลัก + รหัสสำรองใช้ครั้งเดียว)**, การโทรเสียง/วิดีโอผ่าน **LiveKit**, บัญชีร้านค้า **BC Ai Chat OA** แบบหลายร้านและแบ่งสิทธิ์ทีม, สมุดบันทึกส่วนตัว **Keep**, และผู้ช่วย **DeepSeek AI** ภายใต้การออกแบบ **Mobile-First 4 แท็บ** ที่ใช้ Inline Trays/Panels โดยไม่เปิด Popup ซ้อนหน้าจอ
+**BC Ai Chat** พัฒนาขึ้นเพื่อเป็นพื้นที่สื่อสารส่วนตัวที่ปลอดภัย ใช้งานง่าย และครบครันสำหรับครอบครัว แก๊งเพื่อน และร้านค้ารายย่อย โดยผสานการยืนยันตัวตนด้วย **เบอร์โทรศัพท์ OTP (SMSMKT)** และ **Google OAuth2**, ระบบ **กู้คืนบัญชีด้วยตนเอง (PIN 6 หลัก + รหัสสำรองใช้ครั้งเดียว)**, การโทรเสียง/วิดีโอผ่าน **LiveKit**, บัญชีร้านค้า **BC Ai Chat OA** แบบหลายร้านและแบ่งสิทธิ์ทีม, สมุดบันทึกส่วนตัว **Keep**, และผู้ช่วย **BC AI อัจฉริยะ (ระบบจัดสรรโมเดลที่เร็ว ประหยัด Token และเก็บ API เป็นความลับใน `.env` ฝั่งเซิร์ฟเวอร์เท่านั้น พร้อมอ่านภาพ Vision และเอกสาร PDF/Word/Excel/PowerPoint/Text)** ภายใต้การออกแบบ **Mobile-First 4 แท็บ** ที่ใช้ Inline Trays/Panels โดยไม่เปิด Popup ซ้อนหน้าจอ
 
 - **7 ธีมสีไทยร่วมสมัย + 3 โทนห้องแชท**: ค่าเริ่มต้น **บ้านเชียง (`ban_chiang`: `#812920` / `#FBF9F8`)** พร้อมชุดสี **ไหมทองอำพัน (`silk_amber`)**, **ครามสุโขทัย (`indigo_kram`)**, **หยกสังคโลก (`jade_celadon`)**, **บัวหลวงชมพู (`lotus_rose`)**, **อบเชยเครื่องเทศ (`spice_cinnamon`)**, และ **มณีม่วงไทย (`royal_amethyst`)** รวมถึง 3 โทนห้องแชท (`ban_chiang_cream` `#F5EFEA`, `terracotta_night` `#1C1412`, `ivory_white` `#FBF9F8`) ซิงค์สดข้ามหน้าจอผ่าน WebSocket (`theme_changed`)
 - **แยก 2 แอป หลังบ้านตัวเดียว**: **BC Ai Chat** สำหรับคนทั่วไป (ไม่มีเมนูจัดการกิจการ มีเพียงค้นหา/ติดตามร้าน ห้องแชทกับร้าน และคูปอง) และ **BC Ai Chat OA** สำหรับร้านค้า (จัดการร้าน ทีม กล่องแชทลูกค้า ลูกค้า (CRM) คูปอง ส่งข่าว) ทั้งบนเว็บ (2 ไซต์แยกตามโฮสต์) และบนมือถือ (2 แอป 2 ไอคอน) ใช้บัญชีเดียวกันและ Backend/ฐานข้อมูลชุดเดียวกัน
@@ -62,7 +62,7 @@ flowchart LR
   MINIO["MinIO S3 (:9130 / :9131)"]
   LIVEKIT["LiveKit SFU (:7880-7882)"]
   SMS["SMSMKT OTP + Google OAuth2"]
-  AI["DeepSeek AI + FCM Push"]
+  AI["BC AI Engine (.env ลับฝั่งเซิร์ฟเวอร์) + FCM Push"]
 
   WEB -->|HTTP + WebSocket + LiveKit| API
   FLUTTER -->|HTTP + WebSocket + LiveKit| API
@@ -79,6 +79,7 @@ flowchart LR
    - **Phone OTP (SMSMKT)** และ **Verified Google OAuth2**: ผู้ใช้เข้าสู่ระบบหรือลงทะเบียนใหม่ด้วยเบอร์โทรศัพท์ไทย (รับรหัสอ้างอิง `ref_code` และคูลดาวน์ 60 วินาที) หรือบัญชี Google ที่ตรวจสอบ `aud` และ `email_verified` จากปลายทาง Google
    - **Owner Bootstrap Admin**: เจ้าของระบบคนแรกสามารถตั้งค่าบัญชีผู้ดูแลหลักผ่าน `POST /api/auth/bootstrap-admin` ด้วยรหัส `ADMIN_BOOTSTRAP_CODE` จาก `.env` เมื่อยังไม่มีผู้ดูแลในระบบ ส่วนผู้ใช้ที่สมัครตามหลังจะได้รับสิทธิ์ `user` โดยอัตโนมัติ
    - **เชื่อมโยงบัญชีและกู้คืนด้วยตนเอง**: ผูก/ถอด Gmail และเบอร์ OTP ตั้ง **PIN 6 หลัก** พร้อมรับ **รหัสสำรอง 6 ชุด** (`BCRC-XXXX-XXXX` ใช้ได้รหัสละ 1 ครั้ง) สำหรับเปลี่ยนเบอร์หรือเปลี่ยน Gmail เอง (มีล็อกเมื่อใส่ผิดครบ 5 ครั้ง และเพิกถอนเซสชันเดิมทุกอุปกรณ์แบบ O(1) ผ่าน `token_versions`)
+   - **ล็อกระบบ Demo/บัญชีทดสอบเฉพาะ Localhost เท่านั้น**: บัญชีทดสอบด่วน (`/api/auth/test-login` และปุ่มสลับบัญชีทดสอบ) ใช้งานได้เฉพาะการรันทดสอบบนเครื่อง (`localhost`, `127.0.0.1`, `[::1]`, `10.0.2.2`, `oa.localhost`) โดยบังคับตรวจครบทั้ง 3 ชั้น (Backend ตรวจ `PUBLIC_BASE_URL` + `Host`/`X-Forwarded-Host` และล้างบัญชีทดสอบออกจาก DB เมื่อปิดใช้งาน, Web ตรวจ `window.location.hostname` พร้อมตัด `?test_user=`, Flutter ตรวจ `ApiService.isLocalhostUrl`) และถูกตัดออก 100% เมื่อขึ้นใช้งานจริงบนโดเมนหรือ IP ภายนอก
 
 2. **Mobile-First 4 แท็บหลัก & UX แบบไร้ Popup**:
    - แถบนำทางหลัก 4 แท็บ: **เพื่อน/หน้าหลัก** (`0`), **แชท** (`1` — ค่าเริ่มต้น), **สมุดบันทึก** (`2`), และ **ตั้งค่า** (`3`) พร้อมแถบโฟลเดอร์ 7 หมวดแบบตัดบรรทัด ไม่เลื่อนซ้าย-ขวา (`ทั้งหมด`, `ส่วนตัว`, `ครอบครัว`, `กลุ่ม`, `ปักหมุด`, `ยังไม่อ่าน`, `เก็บถาวร`)
@@ -88,7 +89,7 @@ flowchart LR
 3. **เพิ่มเพื่อน 4 ช่องทาง, ความเป็นส่วนตัว, ปิดเสียง และแชทครบเครื่อง**:
    - เพิ่มเพื่อนด้วย **QR Code**, **เบอร์โทร**, **`@bc_id`**, หรือ **Email** โดยระบบเคารพสวิตช์ความเป็นส่วนตัวรายช่องทาง (`allow_add_by_phone`, `allow_add_by_id`, `allow_add_by_email`), รองรับ **Reset QR Token**, **ลบเพื่อน**, **ปิดเสียงรายห้องแบบตั้งเวลา** (`1 ชม.`, `8 ชม.`, `ถึง 08:00 น.`, `ตลอดไป`), **DND ทั้งระบบ**, และ **Silent Block** ที่ซ่อนข้อความ/สายโทรจากผู้ถูกบล็อกโดยอีกฝ่ายไม่รู้ตัว
    - **สแกน QR เต็มจอ**: ปุ่ม "สแกน QR เต็มจอ" ในแผงเพิ่มเพื่อนเปิดหน้าเต็มจอที่สลับ **สแกน QR / QR ของฉัน** ได้ (Web: `MainShell.tsx` + `BarcodeDetector` และอัปโหลดรูป QR, Flutter: `lib/screens/qr_friend_screen.dart` + `mobile_scanner`)
-   - ภายในห้องแชทรองรับข้อความ **แก้ไขสด** (`PUT /api/messages/:id` + WS `message_edited`), **ส่งต่อหลายห้อง**, **ส่งตำแหน่งที่ตั้ง (`location_data`)** พร้อมแผนที่ฟรี OpenStreetMap ในการ์ด โดยกดปุ่ม "ตำแหน่ง" แล้วเข้าหน้าแผนที่เต็มจอทันที (แตะแผนที่เพื่อย้ายหมุดแบบ animation, กดที่หมุดแล้วลากได้โดยแผนที่เลื่อนตามเองเมื่อถึงขอบ, ปุ่มสลับ "ดาวเทียม/แผนที่", ปุ่มจับตำแหน่งปัจจุบันจาก GPS แล้วกด "ส่งตำแหน่งนี้"), **การ์ดแนะนำเพื่อน (`contact_data`)**, **เกมสุ่มบันได (`ladder_data`)**, **ส่งแบบเงียบ & ข้อความลบอัตโนมัติ**, **สมุดบันทึก Keep ส่วนตัว**, ปรับสปีดเสียง `1x / 1.5x / 2x`, อัลบั้ม, โพล, นัดหมาย, ข้อความลับ PIN, Mini-Apps ส่วนตัว 5 ตัว, และผู้ช่วย `@ai`
+   - ภายในห้องแชทรองรับข้อความ **แก้ไขสด** (`PUT /api/messages/:id` + WS `message_edited`), **ส่งต่อหลายห้อง**, **ส่งตำแหน่งที่ตั้ง (`location_data`)** พร้อมแผนที่ฟรี OpenStreetMap ในการ์ด โดยกดปุ่ม "ตำแหน่ง" แล้วเข้าหน้าแผนที่เต็มจอทันที (แตะแผนที่เพื่อย้ายหมุดแบบ animation, กดที่หมุดแล้วลากได้โดยแผนที่เลื่อนตามเองเมื่อถึงขอบ, ปุ่มสลับ "ดาวเทียม/แผนที่", ปุ่มจับตำแหน่งปัจจุบันจาก GPS แล้วกด "ส่งตำแหน่งนี้"), **การ์ดแนะนำเพื่อน (`contact_data`)**, **เกมสุ่มบันได (`ladder_data`)**, **ส่งแบบเงียบ & ข้อความลบอัตโนมัติ**, **สมุดบันทึก Keep ส่วนตัว**, ปรับสปีดเสียง `1x / 1.5x / 2x`, อัลบั้ม, โพล, นัดหมาย, ข้อความลับ PIN, Mini-Apps ส่วนตัว 5 ตัว, และผู้ช่วย `@ai` ที่เข้าใจ **รูปภาพ (Vision)** และ **เอกสาร (`PDF`, `DOCX`, `XLSX`/`XLS`/`ODS`, `PPTX`, `TXT`/`MD`/`CSV`/`JSON`/`XML`/`HTML`)** ทั้งในแชท 1-1 `BC AI`, `@ai`/ตอบกลับไฟล์ในกลุ่ม, แชทร้านค้า OA, สรุปห้อง และปุ่ม `AI อ่านภาพ` / `AI อ่านเอกสาร` บนฟองไฟล์ผ่าน `POST /api/ai/analyze-message` (แคชข้อความเอกสารใน `files.extracted_text` และปกปิดไฟล์ลับ PIN อัตโนมัติ)
    - **ขั้นตอนใช้งานแบบที่คุ้นมือ (Web + Flutter)**: ปุ่ม `+` ในห้องแชทเปิดเมนูไอคอนล้วน (ตำแหน่ง, แนะนำเพื่อน, สุ่มบันได, การ์ดโต้ตอบ, ตัวเลือกการส่ง — ส่งแบบเงียบ/ลบอัตโนมัติอยู่ในเมนู "ตัวเลือกการส่ง"); มีป้ายคั่นวัน (`วันนี้`, `เมื่อวาน`, `ส. 14 พ.ย.`) ระหว่างข้อความ; เมนูข้อความมี **ตอบกลับ / คัดลอก / ลบ / ยกเลิกการส่ง**; ช่องพิมพ์ว่างแสดงปุ่มไมค์ พิมพ์แล้วเปลี่ยนเป็นปุ่มส่ง และปุ่มสติกเกอร์อยู่ในช่องพิมพ์; **กดค้างที่แถวแชท** (เว็บบนคอมพิวเตอร์ใช้คลิกขวา) เพื่อ ปักหมุด / ปิดเสียง / เก็บถาวร / อ่านแล้ว; เมนู `⋯` ของเพื่อนมีปุ่ม **โทร / วิดีโอคอล**; ปุ่ม **ออกจากระบบ** อยู่ท้ายแท็บตั้งค่า
 
 4. **BC Ai Chat OA (หลายร้านค้าต่อผู้ใช้ & แบ่งสิทธิ์ทีม) และ LiveKit Call**:
@@ -97,6 +98,17 @@ flowchart LR
    - **ลูกค้า (CRM)**: รายชื่อผู้ติดตามร้านพร้อมค้นหา กรองหลายป้าย กรองสถานะติดตาม เรียงลำดับ และแบ่งหน้า; หน้ารายละเอียดลูกค้าแสดงป้าย โน้ต คูปองที่เก็บ/ใช้ และประวัติข่าวที่ได้รับ; ส่งข่าวเลือกได้หลายป้าย (`target_tags` ตรงป้ายใดป้ายหนึ่งก็ได้รับ สูงสุด 10 ป้าย) พร้อมจำนวนผู้รับล่วงหน้า — `owner`/`admin`/`agent` เห็นรายชื่อลูกค้า ส่วน `marketer` เห็นเฉพาะสรุปจำนวนต่อป้าย
    - โทรด้วยเสียงและวิดีโอแบบ 1-1 และกลุ่มผ่าน LiveKit SFU พร้อมแถบสายเข้า/สายที่กำลังคุยแบบ Inline และบันทึกการ์ด `call_log` ในห้องแชท
    - ระหว่างวิดีโอคอลมีปุ่ม **สลับกล้องหน้า-หลัง** และถาด **เลือกกล้อง / ไมโครโฟน / ลำโพง** เมื่อมีอุปกรณ์มากกว่า 1 ตัว; การปิดกล้องปิดเฉพาะกล้องของตนเอง ภาพของคู่สนทนายังแสดงตามปกติ
+
+5. **BC Game Center (คลัง 100 เกมเดี่ยว/กลุ่ม + สุ่มเกม + 5 เอนจิน) และ Proactive AI Game Host**:
+   - เปิดแผงเกมแบบ Inline ไร้ Popup จากปุ่ม `+` -> `เกมกลุ่ม/เดี่ยว AI` ในทุกห้องแชท (เล่นคนเดียวในห้อง 1-1 `BC AI` / `Keep` หรือเล่นหลายคนในห้องกลุ่ม) หรือกดเข้าร่วมจากการ์ดชวนเล่น (`game_invite`) (`web/src/components/GameCenterPanel.tsx`, `frontend/lib/screens/game_center_panel.dart`, Backend `backend/src/game_catalog.rs` + `backend/src/routes/game_routes.rs`):
+     - **คลัง 100 เกมไทยไม่ซ้ำ (`GET /api/games/catalog`) & สุ่มเกมอัจฉริยะ (`POST /api/conversations/:id/games/random`)**: ครบ 100 เกม (`#1..#100`) แบ่ง 6 หมวด (`เพื่อน`, `ครอบครัว`, `ทำงาน`, `ความรู้`, `ทายใจ/ฮา`, `สร้างสรรค์`) กรองโหมด `solo` / `group` / `all` และคำค้นได้; ปุ่มสุ่มเกมเลี่ยง 10 เกมล่าสุดในห้องไม่ให้ซ้ำ และเปิดเริ่มทันที (`auto_start`) เมื่อเล่นคนเดียว
+     - **5 เอนจินเกมเล่นได้จริง**:
+       - **`quiz` (30 เกม — ควิซสายฟ้า AI)**: คำถามภาษาไทยจาก BC AI (แคช `game_question_packs` + ชุดสำรองในตัว) ปิดบัง `correct_index` จนกว่าจะเฉลย คิดคะแนนความเร็ว (`100 + speed_bonus`) และประกาศ Leaderboard
+       - **`undercover` (15 เกม — ใครคือสายลับ)**: กลุ่ม 2+ คน สุ่มสายลับ 1 คน แจกคำลับแยกเฉพาะผู้เล่นผ่าน `GET /api/games/:id` (WS `game_updated` ไม่ส่งคำลับหรือคำตอบ) ใบ้คำ (`clue`) แล้วโหวตจับสายลับ (`vote`, ห้ามโหวตตัวเอง) พร้อมเฉลยเมื่อจบ
+       - **`hint_race` (20 เกม — แข่งทายจาก 5 คำใบ้)**: ทยอยเปิดคำใบ้ 1..5 ระดับ (ยากไปง่าย) ส่งคำทาย (`POST /api/games/:id/guess`) ยิ่งทายถูกเร็วยิ่งได้คะแนนสูง ปิดบังเฉลยจนกว่าจะถูกหรือจบข้อ
+       - **`party_vote` (20 เกม — โหวตสายฮา/ทายใจ/ผจญภัย)**: โหวตตัวเลือก 2–4 ข้อ (`POST /api/games/:id/answer`) แสดงแถบผลโหวตพร้อมคำแซว/คอมเมนต์จาก BC AI
+       - **`creative_challenge` (15 เกม — ภารกิจสร้างสรรค์/ถ่ายภาพ)**: ส่งข้อความหรือภาพ (`POST /api/games/:id/submit`) ให้ BC AI (รองรับ Vision) ตัดสินคะแนน `60..100` พร้อมคอมเมนต์สั้นๆ
+   - **Proactive AI Game Host**: BC AI สามารถชวนสมาชิกในห้องกลุ่มเล่นเกมอัตโนมัติ (หรือเรียกทันทีผ่าน `POST /api/conversations/:id/games/proactive-invite`) โดยอ่านบริบทกลุ่มล่าสุด (ข้ามข้อความลับ PIN) เลือกเกมจากคลัง 100 เกมให้เข้าบรรยากาศและส่งการ์ด `game_invite` ที่มีปุ่ม **`เข้าร่วมเล่นเลย`** และ **`ปิดชวนเล่นห้องนี้`**; ควบคุมเปิด/ปิดได้ 2 ชั้น ทั้ง **รายห้อง** (`ai_game_auto_invite` + คูลดาวน์ `ai_game_invite_cooldown_mins` ค่าเริ่มต้น 30 นาที, เปิดเฉพาะห้องกลุ่มปกติ ไม่รบกวนห้อง 1-1/OA/Keep) และ **ทั้งระบบ** (`proactive_game_invites` ใน `GET|PUT /api/admin/ai-settings` และ `AI_GAME_PROACTIVE_ENABLED` ใน `.env`) พร้อมกันสแปมไม่โพสต์ซ้ำเมื่อข้อความล่าสุดเป็น `user_ai` และงดชวนช่วงเวลาเงียบ `23:00–07:00` เวลาไทย
 
 ---
 
@@ -111,6 +123,7 @@ flowchart LR
 | **LiveKit SFU** | `bcaichat-livekit` | `7880-7882` | WebSocket signaling (`:7880`) และ WebRTC media (`7881/tcp`, `7882/udp`) |
 | **Rust Backend & WS** | `bcaichat-backend` | `8096` | HTTP API `/api/*`, `/miniapp/*` และ WebSocket `/ws` |
 | **Next.js Web App** | `bcaichat-web` | `3096` | เว็บแอป 2 ไซต์แยกตามโฮสต์: ไซต์แชท `localhost:3096` · ไซต์ร้านค้า `oa.localhost:3096` |
+| **AI Provider (Server `.env`)** | Server-side only | `443` / `11434` | กำหนดผ่าน `.env` ฝั่งเซิร์ฟเวอร์เท่านั้น (ค่าเริ่มต้น `https://ollama.com` โมเดล `deepseek-v4.1-flash` หรือ Local/OpenAI-compatible) ไม่เปิดเผยใน Client UI |
 
 ### ตัวแปรสภาพแวดล้อมสำคัญ (`.env.example` / `backend/src/config.rs`)
 
@@ -125,8 +138,10 @@ flowchart LR
 | `SMSMKT_BASE_URL` | `https://portal-otp.smsmkt.com` | ปลายทาง SMSMKT OTP (ตั้งค่า `SMSMKT_API_KEY`, `SMSMKT_SECRET_KEY`, `SMSMKT_PROJECT_KEY` ใน `.env` หรือชี้ไปที่ mock ระหว่างรัน E2E) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_OAUTH_VERIFY_BASE` | *(กำหนด Client ID ใน `.env`)* / `https://oauth2.googleapis.com` | ตรวจสอบ Google OAuth2 ID Token |
 | `ADMIN_BOOTSTRAP_CODE` | *(กำหนดรหัสลับใน `.env`)* | รหัสใช้ครั้งเดียวสำหรับตั้งค่าเจ้าของระบบเริ่มต้น (`/api/auth/bootstrap-admin`) |
+| `ENABLE_TEST_USERS` | `false` *(ล็อกเฉพาะ localhost)* | บัญชีทดสอบด่วนใช้งานได้เฉพาะโฮสต์ loopback (`localhost`, `127.0.0.1`, `[::1]`, `10.0.2.2`, `oa.localhost`) เท่านั้น — ถูกบล็อกและตัดออก 100% บนโดเมน/IP จริงแม้ตั้งค่าเป็น `true` |
 | `LIVEKIT_URL` / `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | `ws://127.0.0.1:7880` | เชื่อมต่อ LiveKit SFU (`livekit.yaml`) สำหรับโทรเสียง/วิดีโอ |
-| `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL` / `DEEPSEEK_BASE_URL` | `deepseek-chat` / `https://api.deepseek.com` | เชื่อมต่อผู้ช่วย AI (`@ai`) |
+| `AI_BASE_URL` / `AI_MODEL` / `AI_API_KEY` / `AI_TIMEOUT_SECS` / `AI_ENABLED` | `https://ollama.com` / `deepseek-v4.1-flash` / *(คีย์ลับใน `.env` หรือ `OLLAMA_API_KEY`)* / `60` / `true` | ตั้งค่าฝั่งเซิร์ฟเวอร์เท่านั้น (ความลับไม่เก็บใน DB และไม่ส่งออกให้ Client/UI; แอดมินปรับเฉพาะพฤติกรรมที่ `GET|PUT /api/admin/ai-settings` และทดสอบที่ `POST /api/admin/ai-test`) |
+| `AI_GAME_PROACTIVE_ENABLED` / `AI_GAME_HOST_POLL_SECS` / `AI_GAME_TRIGGER_MSGS` | `true` / `60` / `12` | คุม Background Proactive AI Game Host: เปิด/ปิดตัวชวนเล่นอัตโนมัติ, รอบสแกน (วินาที, `5..=3600`), และจำนวนข้อความคนคุยในกลุ่มก่อนชวนเล่น (`3..=200`) |
 | `FCM_SERVICE_ACCOUNT_FILE` | *(เว้นว่างเพื่อปิด Push)* | พาธไฟล์ Service Account JSON ของ Firebase Cloud Messaging |
 | `BACKEND_URL` / `NEXT_PUBLIC_APP_URL` / `NEXT_PUBLIC_WS_URL` | `http://127.0.0.1:8096` / `http://localhost:3096` / `ws://127.0.0.1:8096/ws` | ค่าเชื่อมต่อ Backend, Metadata/Sitemap และ WebSocket ของ Next.js |
 | `API_BASE_URL` | *(ส่งผ่าน `--dart-define`)* | Override Server URL สำหรับ Flutter ตอน compile/run |
@@ -142,13 +157,14 @@ flowchart LR
 
 | หมวดหมู่ | เครื่องมือ / แพ็กเกจหลัก | รายละเอียดและสัญญาอนุญาต |
 | :--- | :--- | :--- |
-| **Rust Toolchain** | Rust (`edition 2021`), `axum 0.7`, `tokio 1`, `mongodb 3.1`, `bson 2.13`, `reqwest 0.12`, `jsonwebtoken 9.3`, `hmac 0.12`, `sha2 0.10` | ใช้คอมไพล์และรัน `backend/` |
+| **Rust Toolchain** | Rust (`edition 2021`), `axum 0.7`, `tokio 1`, `mongodb 3.1`, `bson 2.13`, `reqwest 0.12`, `jsonwebtoken 9.3`, `hmac 0.12`, `sha2 0.10`, `pdf-extract`, `calamine`, `zip`, `quick-xml` | ใช้คอมไพล์และรัน `backend/` (ดึงข้อความ PDF/Word/Excel/PowerPoint ด้วย Pure Rust) |
 | **Node.js 20+** | Node.js >= 20, `next ^15.3.3`, `react ^19.1.0`, `typescript ^5.8.3`, `@tailwindcss/postcss ^4.1.8`, `livekit-client ^2.24.1`, `qrcode ^1.5.4`, `leaflet ^1.9.4` (**BSD-2**), `playwright ^1.65.1` | ใช้รัน `web/` และชุดทดสอบอัตโนมัติใน `e2e/` |
 | **Flutter SDK** | Flutter (`Dart SDK ^3.11.5`), `http`, `web_socket_channel`, `shared_preferences`, `file_picker`, `url_launcher`, `google_fonts`, `qr_flutter`, `flutter_local_notifications`, `audioplayers`, `livekit_client`, `mobile_scanner` (**BSD-3**), `flutter_map` (**BSD-3**), `latlong2`, `geolocator` (**MIT**) | ใช้รันและ build `frontend/` สำหรับ Android, iOS, Windows, macOS |
 | **Docker** | Docker Engine + Docker Compose (`mongo:7.0`, `minio/minio:latest`, `livekit/livekit-server`) | รันฐานข้อมูล MongoDB, MinIO Storage และ LiveKit SFU |
 | **แผนที่** | ไทล์แผนที่ `https://tile.openstreetmap.org/{z}/{x}/{y}.png` (ข้อมูล OpenStreetMap สัญญาอนุญาต **ODbL**) | ใช้ฟรี ไม่ต้องมี API key; ต้องแสดงเครดิต "© OpenStreetMap" บนแผนที่เสมอ และ Flutter ส่งชื่อแอป `com.bcaichat.app` เป็น User-Agent (ที่มา: [OSM Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/)) |
 | **ภาพดาวเทียม** | ไทล์ `https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/g/{z}/{y}/{x}.jpg` (Sentinel-2 cloudless ปี 2016 สัญญาอนุญาต **CC BY 4.0**) | ใช้ฟรี ไม่ต้องมี API key; ต้องแสดงเครดิต "EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2016)" บนแผนที่ (ที่มา: [EOxCloudless FAQ](https://cloudless.eox.at/documentation/faq)) |
-| **ภายนอก (ตั้งค่าใน `.env`)** | SMSMKT OTP API, Google OAuth2, DeepSeek API, Firebase Cloud Messaging (ตัวเลือก) | ให้บริการส่ง OTP จริง ตรวจสอบ Gmail ตอบแชท AI และ Push แจ้งเตือน |
+| **AI Engine (Server `.env`)** | กำหนดฝั่งเซิร์ฟเวอร์เท่านั้น (ค่าเริ่มต้น Ollama Cloud `https://ollama.com` โมเดล `deepseek-v4.1-flash` หรือ Local Ollama / OpenAI-compatible) | รันผู้ช่วย BC AI (`@ai`, สรุปแชท, ร่างคำตอบ, อ่านภาพ Vision, อ่านเอกสาร) แบบประหยัด Token (`think: false`, จำกัด `max_tokens` รายงาน) โดยไม่เปิดเผยคีย์/โมเดลให้ผู้ใช้ |
+| **ภายนอก (ตั้งค่าใน `.env`)** | SMSMKT OTP API, Google OAuth2, Firebase Cloud Messaging (ตัวเลือก) | ให้บริการส่ง OTP จริง ตรวจสอบ Gmail และ Push แจ้งเตือน |
 | **ฟอนต์และไอคอนปลอดลิขสิทธิ์** | ฟอนต์ `Prompt` (**SIL OFL**), `lucide-react` (**MIT**), Material Icons (**Apache-2.0**), เสียง WAV สังเคราะห์ใน `frontend/assets/sounds/` | ใช้งานได้อย่างถูกต้องตามสัญญาอนุญาตเปิด 100% |
 
 ---
@@ -216,14 +232,14 @@ adb install -r build\bcaichat-oa.apk
 
 ### 4. รันชุดทดสอบอัตโนมัติ (ปลอดภัย ไม่ใช้เครดิต SMSMKT จริง)
 
-ชุดทดสอบ E2E ใน `e2e/` จะเปิดเซิร์ฟเวอร์จำลอง SMSMKT & Google OAuth ในโปรเซส แยกพอร์ต (`:8098` / `:3098`) และแยกฐานข้อมูล `bcaichat_e2e` แล้วทำความสะอาดอัตโนมัติเมื่อจบ (ชุดเว็บเปิดไซต์ร้านค้าที่ `http://oa.localhost:<พอร์ต>`; รันทีละชุด เพราะบางชุดใช้พอร์ตเดียวกัน):
+ชุดทดสอบ E2E ใน `e2e/` จะเปิดเซิร์ฟเวอร์จำลอง SMSMKT, Google OAuth และ Ollama AI ในโปรเซส (หรือกำหนด `AI_ENABLED=false` ในชุด UI/Audit เพื่อไม่แย่ง GPU) แยกพอร์ต (`:8098` / `:3098`) และแยกฐานข้อมูล `bcaichat_e2e` แล้วทำความสะอาดอัตโนมัติเมื่อจบ (ชุดเว็บเปิดไซต์ร้านค้าที่ `http://oa.localhost:<พอร์ต>`; รันทีละชุด เพราะบางชุดใช้พอร์ตเดียวกัน):
 
 ```powershell
 # 1. ทดสอบ Rust Backend Unit & Integration Tests
 cd D:\bcaichat\backend
 cargo test
 
-# 2. ทดสอบ E2E API + WS + MinIO + OA + LiveKit + Privacy/Mute/Block + Keep/Edit/Location/Recovery
+# 2. ทดสอบ E2E API + WS + MinIO + AI Vision/Document + BC Game Center + OA + LiveKit + Privacy/Mute/Block + Keep/Edit/Location/Recovery
 cd D:\bcaichat
 node e2e/e2e_api_ws_5users.mjs
 
@@ -271,7 +287,9 @@ curl -H "Authorization: Bearer <JWT>" "http://127.0.0.1:8096/api/oa/<OA_ID>/cust
 - **ภาพดาวเทียม**: เป็นภาพปี 2016 ความละเอียดราว 10 เมตรต่อพิกเซล (ชัดถึงซูม 14 จึงจำกัดซูมของชั้นดาวเทียมไว้ที่ระดับนี้ ต้องการซูมลึกกว่าให้สลับกลับเป็นแผนที่) เห็นถนนใหญ่ แม่น้ำ และแปลงที่ดิน แต่ไม่เห็นรายหลังคาเรือน; เซิร์ฟเวอร์สาธารณะไม่มี SLA; ภาพปี 2018 ขึ้นไปของผู้ให้บริการเดียวกันห้ามใช้เชิงพาณิชย์จึงไม่ได้นำมาใช้
 - **แชร์ตำแหน่ง**: เลือกได้จากการปักหมุดบนแผนที่หรือปุ่ม GPS เท่านั้น ไม่มีช่องค้นหาชื่อสถานที่ วางลิงก์แผนที่ หรือพิมพ์ชื่อ/ที่อยู่/พิกัดเอง; การ์ดที่ส่งใช้ชื่อ "ตำแหน่งที่ปักหมุด"
 - **ตำแหน่งปัจจุบัน (GPS)**: ต้องอนุญาตสิทธิ์ตำแหน่งและเปิดบริการตำแหน่งของเครื่อง; บนเว็บต้องเปิดผ่าน HTTPS หรือ `localhost`
-- **Push Notification & DeepSeek Fallback**: Push ผ่าน FCM ถูกปิดเป็นค่าเริ่มต้นหากเว้นว่าง `FCM_SERVICE_ACCOUNT_FILE` และเมื่อยังไม่ตั้ง `DEEPSEEK_API_KEY` ผู้ช่วย `@ai` จะตอบกลับด้วย fallback engine ภายใน (`generate_smart_context_reply`)
+- **Push Notification & BC AI Fallback**: Push ผ่าน FCM ถูกปิดเป็นค่าเริ่มต้นหากเว้นว่าง `FCM_SERVICE_ACCOUNT_FILE` ส่วนการตั้งค่าเชื่อมต่อและ API Key ของผู้ช่วย BC AI จัดการผ่าน `.env` ฝั่งเซิร์ฟเวอร์เท่านั้น (ไม่มีหน้าจอให้ผู้ใช้เลือกโมเดลหรือกรอกคีย์); หากตั้ง `AI_ENABLED=false` ไม่มีคีย์ หรือปลายทางออฟไลน์/หมดเวลา (`AI_TIMEOUT_SECS`) ระบบจะสลับไปตอบด้วย fallback engine ภายใน (`generate_smart_context_reply`) อัตโนมัติ
+- **การอ่านภาพ (Vision) และเอกสารของ AI**: รองรับรูปภาพขนาดไม่เกิน `10 MB` (PNG/JPG/WEBP/GIF) และเอกสารขนาดไม่เกิน `20 MB` (`PDF`, `DOCX`, `XLSX`/`XLS`/`ODS`, `PPTX`, ไฟล์ข้อความ/โค้ด โดยตัดข้อความที่ `8,000` ตัวอักษร/ไฟล์เพื่อประหยัด Token และแนบภาพสูงสุด `2` ภาพในบริบทห้อง / `1` ภาพใน `POST /api/ai/analyze-message`); ไฟล์ PDF แบบภาพสแกนที่ไม่มีชั้นข้อความอาจดึงข้อความไม่ได้โดยตรง แนะนำส่งเป็นรูปภาพแทน; ภาพและเอกสารที่ตั้งเป็นข้อความลับล็อก PIN จะถูกปกปิดจากการวิเคราะห์ของ AI เมื่อเปิด `redact_confidential`
 - **แอปร้านค้าบน Windows / iOS / macOS**: `--dart-define=CLIENT_APP=oa` เปลี่ยนเฉพาะหน้าจอเป็นแอปร้านค้า ส่วนชื่อโปรแกรม รหัสแอป และไอคอนที่แยกจากแอปแชทมีเฉพาะ Android จึงติดตั้ง 2 แอปคู่กันได้เฉพาะ Android
 - **ไซต์ร้านค้าต้องมีชื่อโฮสต์**: เมื่อเปิดเว็บด้วยเลข IP ตรงๆ จะไม่มีโฮสต์ย่อย `oa.` ให้ใช้ ระบบจึงเปิดหน้าร้านค้าที่ `/oa` บนโฮสต์เดิมแทน
 - **ประวัติข่าวของลูกค้า (CRM)**: แสดงเฉพาะข่าวที่ส่งหลังจากระบบเริ่มบันทึกรายชื่อผู้รับของแต่ละครั้ง ข่าวที่ส่งก่อนหน้านั้นไม่มีรายชื่อผู้รับจึงไม่ปรากฏในหน้ารายละเอียดลูกค้า
+- **BC Game Center & Proactive AI Game Host**: คลัง 100 เกมรองรับโหมดเดี่ยว (`solo`/`both`, 1+ คน) ในทุกห้องแชท ส่วนเกมกลุ่ม (`undercover` และบางเกม `party_vote`) ต้องมีผู้เล่นอย่างน้อย 2 คน; หากปิด `AI_ENABLED=false` หรือ AI ปลายทางออฟไลน์ ระบบจะสลับใช้ชุดคำถาม/คู่คำ/คำใบ้/โจทย์ภาษาไทยสำรองใน `game_catalog.rs` อัตโนมัติ; การชวนเล่นอัตโนมัติ (Proactive Host) ทำงานเฉพาะห้องกลุ่มปกติในช่วง `07:00–23:00` เวลาไทย เมื่อเปิดสวิตช์ทั้งระดับระบบและรายห้องและพ้นระยะคูลดาวน์แล้วเท่านั้น

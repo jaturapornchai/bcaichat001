@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { api, openGoogleOAuthPopup } from "@/lib/api";
 import { usePwaInstall } from "@/lib/pwa";
-import { SITE_NAME, type SiteId } from "@/lib/site";
+import { isLocalhostRuntime, SITE_NAME, type SiteId } from "@/lib/site";
 import type { AuthConfig, OtpChallengeResponse, UserProfile } from "@/lib/types";
 import { UserAvatar } from "./StickerArt";
 
@@ -348,6 +348,7 @@ export function LoginView({
   };
 
   const handleQuickTestLogin = async (slot: number) => {
+    if (!isLocalhostRuntime()) return;
     setBusy(true);
     setErrorMsg(null);
     try {
@@ -646,8 +647,10 @@ export function LoginView({
             )}
           </div>
 
-          {/* 5 Quick Test Users (One-Click Login & Open in New Tab) */}
-          {authConfig?.test_users_enabled && (authConfig.test_users?.length ?? 0) > 0 && (
+          {/* 5 Quick Test Users (Localhost-Only: One-Click Login & Open in New Tab) */}
+          {isLocalhostRuntime() &&
+            authConfig?.test_users_enabled &&
+            (authConfig.test_users?.length ?? 0) > 0 && (
             <div
               data-testid="quick-test-users-box"
               className="mt-3.5 space-y-1.5 border-t border-[var(--bc-line)] pt-2.5"

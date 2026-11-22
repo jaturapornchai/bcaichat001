@@ -210,6 +210,8 @@ pub async fn build_conversation_dto(
     };
 
     let member_count = conv.member_ids.len().max(members.len());
+    let ai_game_auto_invite = conv.effective_ai_game_auto_invite();
+    let ai_game_invite_cooldown_mins = conv.effective_ai_game_invite_cooldown_mins();
     Ok(ConversationDto {
         id: conv.id,
         conv_type: conv.conv_type,
@@ -232,6 +234,8 @@ pub async fn build_conversation_dto(
         member_count,
         members,
         last_message,
+        ai_game_auto_invite,
+        ai_game_invite_cooldown_mins,
         created_at: conv.created_at,
         updated_at: conv.updated_at,
     })
@@ -458,6 +462,8 @@ pub async fn list_conversations_handler(
         };
 
         let member_count = conv.member_ids.len().max(members.len());
+        let ai_game_auto_invite = conv.effective_ai_game_auto_invite();
+        let ai_game_invite_cooldown_mins = conv.effective_ai_game_invite_cooldown_mins();
         let dto = ConversationDto {
             id: conv.id,
             conv_type: conv.conv_type,
@@ -480,6 +486,8 @@ pub async fn list_conversations_handler(
             member_count,
             members,
             last_message,
+            ai_game_auto_invite,
+            ai_game_invite_cooldown_mins,
             created_at: conv.created_at,
             updated_at: conv.updated_at,
         };
@@ -631,6 +639,10 @@ pub async fn create_group_conversation_handler(
             created_at: now.clone(),
             read_count: 0,
         }),
+        ai_game_auto_invite: None,
+        ai_game_invite_cooldown_mins: None,
+        last_ai_game_invite_at: None,
+        human_msgs_since_game_invite: 0,
         created_at: now.clone(),
         updated_at: now.clone(),
     };
@@ -701,6 +713,8 @@ pub struct UpdateConvMetaRequest {
     pub is_archived: Option<bool>,
     pub name: Option<String>,
     pub avatar_url: Option<String>,
+    pub ai_game_auto_invite: Option<bool>,
+    pub ai_game_invite_cooldown_mins: Option<u32>,
 }
 
 pub async fn update_conversation_meta_handler(
@@ -790,6 +804,15 @@ pub async fn update_conversation_meta_handler(
             conv.avatar_url = avatar.trim().to_string();
         }
     }
+    if let Some(auto_invite) = payload.ai_game_auto_invite {
+        conv.ai_game_auto_invite = Some(auto_invite);
+    }
+    if let Some(cooldown_mins) = payload.ai_game_invite_cooldown_mins {
+        conv.ai_game_invite_cooldown_mins = Some(cooldown_mins.clamp(1, 1440));
+    }
+
+    let eff_auto_invite = conv.effective_ai_game_auto_invite();
+    let eff_cooldown_mins = conv.effective_ai_game_invite_cooldown_mins();
 
     conv_coll
         .replace_one(doc! { "_id": &conv_id }, &conv)
@@ -803,6 +826,8 @@ pub async fn update_conversation_meta_handler(
     state.ws_hub.broadcast_event(json!({
         "event": "conversation_updated",
         "conversation_id": conv_id,
+        "ai_game_auto_invite": eff_auto_invite,
+        "ai_game_invite_cooldown_mins": eff_cooldown_mins,
     }));
 
     Ok(Json(dto))
@@ -1478,6 +1503,14 @@ pub async fn send_message_handler(
             read_count: 0,
         });
         conv.updated_at = now;
+        if conv.conv_type == "group"
+            && conv.oa_id.is_none()
+            && sender_id_clone != "user_ai"
+            && sender_id_clone != "user_official"
+        {
+            conv.human_msgs_since_game_invite =
+                conv.human_msgs_since_game_invite.saturating_add(1);
+        }
 
         let _ = conv_coll
             .replace_one(doc! { "_id": &conv_id }, &conv)
@@ -1510,6 +1543,27 @@ pub async fn send_message_handler(
     } else {
         // Trigger BC AI Co-Pilot if message is in 1-1 chat with AI or mentions @ai
         let _ = crate::routes::ai_routes::maybe_trigger_ai_reply(&state, &mut conv, &msg_doc).await;
+
+        // Non-blocking Proactive AI Game Host trigger for lively group chats
+        let now_utc = Utc::now();
+        if state.config.ai_game_proactive_enabled
+            && conv.conv_type == "group"
+            && conv.oa_id.is_none()
+            && sender_id_clone != "user_ai"
+            && sender_id_clone != "user_official"
+            && conv.effective_ai_game_auto_invite()
+            && conv.human_msgs_since_game_invite >= state.config.ai_game_trigger_msgs
+            && crate::routes::game_routes::is_proactive_cooldown_elapsed(&conv, now_utc)
+            && crate::routes::game_routes::is_bangkok_awake_hour(now_utc)
+        {
+            let bg_state = state.clone();
+            let bg_conv_id = conv_id.clone();
+            tokio::spawn(async move {
+                let _ =
+                    crate::routes::game_routes::maybe_auto_proactive_invite(&bg_state, &bg_conv_id)
+                        .await;
+            });
+        }
     }
 
     Ok(Json(dto))

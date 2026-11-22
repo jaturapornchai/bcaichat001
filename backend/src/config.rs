@@ -15,9 +15,14 @@ pub struct AppConfig {
     pub super_admin_email: String,
     pub super_admin_phone: String,
     pub public_base_url: String,
-    pub deepseek_api_key: String,
-    pub deepseek_model: String,
-    pub deepseek_base_url: String,
+    pub ai_base_url: String,
+    pub ai_model: String,
+    pub ai_api_key: String,
+    pub ai_timeout_secs: u64,
+    pub ai_enabled: bool,
+    pub ai_game_proactive_enabled: bool,
+    pub ai_game_host_poll_secs: u64,
+    pub ai_game_trigger_msgs: u64,
     pub smsmkt_base_url: String,
     pub smsmkt_api_key: String,
     pub smsmkt_secret_key: String,
@@ -53,7 +58,13 @@ fn clean_secret_env(raw: String) -> String {
 
 pub fn is_loopback_base_url(raw_url: &str) -> bool {
     let lower = raw_url.trim().to_ascii_lowercase();
-    for prefix in ["http://127.0.0.1", "http://localhost", "http://[::1]"] {
+    for prefix in [
+        "http://127.0.0.1",
+        "http://localhost",
+        "http://[::1]",
+        "http://10.0.2.2",
+        "http://oa.localhost",
+    ] {
         if let Some(rest) = lower.strip_prefix(prefix) {
             if rest.is_empty() || rest.starts_with(':') || rest.starts_with('/') {
                 return true;
@@ -63,17 +74,113 @@ pub fn is_loopback_base_url(raw_url: &str) -> bool {
     false
 }
 
+/// Validates a `Host` / `X-Forwarded-Host` header value as strictly loopback/local-only.
+/// Accepts optional `:port` and IPv6 `[::1]:port`, checking ONLY the first comma-separated host.
+pub fn is_loopback_host_header(raw_host: &str) -> bool {
+    let first = raw_host.split(',').next().unwrap_or("").trim().to_ascii_lowercase();
+    if first.is_empty() || first.chars().any(char::is_whitespace) {
+        return false;
+    }
+
+    let host_only = if let Some(rest) = first.strip_prefix('[') {
+        let Some((inside, after)) = rest.split_once(']') else {
+            return false;
+        };
+        if !after.is_empty() {
+            let Some(port) = after.strip_prefix(':') else {
+                return false;
+            };
+            if port.is_empty() || !port.bytes().all(|b| b.is_ascii_digit()) {
+                return false;
+            }
+        }
+        inside
+    } else if first.matches(':').count() == 1 {
+        let Some((h, port)) = first.split_once(':') else {
+            return false;
+        };
+        if port.is_empty() || !port.bytes().all(|b| b.is_ascii_digit()) {
+            return false;
+        }
+        h
+    } else {
+        first.as_str()
+    };
+
+    matches!(
+        host_only,
+        "localhost" | "127.0.0.1" | "::1" | "10.0.2.2" | "oa.localhost"
+    )
+}
+
 pub fn resolve_enable_test_users(
     raw_enable: Option<&str>,
     raw_public_base: Option<&str>,
 ) -> bool {
+    let public_base = raw_public_base.map(str::trim).filter(|s| !s.is_empty());
+    if let Some(base) = public_base {
+        // HARD BLOCK: non-loopback PUBLIC_BASE_URL can NEVER enable test users, even if ENABLE_TEST_USERS=true!
+        if !is_loopback_base_url(base) {
+            return false;
+        }
+        if let Some(val) = raw_enable.map(str::trim).filter(|s| !s.is_empty()) {
+            return !(val.eq_ignore_ascii_case("false")
+                || val == "0"
+                || val.eq_ignore_ascii_case("no"));
+        }
+        return true;
+    }
     if let Some(val) = raw_enable.map(str::trim).filter(|s| !s.is_empty()) {
         return val.eq_ignore_ascii_case("true") || val == "1" || val.eq_ignore_ascii_case("yes");
     }
-    match raw_public_base.map(str::trim).filter(|s| !s.is_empty()) {
-        Some(base) => is_loopback_base_url(base),
-        None => false,
+    false
+}
+
+pub fn resolve_ai_enabled(raw: Option<&str>) -> bool {
+    match raw.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(val) => {
+            !(val.eq_ignore_ascii_case("false") || val == "0" || val.eq_ignore_ascii_case("no"))
+        }
+        None => true,
     }
+}
+
+pub fn resolve_ai_timeout_secs(raw: Option<&str>) -> u64 {
+    raw.map(str::trim)
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(60)
+        .clamp(5, 300)
+}
+
+pub fn resolve_ai_game_proactive_enabled(raw: Option<&str>) -> bool {
+    match raw.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(val) => {
+            !(val.eq_ignore_ascii_case("false") || val == "0" || val.eq_ignore_ascii_case("no"))
+        }
+        None => true,
+    }
+}
+
+pub fn resolve_ai_game_host_poll_secs(raw: Option<&str>) -> u64 {
+    raw.map(str::trim)
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(60)
+        .clamp(5, 3600)
+}
+
+pub fn resolve_ai_game_trigger_msgs(raw: Option<&str>) -> u64 {
+    raw.map(str::trim)
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(12)
+        .clamp(3, 200)
+}
+
+pub fn resolve_ai_api_key(ai_key: Option<&str>, ollama_key: Option<&str>) -> String {
+    let primary = clean_secret_env(ai_key.unwrap_or_default().to_string());
+    if !primary.is_empty() {
+        return primary;
+    }
+    clean_secret_env(ollama_key.unwrap_or_default().to_string())
 }
 
 impl AppConfig {
@@ -127,15 +234,29 @@ impl AppConfig {
             .map(str::to_string)
             .unwrap_or_else(|| format!("http://127.0.0.1:{}", port));
 
-        let deepseek_api_key = clean_secret_env(env::var("DEEPSEEK_API_KEY").unwrap_or_default());
-        let deepseek_model = env::var("DEEPSEEK_MODEL")
-            .unwrap_or_else(|_| "deepseek-chat".to_string())
-            .trim()
-            .to_string();
-        let deepseek_base_url = env::var("DEEPSEEK_BASE_URL")
-            .unwrap_or_else(|_| "https://api.deepseek.com".to_string())
-            .trim_end_matches('/')
-            .to_string();
+        let ai_base_url = env::var("AI_BASE_URL")
+            .ok()
+            .map(|v| v.trim().trim_end_matches('/').to_string())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "https://ollama.com".to_string());
+        let ai_model = env::var("AI_MODEL")
+            .ok()
+            .map(|v| v.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "deepseek-v4.1-flash".to_string());
+        let ai_api_key = resolve_ai_api_key(
+            env::var("AI_API_KEY").ok().as_deref(),
+            env::var("OLLAMA_API_KEY").ok().as_deref(),
+        );
+        let ai_timeout_secs = resolve_ai_timeout_secs(env::var("AI_TIMEOUT_SECS").ok().as_deref());
+        let ai_enabled = resolve_ai_enabled(env::var("AI_ENABLED").ok().as_deref());
+        let ai_game_proactive_enabled = resolve_ai_game_proactive_enabled(
+            env::var("AI_GAME_PROACTIVE_ENABLED").ok().as_deref(),
+        );
+        let ai_game_host_poll_secs =
+            resolve_ai_game_host_poll_secs(env::var("AI_GAME_HOST_POLL_SECS").ok().as_deref());
+        let ai_game_trigger_msgs =
+            resolve_ai_game_trigger_msgs(env::var("AI_GAME_TRIGGER_MSGS").ok().as_deref());
 
         let smsmkt_base_url = env::var("SMSMKT_BASE_URL")
             .unwrap_or_else(|_| "https://portal-otp.smsmkt.com".to_string())
@@ -195,9 +316,14 @@ impl AppConfig {
             super_admin_email,
             super_admin_phone,
             public_base_url,
-            deepseek_api_key,
-            deepseek_model,
-            deepseek_base_url,
+            ai_base_url,
+            ai_model,
+            ai_api_key,
+            ai_timeout_secs,
+            ai_enabled,
+            ai_game_proactive_enabled,
+            ai_game_host_poll_secs,
+            ai_game_trigger_msgs,
             smsmkt_base_url,
             smsmkt_api_key,
             smsmkt_secret_key,
@@ -222,7 +348,66 @@ impl AppConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_loopback_base_url, resolve_enable_test_users};
+    use super::{
+        is_loopback_base_url, is_loopback_host_header, resolve_ai_api_key, resolve_ai_enabled,
+        resolve_ai_game_host_poll_secs, resolve_ai_game_proactive_enabled,
+        resolve_ai_game_trigger_msgs, resolve_ai_timeout_secs, resolve_enable_test_users,
+    };
+
+    #[test]
+    fn resolve_ai_game_host_env_helpers_apply_defaults_and_bounds() {
+        assert!(resolve_ai_game_proactive_enabled(None));
+        assert!(resolve_ai_game_proactive_enabled(Some("")));
+        assert!(resolve_ai_game_proactive_enabled(Some("true")));
+        assert!(!resolve_ai_game_proactive_enabled(Some("false")));
+        assert!(!resolve_ai_game_proactive_enabled(Some("0")));
+        assert!(!resolve_ai_game_proactive_enabled(Some("No")));
+
+        assert_eq!(resolve_ai_game_host_poll_secs(None), 60);
+        assert_eq!(resolve_ai_game_host_poll_secs(Some("bad")), 60);
+        assert_eq!(resolve_ai_game_host_poll_secs(Some("1")), 5);
+        assert_eq!(resolve_ai_game_host_poll_secs(Some("120")), 120);
+        assert_eq!(resolve_ai_game_host_poll_secs(Some("9999")), 3600);
+
+        assert_eq!(resolve_ai_game_trigger_msgs(None), 12);
+        assert_eq!(resolve_ai_game_trigger_msgs(Some("nope")), 12);
+        assert_eq!(resolve_ai_game_trigger_msgs(Some("1")), 3);
+        assert_eq!(resolve_ai_game_trigger_msgs(Some("25")), 25);
+        assert_eq!(resolve_ai_game_trigger_msgs(Some("500")), 200);
+    }
+
+    #[test]
+    fn resolve_ai_env_helpers_apply_defaults_and_bounds() {
+        assert!(resolve_ai_enabled(None));
+        assert!(resolve_ai_enabled(Some("")));
+        assert!(resolve_ai_enabled(Some("true")));
+        assert!(resolve_ai_enabled(Some("1")));
+        assert!(!resolve_ai_enabled(Some("false")));
+        assert!(!resolve_ai_enabled(Some("FALSE")));
+        assert!(!resolve_ai_enabled(Some("0")));
+        assert!(!resolve_ai_enabled(Some("no")));
+        assert!(!resolve_ai_enabled(Some(" No ")));
+
+        assert_eq!(resolve_ai_timeout_secs(None), 60);
+        assert_eq!(resolve_ai_timeout_secs(Some("bad")), 60);
+        assert_eq!(resolve_ai_timeout_secs(Some("1")), 5);
+        assert_eq!(resolve_ai_timeout_secs(Some("45")), 45);
+        assert_eq!(resolve_ai_timeout_secs(Some("999")), 300);
+
+        assert_eq!(resolve_ai_api_key(None, None), "");
+        assert_eq!(
+            resolve_ai_api_key(Some("primary-tok"), Some("fallback-tok")),
+            "primary-tok"
+        );
+        assert_eq!(
+            resolve_ai_api_key(Some("your_ollama_cloud_api_key_here"), Some("fallback-tok")),
+            "fallback-tok"
+        );
+        assert_eq!(
+            resolve_ai_api_key(Some("  "), Some("  ollama-key-123  ")),
+            "ollama-key-123"
+        );
+    }
 
     #[test]
     fn resolve_enable_test_users_enforces_fail_closed_outside_explicit_loopback() {
@@ -246,13 +431,26 @@ mod tests {
         ));
         assert!(!is_loopback_base_url("http://127.0.0.1.evil.com"));
 
-        // Explicit ENABLE_TEST_USERS overrides in both directions
-        assert!(resolve_enable_test_users(
+        // HARD BLOCK: non-loopback PUBLIC_BASE_URL ALWAYS forces false even if ENABLE_TEST_USERS=true!
+        assert!(!resolve_enable_test_users(
             Some("true"),
             Some("https://www.bcaichat.com")
         ));
+        assert!(!resolve_enable_test_users(
+            Some("1"),
+            Some("https://oa.bcaichat.com")
+        ));
+        assert!(!resolve_enable_test_users(
+            Some("YES"),
+            Some("http://localhost.evil.com")
+        ));
+
+        // When PUBLIC_BASE_URL is omitted, explicit ENABLE_TEST_USERS=true/1/yes allows (still gated by Host header)
         assert!(resolve_enable_test_users(Some("1"), None));
         assert!(resolve_enable_test_users(Some("YES"), None));
+        assert!(!resolve_enable_test_users(Some("false"), None));
+
+        // Explicit disable on loopback PUBLIC_BASE_URL turns it off
         assert!(!resolve_enable_test_users(
             Some("false"),
             Some("http://127.0.0.1:8096")
@@ -265,5 +463,62 @@ mod tests {
             Some("no"),
             Some("http://localhost:8096")
         ));
+        assert!(resolve_enable_test_users(
+            Some("true"),
+            Some("http://127.0.0.1:8096")
+        ));
+    }
+
+    #[test]
+    fn is_loopback_host_header_locks_strictly_to_localhost_variants() {
+        for allowed in [
+            "localhost",
+            "LOCALHOST",
+            "localhost:3096",
+            "127.0.0.1",
+            "127.0.0.1:8096",
+            "::1",
+            "[::1]",
+            "[::1]:8096",
+            "10.0.2.2",
+            "10.0.2.2:8096",
+            "oa.localhost",
+            "oa.localhost:3096",
+            "localhost:3096, proxy.local",
+        ] {
+            assert!(
+                is_loopback_host_header(allowed),
+                "expected loopback host to pass: {allowed}"
+            );
+        }
+
+        for rejected in [
+            "",
+            "   ",
+            "www.bcaichat.com",
+            "oa.bcaichat.com",
+            "www.bcaichat.com:443",
+            "www.bcaichat.com, localhost",
+            "localhost.evil.com",
+            "localhost.evil.com:3096",
+            "127.0.0.1.evil.com",
+            "127.0.0.1.evil.com:8096",
+            "sub.oa.localhost",
+            "203.0.113.10",
+            "203.0.113.10:8096",
+            "192.168.1.50:8096",
+            "[::1]:notaport",
+            "localhost:abc",
+            "localhost ",
+        ] {
+            if rejected == "localhost " {
+                assert!(is_loopback_host_header(rejected));
+            } else {
+                assert!(
+                    !is_loopback_host_header(rejected),
+                    "expected non-loopback/spoofed host to be rejected: {rejected}"
+                );
+            }
+        }
     }
 }

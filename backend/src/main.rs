@@ -25,6 +25,10 @@ async fn main() {
         tracing::info!("Seeded initial MongoDB & MinIO data successfully");
     }
 
+    if state.config.ai_game_proactive_enabled {
+        bcaichat_backend::routes::game_routes::spawn_proactive_game_host(state.clone());
+    }
+
     let app = create_router(state);
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     tracing::info!("BC Ai Chat Backend listening on http://127.0.0.1:{}", port);

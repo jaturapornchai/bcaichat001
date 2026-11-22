@@ -85,14 +85,7 @@ class _MainShellState extends State<MainShell> {
   List<AppUser> _homeSmartResults = const [];
   String? _homeSmartError;
 
-  AiAdminSettings _aiSettings = const AiAdminSettings(
-    model: 'deepseek-chat',
-    maskedKey: 'ตั้งค่าบนเซิร์ฟเวอร์แล้ว',
-    hasKey: true,
-    systemPrompt:
-        'คุณคือ BC AI ผู้ช่วยส่วนตัวประจำทุกห้องแชทของ BC Ai Chat ช่วยคิดคำตอบ เกลาข้อความ สรุปนัดหมาย และช่วยวางแผนกับครอบครัวและเพื่อนๆ อย่างเป็นกันเอง',
-    enabled: true,
-  );
+  AiAdminSettings _aiSettings = const AiAdminSettings();
 
   Conversation? _activeConversation;
 
@@ -775,7 +768,11 @@ class _MainShellState extends State<MainShell> {
   // Quick Test Account Switcher (Inline, Zero-Popup)
   // ---------------------------------------------------------------------------
   Future<void> _switchToTestUser(QuickTestUser u) async {
-    if (_switchingTestUser || u.id == _user.id) return;
+    if (!ApiService.instance.isLocalhostServer ||
+        _switchingTestUser ||
+        u.id == _user.id) {
+      return;
+    }
     setState(() => _switchingTestUser = true);
     try {
       final res = await ApiService.instance.testQuickLogin(slot: u.slot);
@@ -1218,7 +1215,8 @@ class _MainShellState extends State<MainShell> {
               conversationId: _activeConversation?.id,
               onOpenConversation: _openConversationById,
             ),
-            if (_authConfig.testUsersEnabled &&
+            if (ApiService.instance.isLocalhostServer &&
+                _authConfig.testUsersEnabled &&
                 _authConfig.testUsers.isNotEmpty)
               _buildQuickTestSwitchBar(),
             Expanded(child: content),
@@ -3938,166 +3936,11 @@ class _MainShellState extends State<MainShell> {
   }
 
   Widget _buildAiBrainSettingsCard() {
-    String selectedModel = _aiSettings.model;
-    final apiKeyCtrl = TextEditingController();
-    final promptCtrl = TextEditingController(text: _aiSettings.systemPrompt);
-
-    return StatefulBuilder(
-      builder: (ctx, setCardState) {
-        return Container(
-          padding: const EdgeInsets.all(13),
-          decoration: AppTheme.surface(),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      gradient: AppTheme.aiGradient,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.psychology_rounded,
-                      color: Colors.white,
-                      size: 22,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 4,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            const Text(
-                              '🧠 ตั้งค่าสมองกล DeepSeek AI ส่วนตัว',
-                              style: TextStyle(
-                                fontSize: 15.5,
-                                height: 1.35,
-                                fontWeight: FontWeight.w600,
-                                color: AppTheme.slateDark,
-                              ),
-                            ),
-                            PillBadge(
-                              text:
-                                  'API Key: ${_aiSettings.maskedKey.isNotEmpty ? _aiSettings.maskedKey : "พร้อมใช้งาน"}',
-                              backgroundColor: AppTheme.tintStrong,
-                              textColor: AppTheme.brandDeep,
-                              icon: Icons.verified_rounded,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 2),
-                        const Text(
-                          'ทำหน้าที่เป็นผู้ช่วยอัจฉริยะให้ครอบครัวและเพื่อนทุกห้องแชท (@ai ถามในกลุ่ม, สรุปแชท, เกลาคำพูด)',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppTheme.slateMuted,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  const Text(
-                    'เลือกโมเดล DeepSeek:',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.slateDark,
-                    ),
-                  ),
-                  ChoiceChip(
-                    selected: selectedModel == 'deepseek-chat',
-                    label: const Text('deepseek-chat (DeepSeek-V3)'),
-                    onSelected: (_) =>
-                        setCardState(() => selectedModel = 'deepseek-chat'),
-                  ),
-                  ChoiceChip(
-                    selected: selectedModel == 'deepseek-reasoner',
-                    label: const Text('deepseek-reasoner (DeepSeek-R1)'),
-                    onSelected: (_) =>
-                        setCardState(() => selectedModel = 'deepseek-reasoner'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: apiKeyCtrl,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText:
-                      'อัปเดต DeepSeek API Key (ปัจจุบัน: ${_aiSettings.maskedKey})',
-                  hintText:
-                      'เว้นว่างไว้หากใช้ API Key เดิมที่ตั้งค่าแล้วบนเซิร์ฟเวอร์',
-                  prefixIcon: const Icon(Icons.key_rounded, size: 18),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: promptCtrl,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText:
-                      'System Prompt (กำหนดนิสัยและโทนการตอบของ BC AI)',
-                  prefixIcon: Icon(Icons.tune_rounded, size: 18),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Align(
-                alignment: Alignment.centerRight,
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    try {
-                      final updated = await ApiService.instance
-                          .updateAdminAiSettings(
-                            model: selectedModel,
-                            apiKey: apiKeyCtrl.text,
-                            systemPrompt: promptCtrl.text,
-                          );
-                      if (!mounted) return;
-                      setState(() => _aiSettings = updated);
-                      apiKeyCtrl.clear();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          backgroundColor: AppTheme.brandDeep,
-                          content: Text(
-                            'บันทึกการตั้งค่าสมองกล DeepSeek AI ส่วนตัวเรียบร้อยแล้ว!',
-                          ),
-                        ),
-                      );
-                    } catch (e) {
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            _friendlyUiError(e, 'บันทึกไม่สำเร็จ'),
-                          ),
-                        ),
-                      );
-                    }
-                  },
-                  icon: const Icon(Icons.save_rounded, size: 17),
-                  label: const Text('บันทึกตั้งค่าสมองกล DeepSeek AI'),
-                ),
-              ),
-            ],
-          ),
-        );
+    return AdminAiSettingsCard(
+      initialSettings: _aiSettings,
+      onUpdated: (updated) {
+        if (!mounted) return;
+        setState(() => _aiSettings = updated);
       },
     );
   }
@@ -7556,6 +7399,461 @@ class _InlineAdminAuthSettingsCardState
               label: const Text('บันทึกตั้งค่า Auth'),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class AdminAiSettingsCard extends StatefulWidget {
+  final AiAdminSettings initialSettings;
+  final ValueChanged<AiAdminSettings> onUpdated;
+
+  const AdminAiSettingsCard({
+    super.key,
+    required this.initialSettings,
+    required this.onUpdated,
+  });
+
+  @override
+  State<AdminAiSettingsCard> createState() => _AdminAiSettingsCardState();
+}
+
+class _AdminAiSettingsCardState extends State<AdminAiSettingsCard> {
+  late TextEditingController _promptCtrl;
+  late bool _enabled;
+  late bool _systemReady;
+  late bool _autoReplyInGroups;
+  late bool _redactConfidential;
+  late bool _proactiveGameInvites;
+
+  bool _testing = false;
+  bool _saving = false;
+  AiConnectionTestResult? _testResult;
+  String? _testError;
+  bool _dirty = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final s = widget.initialSettings;
+    _enabled = s.enabled;
+    _systemReady = s.systemReady;
+    _autoReplyInGroups = s.autoReplyInGroups;
+    _redactConfidential = s.redactConfidential;
+    _proactiveGameInvites = s.proactiveGameInvites;
+    _promptCtrl = TextEditingController(text: s.systemPrompt);
+  }
+
+  @override
+  void didUpdateWidget(covariant AdminAiSettingsCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_dirty &&
+        !_saving &&
+        widget.initialSettings != oldWidget.initialSettings) {
+      _applySettings(widget.initialSettings);
+    }
+  }
+
+  void _applySettings(AiAdminSettings s) {
+    _enabled = s.enabled;
+    _systemReady = s.systemReady;
+    _autoReplyInGroups = s.autoReplyInGroups;
+    _redactConfidential = s.redactConfidential;
+    _proactiveGameInvites = s.proactiveGameInvites;
+    _promptCtrl.text = s.systemPrompt;
+  }
+
+  @override
+  void dispose() {
+    _promptCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _testSystem() async {
+    if (_testing) return;
+    setState(() {
+      _testing = true;
+      _testResult = null;
+      _testError = null;
+    });
+    try {
+      final res = await ApiService.instance.testAdminAiConnection();
+      if (!mounted) return;
+      setState(() {
+        _testResult = res;
+        _testing = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _testError = cleanErrorMessage(e);
+        _testing = false;
+      });
+    }
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      final updated = await ApiService.instance.updateAdminAiSettings(
+        enabled: _enabled,
+        systemPrompt: _promptCtrl.text,
+        autoReplyInGroups: _autoReplyInGroups,
+        redactConfidential: _redactConfidential,
+        proactiveGameInvites: _proactiveGameInvites,
+      );
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _dirty = false;
+        _applySettings(updated);
+      });
+      widget.onUpdated(updated);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppTheme.brandDeep,
+          content: const Text('บันทึกตั้งค่าผู้ช่วย BC AI เรียบร้อยแล้ว'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('บันทึกตั้งค่าไม่สำเร็จ: ${cleanErrorMessage(e)}'),
+        ),
+      );
+    }
+  }
+
+  Widget _buildStatusBadge() {
+    if (!_enabled) {
+      return const PillBadge(
+        text: 'ปิดใช้งาน',
+        backgroundColor: AppTheme.panelBg,
+        textColor: AppTheme.slateMuted,
+        icon: Icons.pause_circle_outline_rounded,
+      );
+    }
+    if (_systemReady) {
+      return const PillBadge(
+        text: 'ระบบจัดการอัตโนมัติ · พร้อมใช้งาน',
+        backgroundColor: Color(0xFFECFDF5),
+        textColor: Color(0xFF047857),
+        icon: Icons.check_circle_rounded,
+      );
+    }
+    return const PillBadge(
+      text: 'ยังไม่พร้อมใช้งาน',
+      backgroundColor: Color(0xFFFEF2F2),
+      textColor: AppTheme.dangerRed,
+      icon: Icons.info_outline_rounded,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: AppTheme.surface(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  gradient: AppTheme.aiGradient,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+                ),
+                child: const Icon(
+                  Icons.psychology_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        const Text(
+                          'ตั้งค่าผู้ช่วย BC AI',
+                          style: TextStyle(
+                            fontSize: 14.5,
+                            height: 1.3,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.slateDark,
+                          ),
+                        ),
+                        _buildStatusBadge(),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    const Text(
+                      'ระบบจัดการอัตโนมัติ เลือกการทำงานที่เร็วและประหยัดที่สุด (แชท สรุป วิเคราะห์ภาพ และอ่านเอกสาร)',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: AppTheme.slateMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: AppTheme.well(radius: AppTheme.radiusMd),
+            child: Column(
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.auto_awesome_rounded,
+                      size: 16,
+                      color: AppTheme.personalPurple,
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'เปิดใช้งานผู้ช่วย BC AI',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w500,
+                          color: AppTheme.slateDark,
+                        ),
+                      ),
+                    ),
+                    Switch(
+                      key: const Key('bc-ai-enabled-switch'),
+                      value: _enabled,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      onChanged: (v) => setState(() {
+                        _enabled = v;
+                        _dirty = true;
+                      }),
+                    ),
+                  ],
+                ),
+                const Divider(height: 1, color: AppTheme.hairline),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.forum_outlined,
+                      size: 16,
+                      color: AppTheme.slateBody,
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'ตอบอัตโนมัติในกลุ่มเมื่อเรียก @ai',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: AppTheme.slateDark,
+                        ),
+                      ),
+                    ),
+                    Switch(
+                      key: const Key('bc-ai-auto-reply-switch'),
+                      value: _autoReplyInGroups,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      onChanged: (v) => setState(() {
+                        _autoReplyInGroups = v;
+                        _dirty = true;
+                      }),
+                    ),
+                  ],
+                ),
+                const Divider(height: 1, color: AppTheme.hairline),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.shield_outlined,
+                      size: 16,
+                      color: AppTheme.slateBody,
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'ปกปิดข้อความลับ PIN ก่อนส่งให้ AI',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: AppTheme.slateDark,
+                        ),
+                      ),
+                    ),
+                    Switch(
+                      key: const Key('bc-ai-redact-switch'),
+                      value: _redactConfidential,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      onChanged: (v) => setState(() {
+                        _redactConfidential = v;
+                        _dirty = true;
+                      }),
+                    ),
+                  ],
+                ),
+                const Divider(height: 1, color: AppTheme.hairline),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.sports_esports_outlined,
+                      size: 16,
+                      color: AppTheme.slateBody,
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'ให้ BC AI ชวนเล่นเกมในกลุ่มอัตโนมัติ (ทั้งระบบ)',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: AppTheme.slateDark,
+                        ),
+                      ),
+                    ),
+                    Switch(
+                      key: const Key('bc-ai-proactive-games-switch'),
+                      value: _proactiveGameInvites,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      onChanged: (v) => setState(() {
+                        _proactiveGameInvites = v;
+                        _dirty = true;
+                      }),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            key: const Key('bc-ai-prompt-input'),
+            controller: _promptCtrl,
+            maxLines: 3,
+            minLines: 2,
+            onChanged: (_) => _dirty = true,
+            decoration: const InputDecoration(
+              isDense: true,
+              labelText: 'System Prompt (กำหนดนิสัยและโทนการตอบของ BC AI)',
+              prefixIcon: Icon(Icons.tune_rounded, size: 18),
+            ),
+          ),
+          if (_testResult != null || _testError != null) ...[
+            const SizedBox(height: 8),
+            _buildInlineTestStatusBox(),
+          ],
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            alignment: WrapAlignment.end,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              OutlinedButton.icon(
+                key: const Key('bc-ai-test-btn'),
+                onPressed: (_testing || _saving) ? null : _testSystem,
+                icon: _testing
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.bolt_rounded, size: 16),
+                label: Text(_testing ? 'กำลังทดสอบ...' : 'ทดสอบระบบ AI'),
+              ),
+              ElevatedButton.icon(
+                key: const Key('bc-ai-save-btn'),
+                onPressed: (_saving || _testing) ? null : _save,
+                icon: _saving
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.save_rounded, size: 16),
+                label: const Text('บันทึกตั้งค่า BC AI'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInlineTestStatusBox() {
+    final res = _testResult;
+    final ok = res != null && res.ok;
+    final bgColor = ok ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2);
+    final borderColor =
+        ok ? const Color(0xFFA7F3D0) : const Color(0xFFFECACA);
+    final accentColor = ok ? const Color(0xFF047857) : AppTheme.dangerRed;
+
+    return Container(
+      key: const Key('bc-ai-test-result-box'),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(
+                ok ? Icons.check_circle_rounded : Icons.error_outline_rounded,
+                size: 16,
+                color: accentColor,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  ok
+                      ? 'ระบบผู้ช่วย BC AI พร้อมใช้งาน · ${res.latencyMs} ms'
+                      : 'ทดสอบระบบไม่สำเร็จ${res != null && res.latencyMs > 0 ? " (${res.latencyMs} ms)" : ""}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: accentColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (ok && res.reply != null && res.reply!.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              'คำตอบทดสอบ: ${res.reply}',
+              style: const TextStyle(fontSize: 12, color: AppTheme.slateDark),
+            ),
+          ] else if (!ok) ...[
+            const SizedBox(height: 4),
+            Text(
+              res?.error ?? _testError ?? 'ไม่สามารถเชื่อมต่อระบบผู้ช่วย BC AI ได้',
+              style: const TextStyle(fontSize: 12, color: AppTheme.slateDark),
+            ),
+          ],
         ],
       ),
     );

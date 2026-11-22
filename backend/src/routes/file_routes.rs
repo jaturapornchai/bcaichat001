@@ -166,6 +166,7 @@ pub async fn upload_handler(
         uploader_id: auth.user_id,
         uploader_name,
         conversation_id,
+        extracted_text: None,
         created_at: Utc::now().to_rfc3339(),
     };
 
@@ -246,10 +247,32 @@ fn guess_mime(filename: &str) -> String {
         "audio/mp4".to_string()
     } else if lower.ends_with(".pdf") {
         "application/pdf".to_string()
-    } else if lower.ends_with(".txt") || lower.ends_with(".csv") {
+    } else if lower.ends_with(".docx") {
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document".to_string()
+    } else if lower.ends_with(".xlsx") {
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet".to_string()
+    } else if lower.ends_with(".xls") {
+        "application/vnd.ms-excel".to_string()
+    } else if lower.ends_with(".ods") {
+        "application/vnd.oasis.opendocument.spreadsheet".to_string()
+    } else if lower.ends_with(".pptx") {
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation".to_string()
+    } else if lower.ends_with(".md") {
+        "text/markdown; charset=utf-8".to_string()
+    } else if lower.ends_with(".csv") {
+        "text/csv; charset=utf-8".to_string()
+    } else if lower.ends_with(".tsv") {
+        "text/tab-separated-values; charset=utf-8".to_string()
+    } else if lower.ends_with(".txt") || lower.ends_with(".log") {
         "text/plain; charset=utf-8".to_string()
     } else if lower.ends_with(".json") {
         "application/json".to_string()
+    } else if lower.ends_with(".xml") {
+        "application/xml; charset=utf-8".to_string()
+    } else if lower.ends_with(".html") || lower.ends_with(".htm") {
+        "text/html; charset=utf-8".to_string()
+    } else if lower.ends_with(".yaml") || lower.ends_with(".yml") {
+        "application/x-yaml; charset=utf-8".to_string()
     } else {
         "application/octet-stream".to_string()
     }

@@ -64,6 +64,7 @@ class _BCAiChatAppState extends State<BCAiChatApp> {
   }
 
   Future<void> _switchToTestSlot(int slot) async {
+    if (!ApiService.instance.isLocalhostServer) return;
     try {
       final res = await ApiService.instance.testQuickLogin(slot: slot);
       if (!mounted) return;
@@ -82,19 +83,22 @@ class _BCAiChatAppState extends State<BCAiChatApp> {
     }
     ApiService.instance.loadBusinessTheme();
     try {
-      final initialSlot = await PushService.instance.takeInitialTestUserSlot();
-      if (initialSlot != null) {
-        try {
-          final res = await ApiService.instance.testQuickLogin(
-            slot: initialSlot,
-          );
-          if (!mounted) return;
-          setState(() {
-            _currentUser = res.user;
-            _checkingSession = false;
-          });
-          return;
-        } catch (_) {}
+      if (ApiService.instance.isLocalhostServer) {
+        final initialSlot = await PushService.instance
+            .takeInitialTestUserSlot();
+        if (initialSlot != null) {
+          try {
+            final res = await ApiService.instance.testQuickLogin(
+              slot: initialSlot,
+            );
+            if (!mounted) return;
+            setState(() {
+              _currentUser = res.user;
+              _checkingSession = false;
+            });
+            return;
+          } catch (_) {}
+        }
       }
       final ok = await ApiService.instance.restoreSession();
       if (!mounted) return;

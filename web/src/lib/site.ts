@@ -8,6 +8,37 @@ export const SITE_NAME: Record<SiteId, string> = {
 
 const SHOP_LABEL = "oa";
 const IPV4_HOST = /^\d{1,3}(\.\d{1,3}){3}(:\d+)?$/;
+const LOCALHOST_HOSTS = new Set([
+  "localhost",
+  "127.0.0.1",
+  "::1",
+  "oa.localhost",
+]);
+
+/** ตรวจว่าโฮสต์เป็น localhost สำหรับการทดสอบบนเครื่องเท่านั้น (ไม่รวมโดเมนจริงหรือโฮสต์ปลอม) */
+export function isLocalhostHost(host: string): boolean {
+  const first = host.split(",")[0]?.trim().toLowerCase() ?? "";
+  if (!first) return false;
+  let normalized = first;
+  if (normalized.startsWith("[")) {
+    const closeIdx = normalized.indexOf("]");
+    if (closeIdx === -1) return false;
+    const rest = normalized.slice(closeIdx + 1);
+    if (rest && !/^:\d+$/.test(rest)) return false;
+    normalized = normalized.slice(1, closeIdx);
+  } else if (normalized !== "::1") {
+    const colonIdx = normalized.lastIndexOf(":");
+    if (colonIdx !== -1 && /^\d+$/.test(normalized.slice(colonIdx + 1))) {
+      normalized = normalized.slice(0, colonIdx);
+    }
+  }
+  return LOCALHOST_HOSTS.has(normalized);
+}
+
+/** ใช้บนฝั่งเบราว์เซอร์เท่านั้น — คืน true เฉพาะเมื่อเปิดเว็บบน localhost */
+export function isLocalhostRuntime(): boolean {
+  return typeof window !== "undefined" && isLocalhostHost(window.location.hostname);
+}
 
 /** โฮสต์เป็น IP ตรงๆ (เช่น 127.0.0.1:3096 หรือ [::1]) — ไม่มีซับโดเมนให้ใช้ */
 export function isIpHost(host: string): boolean {

@@ -42,9 +42,7 @@ pub async fn serve_miniapp_html_handler(
     State(state): State<AppState>,
 ) -> Html<String> {
     let token = query.token.unwrap_or_default();
-    let conv_id = query
-        .conv_id
-        .unwrap_or_else(|| "conv_group_demo5".to_string());
+    let conv_id = query.conv_id.unwrap_or_default();
 
     let mut user_display = "ผู้ใช้งาน BC Ai Chat".to_string();
     let mut user_email = "".to_string();

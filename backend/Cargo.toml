@@ -26,3 +26,7 @@ base64 = "0.22"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 urlencoding = "2.1"
+pdf-extract = "0.12"
+calamine = "0.38"
+zip = { version = "9.8", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+quick-xml = "0.42"

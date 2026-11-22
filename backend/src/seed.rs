@@ -269,6 +269,22 @@ pub async fn ensure_mongo_indexes(db: &mongodb::Database) {
                 .build(),
         )
         .await;
+    let _ = db
+        .collection::<Document>("game_sessions")
+        .create_index(
+            IndexModel::builder()
+                .keys(doc! { "conversation_id": 1, "status": 1, "created_at": -1 })
+                .build(),
+        )
+        .await;
+    let _ = db
+        .collection::<Document>("game_question_packs")
+        .create_index(
+            IndexModel::builder()
+                .keys(doc! { "game_type": 1, "topic_key": 1 })
+                .build(),
+        )
+        .await;
 }
 
 async fn upsert_seeded_user(
@@ -684,9 +700,130 @@ pub async fn seed_initial_data(state: &AppState) -> Result<(), String> {
 
     if state.config.enable_test_users {
         ensure_quick_test_users(state).await?;
+    } else {
+        purge_quick_test_users(state).await;
     }
 
     Ok(())
+}
+
+/// Removes any leftover localhost-only test accounts & test-only artifacts when running in production.
+async fn purge_quick_test_users(state: &AppState) {
+    let mut test_user_ids: Vec<String> = TEST_USER_IDS.iter().map(|s| (*s).to_string()).collect();
+    for legacy in [
+        "user_test_1",
+        "user_test_2",
+        "user_test_3",
+        "user_test_4",
+        "user_test_5",
+        "user_oa_test_chabanchiang",
+    ] {
+        test_user_ids.push(legacy.to_string());
+    }
+
+    let _ = state
+        .db
+        .collection::<Document>("users")
+        .delete_many(doc! { "_id": { "$in": &test_user_ids } })
+        .await;
+    let _ = state
+        .db
+        .collection::<Document>("friendships")
+        .delete_many(doc! {
+            "$or": [
+                { "user_id": { "$in": &test_user_ids } },
+                { "friend_id": { "$in": &test_user_ids } },
+            ]
+        })
+        .await;
+    let _ = state
+        .db
+        .collection::<Document>("device_tokens")
+        .delete_many(doc! { "user_id": { "$in": &test_user_ids } })
+        .await;
+
+    let mut test_conv_ids: Vec<String> = vec![
+        "conv_dm_test_1_2".to_string(),
+        "conv_group_test_friends".to_string(),
+        "conv_oa_test_chabanchiang".to_string(),
+    ];
+    for uid in &test_user_ids {
+        test_conv_ids.push(format!("conv_keep_{uid}"));
+    }
+
+    let conv_coll = state.db.collection::<Document>("conversations");
+    if let Ok(cursor) = conv_coll
+        .find(doc! {
+            "type": { "$in": ["direct", "official", "keep"] },
+            "member_ids": { "$in": &test_user_ids },
+        })
+        .await
+    {
+        if let Ok(docs) = cursor.try_collect::<Vec<Document>>().await {
+            for d in docs {
+                if let Ok(id) = d.get_str("_id") {
+                    if !test_conv_ids.iter().any(|x| x == id) {
+                        test_conv_ids.push(id.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    let _ = conv_coll
+        .delete_many(doc! { "_id": { "$in": &test_conv_ids } })
+        .await;
+    let _ = conv_coll
+        .update_many(
+            doc! {},
+            doc! {
+                "$pullAll": {
+                    "member_ids": &test_user_ids,
+                    "admin_ids": &test_user_ids,
+                }
+            },
+        )
+        .await;
+    let _ = state
+        .db
+        .collection::<Document>("messages")
+        .delete_many(doc! { "conversation_id": { "$in": &test_conv_ids } })
+        .await;
+    let _ = state
+        .db
+        .collection::<Document>("notes")
+        .delete_many(doc! {
+            "$or": [
+                { "owner_id": { "$in": &test_user_ids } },
+                { "conversation_id": { "$in": &test_conv_ids } },
+            ]
+        })
+        .await;
+    let _ = state
+        .db
+        .collection::<Document>("oa_accounts")
+        .delete_many(doc! { "_id": "oa_test_chabanchiang" })
+        .await;
+    let _ = state
+        .db
+        .collection::<Document>("oa_followers")
+        .delete_many(doc! {
+            "$or": [
+                { "oa_id": "oa_test_chabanchiang" },
+                { "user_id": { "$in": &test_user_ids } },
+            ]
+        })
+        .await;
+    let _ = state
+        .db
+        .collection::<Document>("oa_auto_replies")
+        .delete_many(doc! { "oa_id": "oa_test_chabanchiang" })
+        .await;
+    let _ = state
+        .db
+        .collection::<Document>("oa_coupons")
+        .delete_many(doc! { "oa_id": "oa_test_chabanchiang" })
+        .await;
 }
 
 async fn ensure_system_accounts(
@@ -735,7 +872,7 @@ async fn ensure_system_accounts(
             bc_id: "@bc.ai".to_string(),
             avatar_url: "https://ui-avatars.com/api/?name=BC+AI&background=812920&color=fff&bold=true".to_string(),
             status_message: "ผู้ช่วย AI ส่วนตัวสำหรับทุกคนและทุกกลุ่ม (เรียก @ai ได้ทุกห้อง)".to_string(),
-            qr_token: "BCQR_DEEPSEEK_AI".to_string(),
+            qr_token: "BCQR_BC_AI".to_string(),
             role: "admin".to_string(),
             department: "AI ส่วนตัว".to_string(),
             job_title: "เพื่อนคู่คิด & ผู้ช่วยประจำแชท".to_string(),
@@ -872,6 +1009,10 @@ pub async fn ensure_quick_test_users(state: &AppState) -> Result<(), String> {
                 created_at: now.clone(),
                 read_count: 1,
             }),
+            ai_game_auto_invite: None,
+            ai_game_invite_cooldown_mins: None,
+            last_ai_game_invite_at: None,
+            human_msgs_since_game_invite: 0,
             created_at: now.clone(),
             updated_at: now.clone(),
         };
@@ -971,6 +1112,10 @@ pub async fn ensure_quick_test_users(state: &AppState) -> Result<(), String> {
                 created_at: now.clone(),
                 read_count: 3,
             }),
+            ai_game_auto_invite: None,
+            ai_game_invite_cooldown_mins: None,
+            last_ai_game_invite_at: None,
+            human_msgs_since_game_invite: 0,
             created_at: now.clone(),
             updated_at: now.clone(),
         };
@@ -1172,6 +1317,10 @@ pub async fn ensure_quick_test_users(state: &AppState) -> Result<(), String> {
                 created_at: now.clone(),
                 read_count: 1,
             }),
+            ai_game_auto_invite: None,
+            ai_game_invite_cooldown_mins: None,
+            last_ai_game_invite_at: None,
+            human_msgs_since_game_invite: 0,
             created_at: now.clone(),
             updated_at: now.clone(),
         };
@@ -1397,6 +1546,10 @@ pub async fn ensure_direct_conversation(
         last_message: Some(last_msg),
         oa_id: None,
         oa_handle: None,
+        ai_game_auto_invite: None,
+        ai_game_invite_cooldown_mins: None,
+        last_ai_game_invite_at: None,
+        human_msgs_since_game_invite: 0,
         created_at: now.clone(),
         updated_at: now.clone(),
     };
@@ -1499,6 +1652,10 @@ pub async fn ensure_keep_conversation_for_user(
         }),
         oa_id: None,
         oa_handle: None,
+        ai_game_auto_invite: None,
+        ai_game_invite_cooldown_mins: None,
+        last_ai_game_invite_at: None,
+        human_msgs_since_game_invite: 0,
         created_at: now.clone(),
         updated_at: now.clone(),
     };
