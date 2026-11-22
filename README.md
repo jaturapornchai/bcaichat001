@@ -6,29 +6,33 @@
 
 ## ภาพตัวอย่าง
 
+> อ่านฉบับเต็ม: **[บทความแนะนำ BC Ai Chat และเจาะลึกทั้ง 5 หน้าจอจากระบบจริง](docs/showcase/article-bc-ai-chat-showcase.md)**
+
+### 1. ห้องแชท 2 ฝั่ง & ผู้ช่วย BC AI อัจฉริยะ (ตอบ `@ai` และช่วยคิดคำตอบ 3 สไตล์)
+
+![ห้องแชท 2 ฝั่งบนจอกว้างพร้อมแถบผู้ช่วย BC AI คิดคำตอบแบบ Inline](docs/showcase/01-chat-and-bc-ai-assistant.png)
+
+### 2. BC AI อ่านรูปภาพ (Vision) และสรุปเอกสารธุรกิจ (`PDF` / `DOCX` / `XLSX` / `PPTX`)
+
+![BC AI วิเคราะห์ใบเสนอราคาด้วย Vision และปุ่ม AI อ่านเอกสารในห้องแชท](docs/showcase/02-ai-vision-and-document-reader.png)
+
+### 3. BC Game Center — คลัง 100 เกมเดี่ยว/กลุ่ม พร้อม Proactive AI Host ชวนเล่นอัตโนมัติ
+
+![ศูนย์รวม 100 เกมใน BC Ai Chat พร้อมสวิตช์เปิด-ปิด AI ชวนเล่นอัตโนมัติและเวลาพักชวน](docs/showcase/03-bc-game-center-100-games.png)
+
+### 4. เก็บไฟล์ถาวรไม่มีวันหมดอายุ + แผนที่ OpenStreetMap + ข้อความลับล็อก PIN
+
+![ห้องครอบครัวแสดงไฟล์เก็บถาวร การ์ดแผนที่ OpenStreetMap และข้อความลับล็อกด้วย PIN](docs/showcase/04-permanent-vault-map-and-privacy.png)
+
+### 5. BC Ai Chat OA — ไซต์ร้านค้าเฉพาะ (`oa.<โดเมน>`), Multi-Shop Switcher & CRM ลูกค้า
+
+![หน้าจัดการร้านค้า BC Ai Chat OA แสดงตัวสลับหลายร้าน ระบบแท็ก และข้อมูลลูกค้า CRM](docs/showcase/05-bc-ai-chat-oa-shop-crm.png)
+
+---
+
 **วิดีโอคอลกลุ่มบนอุปกรณ์จริงพร้อมกัน** — เว็บบนจอใหญ่ + แอป Android 2 เครื่อง
 
 <img src="docs/screenshots/real-devices-group-video-call.png" alt="วิดีโอคอลกลุ่ม BC Ai Chat บนเว็บและมือถือ Android 2 เครื่องพร้อมกัน" width="420">
-
-**จอกว้าง: รายการแชทซ้าย + ห้องแชทขวา**
-
-![BC Ai Chat บนจอกว้าง รายการแชทและห้องแชทแบบสองฝั่ง](docs/screenshots/web-chat-two-pane.png)
-
-**ข้อความครบเครื่อง: ตำแหน่งที่ตั้ง, แนะนำเพื่อน, สุ่มบันได, ข้อความเงียบ/หมดอายุ, บันทึกการโทร**
-
-![ข้อความตำแหน่งที่ตั้ง การ์ดแนะนำเพื่อน และเกมสุ่มบันไดในห้องแชท](docs/screenshots/web-rich-messages.png)
-
-**แผนที่ฟรี (OpenStreetMap): แผนที่ในการ์ดตำแหน่ง และเลือกตำแหน่งบนแผนที่แบบเต็มพื้นที่**
-
-![การ์ดตำแหน่งที่ตั้งพร้อมแผนที่ หมุด และเครดิต OpenStreetMap ในห้องแชท](docs/screenshots/web-location-map.png)
-
-![หน้าเลือกตำแหน่งบนแผนที่แบบเต็มพื้นที่ แตะแผนที่เพื่อปักหมุดแล้วกดส่งตำแหน่งนี้](docs/screenshots/web-location-picker.png)
-
-![หน้าเลือกตำแหน่งเมื่อกดปุ่มสลับเป็นภาพดาวเทียม พร้อมเครดิตแหล่งภาพ](docs/screenshots/web-location-satellite.png)
-
-**BC Ai Chat OA: หลายร้านค้า ทีมงาน ลูกค้า และคูปอง (ไซต์ร้านค้า `oa.<โดเมน>`)**
-
-![หน้าจัดการร้านค้า BC Ai Chat OA พร้อมตัวสลับร้านและคูปอง](docs/screenshots/web-oa-console.png)
 
 **มือถือ: รายการแชท และ QR ของฉันแบบเต็มจอ**
 
@@ -36,8 +40,6 @@
   <img src="docs/screenshots/mobile-chat-list.png" alt="รายการแชทบนมือถือ 390px" width="260">
   <img src="docs/screenshots/mobile-qr-fullscreen.png" alt="หน้า QR ของฉันแบบเต็มจอ สลับกับโหมดสแกน QR ได้" width="260">
 </p>
-
-> ภาพหน้าจอ (ยกเว้นภาพถ่ายอุปกรณ์จริง) สร้างจากชุดทดสอบจริง: `README_SHOTS_DIR=docs/screenshots node e2e/e2e_playwright_web_5users.mjs`
 
 ---
 
@@ -123,7 +125,7 @@ flowchart LR
 | **LiveKit SFU** | `bcaichat-livekit` | `7880-7882` | WebSocket signaling (`:7880`) และ WebRTC media (`7881/tcp`, `7882/udp`) |
 | **Rust Backend & WS** | `bcaichat-backend` | `8096` | HTTP API `/api/*`, `/miniapp/*` และ WebSocket `/ws` |
 | **Next.js Web App** | `bcaichat-web` | `3096` | เว็บแอป 2 ไซต์แยกตามโฮสต์: ไซต์แชท `localhost:3096` · ไซต์ร้านค้า `oa.localhost:3096` |
-| **AI Provider (Server `.env`)** | Server-side only | `443` / `11434` | กำหนดผ่าน `.env` ฝั่งเซิร์ฟเวอร์เท่านั้น (ค่าเริ่มต้น `https://ollama.com` โมเดล `deepseek-v4.1-flash` หรือ Local/OpenAI-compatible) ไม่เปิดเผยใน Client UI |
+| **AI Provider (Server `.env`)** | Server-side only | `443` / `11434` | กำหนดผ่าน `.env` ฝั่งเซิร์ฟเวอร์เท่านั้น (รองรับ OpenAI-compatible / Vision / Local AI Endpoint) ไม่เปิดเผยผู้ให้บริการ โมเดล หรือคีย์ใน Client UI |
 
 ### ตัวแปรสภาพแวดล้อมสำคัญ (`.env.example` / `backend/src/config.rs`)
 
@@ -140,7 +142,7 @@ flowchart LR
 | `ADMIN_BOOTSTRAP_CODE` | *(กำหนดรหัสลับใน `.env`)* | รหัสใช้ครั้งเดียวสำหรับตั้งค่าเจ้าของระบบเริ่มต้น (`/api/auth/bootstrap-admin`) |
 | `ENABLE_TEST_USERS` | `false` *(ล็อกเฉพาะ localhost)* | บัญชีทดสอบด่วนใช้งานได้เฉพาะโฮสต์ loopback (`localhost`, `127.0.0.1`, `[::1]`, `10.0.2.2`, `oa.localhost`) เท่านั้น — ถูกบล็อกและตัดออก 100% บนโดเมน/IP จริงแม้ตั้งค่าเป็น `true` |
 | `LIVEKIT_URL` / `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | `ws://127.0.0.1:7880` | เชื่อมต่อ LiveKit SFU (`livekit.yaml`) สำหรับโทรเสียง/วิดีโอ |
-| `AI_BASE_URL` / `AI_MODEL` / `AI_API_KEY` / `AI_TIMEOUT_SECS` / `AI_ENABLED` | `https://ollama.com` / `deepseek-v4.1-flash` / *(คีย์ลับใน `.env` หรือ `OLLAMA_API_KEY`)* / `60` / `true` | ตั้งค่าฝั่งเซิร์ฟเวอร์เท่านั้น (ความลับไม่เก็บใน DB และไม่ส่งออกให้ Client/UI; แอดมินปรับเฉพาะพฤติกรรมที่ `GET|PUT /api/admin/ai-settings` และทดสอบที่ `POST /api/admin/ai-test`) |
+| `AI_BASE_URL` / `AI_MODEL` / `AI_API_KEY` / `AI_TIMEOUT_SECS` / `AI_ENABLED` | *(กำหนดใน `.env` ฝั่งเซิร์ฟเวอร์เท่านั้น)* / *(ชื่อโมเดล)* / *(คีย์ลับใน `.env`)* / `60` / `true` | ตั้งค่าฝั่งเซิร์ฟเวอร์เท่านั้น (ความลับไม่เก็บใน DB และไม่ส่งออกให้ Client/UI; แอดมินปรับเฉพาะพฤติกรรมที่ `GET|PUT /api/admin/ai-settings` และทดสอบที่ `POST /api/admin/ai-test`) |
 | `AI_GAME_PROACTIVE_ENABLED` / `AI_GAME_HOST_POLL_SECS` / `AI_GAME_TRIGGER_MSGS` | `true` / `60` / `12` | คุม Background Proactive AI Game Host: เปิด/ปิดตัวชวนเล่นอัตโนมัติ, รอบสแกน (วินาที, `5..=3600`), และจำนวนข้อความคนคุยในกลุ่มก่อนชวนเล่น (`3..=200`) |
 | `FCM_SERVICE_ACCOUNT_FILE` | *(เว้นว่างเพื่อปิด Push)* | พาธไฟล์ Service Account JSON ของ Firebase Cloud Messaging |
 | `BACKEND_URL` / `NEXT_PUBLIC_APP_URL` / `NEXT_PUBLIC_WS_URL` | `http://127.0.0.1:8096` / `http://localhost:3096` / `ws://127.0.0.1:8096/ws` | ค่าเชื่อมต่อ Backend, Metadata/Sitemap และ WebSocket ของ Next.js |
@@ -163,7 +165,7 @@ flowchart LR
 | **Docker** | Docker Engine + Docker Compose (`mongo:7.0`, `minio/minio:latest`, `livekit/livekit-server`) | รันฐานข้อมูล MongoDB, MinIO Storage และ LiveKit SFU |
 | **แผนที่** | ไทล์แผนที่ `https://tile.openstreetmap.org/{z}/{x}/{y}.png` (ข้อมูล OpenStreetMap สัญญาอนุญาต **ODbL**) | ใช้ฟรี ไม่ต้องมี API key; ต้องแสดงเครดิต "© OpenStreetMap" บนแผนที่เสมอ และ Flutter ส่งชื่อแอป `com.bcaichat.app` เป็น User-Agent (ที่มา: [OSM Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/)) |
 | **ภาพดาวเทียม** | ไทล์ `https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/g/{z}/{y}/{x}.jpg` (Sentinel-2 cloudless ปี 2016 สัญญาอนุญาต **CC BY 4.0**) | ใช้ฟรี ไม่ต้องมี API key; ต้องแสดงเครดิต "EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2016)" บนแผนที่ (ที่มา: [EOxCloudless FAQ](https://cloudless.eox.at/documentation/faq)) |
-| **AI Engine (Server `.env`)** | กำหนดฝั่งเซิร์ฟเวอร์เท่านั้น (ค่าเริ่มต้น Ollama Cloud `https://ollama.com` โมเดล `deepseek-v4.1-flash` หรือ Local Ollama / OpenAI-compatible) | รันผู้ช่วย BC AI (`@ai`, สรุปแชท, ร่างคำตอบ, อ่านภาพ Vision, อ่านเอกสาร) แบบประหยัด Token (`think: false`, จำกัด `max_tokens` รายงาน) โดยไม่เปิดเผยคีย์/โมเดลให้ผู้ใช้ |
+| **AI Engine (Server `.env`)** | กำหนดฝั่งเซิร์ฟเวอร์ผ่าน `.env` เท่านั้น (OpenAI-compatible / Vision / Local Endpoint) | รันผู้ช่วย BC AI (`@ai`, สรุปแชท, ร่างคำตอบ, อ่านภาพ Vision, อ่านเอกสาร) แบบประหยัด Token (จำกัด `max_tokens` รายงาน) โดยไม่เปิดเผยคีย์/โมเดลให้ผู้ใช้ |
 | **ภายนอก (ตั้งค่าใน `.env`)** | SMSMKT OTP API, Google OAuth2, Firebase Cloud Messaging (ตัวเลือก) | ให้บริการส่ง OTP จริง ตรวจสอบ Gmail และ Push แจ้งเตือน |
 | **ฟอนต์และไอคอนปลอดลิขสิทธิ์** | ฟอนต์ `Prompt` (**SIL OFL**), `lucide-react` (**MIT**), Material Icons (**Apache-2.0**), เสียง WAV สังเคราะห์ใน `frontend/assets/sounds/` | ใช้งานได้อย่างถูกต้องตามสัญญาอนุญาตเปิด 100% |
 
@@ -232,7 +234,7 @@ adb install -r build\bcaichat-oa.apk
 
 ### 4. รันชุดทดสอบอัตโนมัติ (ปลอดภัย ไม่ใช้เครดิต SMSMKT จริง)
 
-ชุดทดสอบ E2E ใน `e2e/` จะเปิดเซิร์ฟเวอร์จำลอง SMSMKT, Google OAuth และ Ollama AI ในโปรเซส (หรือกำหนด `AI_ENABLED=false` ในชุด UI/Audit เพื่อไม่แย่ง GPU) แยกพอร์ต (`:8098` / `:3098`) และแยกฐานข้อมูล `bcaichat_e2e` แล้วทำความสะอาดอัตโนมัติเมื่อจบ (ชุดเว็บเปิดไซต์ร้านค้าที่ `http://oa.localhost:<พอร์ต>`; รันทีละชุด เพราะบางชุดใช้พอร์ตเดียวกัน):
+ชุดทดสอบ E2E ใน `e2e/` จะเปิดเซิร์ฟเวอร์จำลอง SMSMKT, Google OAuth และ Mock AI ในโปรเซส (หรือกำหนด `AI_ENABLED=false` ในชุด UI/Audit เพื่อไม่แย่ง GPU) แยกพอร์ต (`:8098` / `:3098`) และแยกฐานข้อมูล `bcaichat_e2e` แล้วทำความสะอาดอัตโนมัติเมื่อจบ (ชุดเว็บเปิดไซต์ร้านค้าที่ `http://oa.localhost:<พอร์ต>`; รันทีละชุด เพราะบางชุดใช้พอร์ตเดียวกัน):
 
 ```powershell
 # 1. ทดสอบ Rust Backend Unit & Integration Tests
